@@ -75,8 +75,45 @@ describe('grouping', () => {
     expect(groupEntries(es, 'kenburns')).toHaveLength(7)
   })
   it('puts two portrait photos side by side', () => {
-    expect(pickTemplate([0.75, 0.75], 16 / 9).id).toBe('halves')
-    expect(pickTemplate([1.5, 1.5], 9 / 16).id).toBe('rows')
+    expect(pickTemplate([0.75, 0.75], 16 / 9).template.id).toBe('halves')
+    expect(pickTemplate([1.5, 1.5], 9 / 16).template.id).toBe('rows')
+  })
+})
+
+describe('magazine', () => {
+  const portrait = (id: string): MediaItem => photo(id, 3000, 4000)
+  it('turns a text slide into a caption on the next slide', () => {
+    const media = [photo('a'), photo('b'), photo('c')]
+    const entries: Entry[] = [
+      { id: 'e1', type: 'photo', mediaId: 'a' },
+      { id: 't1', type: 'text', title: 'Sonntag', subtitle: 'Unser erster Tag' },
+      { id: 'e2', type: 'photo', mediaId: 'b' },
+      { id: 'e3', type: 'photo', mediaId: 'c' }
+    ]
+    const tl = buildTimeline(project(entries, media, [], { theme: 'magazine' }))
+    expect(tl.slides.every((s) => s.kind === 'photos')).toBe(true)
+    const withCaption = tl.slides.find((s) => s.caption)!
+    expect(withCaption.caption).toEqual({ text: 'Sonntag', subtitle: 'Unser erster Tag' })
+    expect(withCaption.captionEntryId).toBe('t1')
+    // other themes keep it as a slide of its own
+    expect(buildTimeline(project(entries, media)).slides.some((s) => s.kind === 'text')).toBe(true)
+  })
+
+  it('pairs a lone portrait and fills every slide with a template', () => {
+    const media = [portrait('a'), photo('b'), photo('c')]
+    const entries: Entry[] = media.map((m, i) => ({ id: `e${i}`, type: 'photo', mediaId: m.id }))
+    const tl = buildTimeline(project(entries, media, [], { theme: 'magazine', showTitle: false }))
+    expect(tl.slides[0].entries).toHaveLength(2)
+    expect(tl.slides.every((s) => s.template && s.template.slots.length === s.entries.length)).toBe(true)
+  })
+
+  it('moves photos into the cells that fit them and honours a chosen layout', () => {
+    const media = [photo('w1'), portrait('p1'), photo('w2')]
+    const entries: Entry[] = media.map((m, i) => ({ id: `e${i}`, type: 'photo', mediaId: m.id, groupBreak: i ? 'join' : undefined }))
+    const auto = buildTimeline(project(entries, media, [], { theme: 'magazine' })).slides[0]
+    expect(auto.entries).toHaveLength(3)
+    const forced = entries.map((e, i) => (i === 0 ? { ...e, layout: 'm3-cols' } : e))
+    expect(buildTimeline(project(forced, media, [], { theme: 'magazine' })).slides[0].template?.id).toBe('m3-cols')
   })
 })
 

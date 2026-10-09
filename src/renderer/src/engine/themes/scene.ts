@@ -4,8 +4,8 @@ import type { Compositor, Tex } from '../gl'
 import type { Ctx, Theme } from '../types'
 import type { TimelineSlide } from '@shared/timeline'
 import {
-  aspectOf, clamp01, containBox, drawFitted, drawMedia, drawText, easeIn, easeInOut, easeOut, lerp, rng, slideTexture,
-  slotBoxes, smooth, titleOpacity
+  aspectOf, clamp01, containBox, drawFitted, drawMedia, drawText, easeIn, easeInOut, easeOut, lerp, photoUv, rng, slideTexture,
+  slotBoxes, smooth, titleOpacity, type Box
 } from '../draw'
 import { drawCenteredText } from './simple'
 
@@ -19,6 +19,7 @@ const stagger = (p: number, i: number, n: number, step = 0.12): number => {
 export const origami: Theme = {
   mode: 'scene',
   clear: [0.05, 0.05, 0.055],
+  boxes: (W, H, sl) => slotBoxes(sl, { x: 0, y: 0, w: W, h: H }, Math.max(2, H * 0.008)),
   drawSlide(ctx, s) {
     const { W, H } = ctx
     const sl = s.slide
@@ -41,8 +42,9 @@ export const origami: Theme = {
     boxes.forEach((box, i) => {
       const q = stagger(s.inP, i, boxes.length)
       const tex = slideTexture(ctx, s, i)
-      const draw = sl.kind === 'video' ? drawFitted : drawMedia
-      fold(q, (o) => draw(ctx, tex, aspectOf(sl.media[i], tex), box, { ...o, zoom: lerp(1.06, 1, s.p) }))
+      const a = aspectOf(sl.media[i], tex)
+      if (sl.kind === 'video') fold(q, (o) => drawFitted(ctx, tex, a, box, { ...o, zoom: lerp(1.06, 1, s.p) }))
+      else fold(q, (o) => drawMedia(ctx, tex, a, box, { ...o, uv: photoUv(sl.entries[i], sl.media[i], box.w / box.h, tex), zoom: lerp(1.06, 1, s.p) }))
     })
     if (sl.titleOverlay) drawCenteredText(ctx, s, 'sans', '#ffffff', { opacity: titleOpacity(s.local), shadow: true })
   }
@@ -130,6 +132,7 @@ export const reflections: Theme = {
 export const panels: Theme = {
   mode: 'scene',
   clear: [0, 0, 0],
+  boxes: (W, H, sl) => slotBoxes(sl, { x: 0, y: 0, w: W, h: H }, Math.max(2, H * 0.006)),
   drawSlide(ctx, s) {
     const { W, H } = ctx
     const sl = s.slide
@@ -146,8 +149,10 @@ export const panels: Theme = {
       const dx = (1 - q) * W - out
       const tex = slideTexture(ctx, s, i)
       const drift = i % 2 ? lerp(1.0, 1.07, s.p) : lerp(1.07, 1.0, s.p)
-      const draw = sl.kind === 'video' ? drawFitted : drawMedia
-      draw(ctx, tex, aspectOf(sl.media[i], tex), { ...box, x: box.x + dx }, { zoom: drift })
+      const moved = { ...box, x: box.x + dx }
+      const a = aspectOf(sl.media[i], tex)
+      if (sl.kind === 'video') drawFitted(ctx, tex, a, moved, { zoom: drift })
+      else drawMedia(ctx, tex, a, moved, { uv: photoUv(sl.entries[i], sl.media[i], box.w / box.h, tex), zoom: drift })
     })
     if (sl.titleOverlay && sl.title) {
       const o = titleOpacity(s.local)
@@ -254,59 +259,65 @@ export const vintage: Theme = {
 
 // ---------------------------------------------------------------- Magazine
 
-const INK = '#1c1b19'
+// Measured from a Photos export: background #EDF2EE, margin and gutter about 2.1 % of the height.
+const PAPER: [number, number, number] = [237 / 255, 242 / 255, 238 / 255]
+const magazineBoxes = (W: number, H: number, sl: TimelineSlide): Box[] => {
+  const m = Math.round(H * 0.021)
+  return slotBoxes(sl, { x: m, y: m, w: W - 2 * m, h: H - 2 * m }, m)
+}
+
+/** White text block at the bottom right of a cell, like Photos' Magazine captions. */
+function cornerText(ctx: Ctx, box: Box, lines: string, font: 'caption' | 'rounded', size: number, opacity: number): Box | null {
+  if (!lines.trim() || opacity <= 0.001) return null
+  const pad = ctx.H * 0.028
+  const spec = { text: lines, font, size, weight: font === 'rounded' ? 800 : 600, color: '#ffffff', uppercase: true, align: 'right' as const, shadow: true, maxWidth: box.w * 0.7, lineHeight: 1.08 }
+  const tex = ctx.text(spec)
+  if (!tex) return null
+  const r = { x: box.x + box.w - pad - tex.w, y: box.y + box.h - pad - tex.h, w: tex.w, h: tex.h }
+  ctx.c.quad({ tex, ...r, opacity })
+  return r
+}
 
 export const magazine: Theme = {
   mode: 'scene',
-  clear: [0.965, 0.96, 0.945],
+  clear: PAPER,
+  ownCaption: true,
+  boxes: (W, H, sl) => magazineBoxes(W, H, sl),
   drawSlide(ctx, s) {
     const { W, H } = ctx
     const sl = s.slide
-    const m = H * 0.05
-    const qi = easeOut(s.inP)
-    const qo = easeIn(s.outP)
+    // the old slide fades out quickly while the new cells fade in one after another
+    const fadeOut = 1 - smooth(s.outP / 0.3)
     if (sl.kind === 'title' || sl.kind === 'text') {
-      const o = smooth(s.inP * 1.4) * (1 - smooth(s.outP * 1.3))
-      const lift = (1 - qi) * H * 0.12 + qo * -H * 0.08
-      const cover = sl.kind === 'title' ? ctx.tl.slides.find((x) => x.kind === 'photos') : undefined
-      const textW = cover ? W * 0.46 : W * 0.86
-      const sub = sl.title?.subtitle
-      const big = drawText(
-        ctx,
-        { text: sl.title?.text ?? '', font: 'display', size: H * 0.16, color: INK, uppercase: true, align: 'left', maxWidth: textW, lineHeight: 0.98 },
-        m * 1.6,
-        H * 0.52 + lift,
-        { opacity: o, anchor: 'left' }
-      )
-      if (sub && big) {
-        drawText(ctx, { text: sub, font: 'sans', size: H * 0.03, weight: 600, color: '#77746d', uppercase: true, tracking: 0.18, align: 'left' }, m * 1.6, big.y - H * 0.02, { opacity: o, anchor: 'left' })
-      }
-      if (cover) {
-        const tex = ctx.image(cover.media[0])
-        const box = { x: W * 0.54, y: m, w: W * 0.46 - m, h: H - 2 * m }
-        drawMedia(ctx, tex, aspectOf(cover.media[0], tex), { ...box, x: box.x + (1 - qi) * W * 0.3 + qo * W * 0.3 }, { opacity: o })
-      }
+      const o = smooth(s.inP) * fadeOut
+      const t = drawText(ctx, { text: sl.title?.text ?? '', font: 'rounded', size: H * 0.09, weight: 800, color: '#2b2e2c', uppercase: true, maxWidth: W * 0.8 }, W / 2, H * 0.47, { opacity: o })
+      if (t && sl.title?.subtitle) drawText(ctx, { text: sl.title.subtitle, font: 'caption', size: H * 0.04, weight: 500, color: '#5d625e', uppercase: true, tracking: 0.04, maxWidth: W * 0.8 }, W / 2, t.y + t.h + H * 0.03, { opacity: o })
       return
     }
-    const boxes = slotBoxes(sl, { x: m, y: m, w: W - 2 * m, h: H - 2 * m }, H * 0.022)
-    const r = rng(`mag${sl.id}`)
+    const boxes = magazineBoxes(W, H, sl)
+    const n = boxes.length
+    const fade = 0.28
+    const step = n > 1 ? Math.min(0.13, (0.95 - 0.05 - fade) / (n - 1)) : 0
     boxes.forEach((box, i) => {
-      const dirs: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]]
-      const d = dirs[Math.floor(r() * 4)]
-      const a = easeOut(stagger(s.inP, i, boxes.length, 0.1))
-      const b = easeIn(stagger(s.outP, i, boxes.length, 0.08))
-      const off = (1 - a) * H * 0.3 - b * H * 0.3
-      const opacity = smooth(a * 1.4) * (1 - smooth(b * 1.2))
+      const q = smooth((s.inP - 0.05 - i * step) / fade)
+      const opacity = q * fadeOut
       if (opacity <= 0.001) return
       const tex = slideTexture(ctx, s, i)
-      const moved = { ...box, x: box.x + d[0] * off, y: box.y + d[1] * off }
-      const asp = aspectOf(sl.media[i], tex)
-      // portrait media sits on the paper instead of being cropped
-      const fit = sl.kind === 'video' || (boxes.length === 1 && asp < 0.9) ? 'contain' : 'cover'
-      drawMedia(ctx, tex, asp, moved, { opacity, fit, zoom: fit === 'cover' ? lerp(1.04, 1, s.p) : 1 })
+      const m = sl.media[i]
+      if (sl.kind === 'video') drawFitted(ctx, tex, aspectOf(m, tex), box, { opacity })
+      else drawMedia(ctx, tex, aspectOf(m, tex), box, { opacity, uv: photoUv(sl.entries[i], m, box.w / box.h, tex) })
     })
+    // texts sit on the largest cell, bottom right
+    const main = boxes.reduce((a, b) => (b.w * b.h > a.w * a.h ? b : a), boxes[0])
+    const textOpacity = smooth((s.inP - 0.3) / 0.4) * fadeOut
+    let bottom = main
     if (sl.titleOverlay && sl.title) {
-      drawText(ctx, { text: sl.title.text, font: 'display', size: H * 0.12, color: '#ffffff', uppercase: true, shadow: true, align: 'left', maxWidth: W * 0.6 }, m * 1.8, H * 0.78, { opacity: titleOpacity(s.local), anchor: 'left' })
+      const t = cornerText(ctx, main, sl.title.text, 'rounded', H * 0.072, textOpacity)
+      if (t) bottom = { ...main, h: t.y - main.y + H * 0.028 - H * 0.012 }
+    }
+    if (sl.caption) {
+      const lines = [sl.caption.text, sl.caption.subtitle].filter(Boolean).join('\n')
+      cornerText(ctx, bottom, lines, 'caption', H * 0.046, textOpacity)
     }
   }
 }

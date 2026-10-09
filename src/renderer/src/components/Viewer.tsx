@@ -1,10 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ImagePlus, FolderPlus, Pause, Play, Repeat } from 'lucide-react'
 import { mediaUrl } from '@shared/api'
-import type { PhotoEntry, Rect } from '@shared/types'
+import type { MediaItem, PhotoEntry, Rect } from '@shared/types'
+import type { TimelineSlide } from '@shared/timeline'
+import { themeMeta } from '@shared/themes'
 import { aspectValue } from '@shared/timeline'
 import { Player } from '../engine/player'
-import { coverRect, defaultKenBurns } from '../engine/draw'
+import { coverRect, defaultKenBurns, photoUv, type Box } from '../engine/draw'
 import { playerRef, useStore } from '../store'
 import { timelineOf, useTimeline } from '../timeline'
 import { fmtTime, localeTag, t } from '../i18n'
@@ -87,6 +89,11 @@ export function Viewer() {
   const duration = tl?.duration ?? 0
   const empty = project.entries.length === 0
 
+  const editSlide: TimelineSlide | undefined =
+    themeMeta(project.settings.theme).cropEdit && selection.length
+      ? timelineOf(project).slides.find((s) => s.kind === 'photos' && s.entries.some((e) => e.id === selection[0]))
+      : undefined
+
   const selectedPhoto = (() => {
     if (selection.length !== 1) return null
     const e = project.entries.find((x) => x.id === selection[0])
@@ -100,6 +107,7 @@ export function Viewer() {
       <div className="stage" ref={stageRef}>
         <div className="frame" style={{ width: fw, height: fh, visibility: empty ? 'hidden' : 'visible' }}>
           <canvas ref={canvasRef} />
+          {!playing && !kbEdit && editSlide && <CropEditor slide={editSlide} scale={fw / (canvasRef.current?.width || fw)} />}
           {kbEdit && selectedPhoto && <KenBurnsEditor entry={selectedPhoto.e} display={selectedPhoto.m.display} mediaAspect={selectedPhoto.m.width / selectedPhoto.m.height} frameAspect={aspect} w={fw} h={fh} />}
         </div>
         {empty && (
@@ -233,5 +241,67 @@ function KenBurnsEditor(props: { entry: PhotoEntry; display?: string; mediaAspec
         <span className="hint" style={{ margin: 0 }}>{t('kbHint')}</span>
       </div>
     </div>
+  )
+}
+
+/** Drag a photo inside its cell to move the framing, scroll to zoom, double-click to reset. */
+function CropEditor({ slide, scale }: { slide: TimelineSlide; scale: number }) {
+  const setEntry = useStore((s) => s.setEntry)
+  const [active, setActive] = useState<string | null>(null)
+  const frame = useRef(0)
+  const engine = playerRef.current?.engine
+  const boxes: Box[] = engine ? engine.editBoxes(slide) : []
+  // one project update per animation frame while dragging
+  const write = (id: string, crop: PhotoEntry['crop']): void => {
+    cancelAnimationFrame(frame.current)
+    frame.current = requestAnimationFrame(() => setEntry(id, { crop } as Partial<PhotoEntry>))
+  }
+  const center = (e: PhotoEntry, m: MediaItem, b: Box) => {
+    const uv = photoUv(e, m, b.w / b.h)
+    return { uv, x: uv.x + uv.w / 2, y: uv.y + uv.h / 2, zoom: e.crop?.zoom ?? 1 }
+  }
+  return (
+    <>
+      {boxes.map((b, i) => {
+        const e = slide.entries[i]
+        const m = slide.media[i]
+        if (!e || e.type !== 'photo' || !m) return null
+        return (
+          <div
+            key={e.id}
+            className={`crop-cell ${active === e.id ? 'active' : ''}`}
+            style={{ left: b.x * scale, top: b.y * scale, width: b.w * scale, height: b.h * scale }}
+            title={t('cropHint')}
+            onPointerDown={(ev) => {
+              if (ev.button !== 0) return
+              const el = ev.currentTarget
+              el.setPointerCapture(ev.pointerId)
+              setActive(e.id)
+              const c0 = center(e, m, b)
+              const sx = ev.clientX
+              const sy = ev.clientY
+              const move = (pe: PointerEvent): void => {
+                const dx = (pe.clientX - sx) / scale / b.w
+                const dy = (pe.clientY - sy) / scale / b.h
+                write(e.id, { x: c0.x - dx * c0.uv.w, y: c0.y - dy * c0.uv.h, zoom: c0.zoom })
+              }
+              const up = (): void => {
+                el.removeEventListener('pointermove', move)
+                el.removeEventListener('pointerup', up)
+                setActive(null)
+              }
+              el.addEventListener('pointermove', move)
+              el.addEventListener('pointerup', up)
+            }}
+            onWheel={(ev) => {
+              const c = center(e, m, b)
+              const zoom = Math.min(4, Math.max(1, c.zoom * (ev.deltaY < 0 ? 1.08 : 1 / 1.08)))
+              write(e.id, { x: c.x, y: c.y, zoom })
+            }}
+            onDoubleClick={() => setEntry(e.id, { crop: undefined } as Partial<PhotoEntry>)}
+          />
+        )
+      })}
+    </>
   )
 }

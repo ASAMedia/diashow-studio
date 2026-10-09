@@ -2,8 +2,9 @@
 // Classic, Ken Burns and Retro Film.
 import type { PhotoEntry } from '@shared/types'
 import type { Ctx, SlideState, Theme } from '../types'
-import { aspectOf, dirVector, drawFitted, drawMedia, drawText, kenBurnsUv, slideTexture, titleOpacity, lerp, rng } from '../draw'
+import { aspectOf, dirVector, drawFitted, drawMedia, drawText, kenBurnsUv, photoUv, slideTexture, titleOpacity, lerp, rng } from '../draw'
 import type { FontRole } from '../media'
+import type { Box } from '../draw'
 
 export function drawCenteredText(
   ctx: Ctx,
@@ -44,12 +45,15 @@ function fullFrameMedia(ctx: Ctx, s: SlideState, fit: 'cover' | 'contain', extra
   const a = aspectOf(sl.media[0], tex)
   const box = { x: extra.dx ?? 0, y: extra.dy ?? 0, w: W, h: H }
   if (fit === 'contain' || sl.kind === 'video') drawFitted(ctx, tex, a, box, { zoom: extra.zoom }, 0.08)
-  else drawMedia(ctx, tex, a, box, { fit, zoom: extra.zoom })
+  else drawMedia(ctx, tex, a, box, { uv: photoUv(sl.entries[0], sl.media[0], W / H, tex), zoom: extra.zoom })
 }
+
+const fullBox = (W: number, H: number): Box[] => [{ x: 0, y: 0, w: W, h: H }]
 
 export const classic: Theme = {
   mode: 'composite',
   clear: [0, 0, 0],
+  boxes: (W, H, _sl, st) => (st.scaleToFill ? fullBox(W, H) : []),
   drawSlide(ctx, s) {
     const sl = s.slide
     if (sl.kind === 'title' || sl.kind === 'text') {
@@ -90,6 +94,7 @@ export const kenburns: Theme = {
 export const retro: Theme = {
   mode: 'composite',
   clear: [0.02, 0.02, 0.015],
+  boxes: (W, H) => fullBox(W, H),
   drawSlide(ctx, s) {
     const { H } = ctx
     // gate weave: a small jitter that changes 18 times per second

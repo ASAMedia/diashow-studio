@@ -22,6 +22,10 @@ export interface ThemeMeta {
   titleSlide: boolean
   /** Look applied when the theme is chosen (the user can change it afterwards). */
   defaultLook: LookId
+  /** Photos are cropped into cells whose framing the user can drag in the viewer. */
+  cropEdit: boolean
+  /** Text slides become captions on the following slide instead of slides of their own. */
+  textAsCaption: boolean
 }
 
 export const THEMES: ThemeMeta[] = [
@@ -37,7 +41,9 @@ export const THEMES: ThemeMeta[] = [
     freeTransition: false,
     scaleOption: false,
     titleSlide: false,
-    defaultLook: 'natural'
+    defaultLook: 'natural',
+    cropEdit: false,
+    textAsCaption: false
   },
   {
     id: 'origami',
@@ -51,7 +57,9 @@ export const THEMES: ThemeMeta[] = [
     freeTransition: false,
     scaleOption: false,
     titleSlide: true,
-    defaultLook: 'natural'
+    defaultLook: 'natural',
+    cropEdit: true,
+    textAsCaption: false
   },
   {
     id: 'reflections',
@@ -65,7 +73,9 @@ export const THEMES: ThemeMeta[] = [
     freeTransition: false,
     scaleOption: false,
     titleSlide: true,
-    defaultLook: 'natural'
+    defaultLook: 'natural',
+    cropEdit: false,
+    textAsCaption: false
   },
   {
     id: 'panels',
@@ -79,7 +89,9 @@ export const THEMES: ThemeMeta[] = [
     freeTransition: false,
     scaleOption: false,
     titleSlide: false,
-    defaultLook: 'natural'
+    defaultLook: 'natural',
+    cropEdit: true,
+    textAsCaption: false
   },
   {
     id: 'vintage',
@@ -93,7 +105,9 @@ export const THEMES: ThemeMeta[] = [
     freeTransition: false,
     scaleOption: false,
     titleSlide: false,
-    defaultLook: 'faded'
+    defaultLook: 'faded',
+    cropEdit: false,
+    textAsCaption: false
   },
   {
     id: 'classic',
@@ -107,21 +121,25 @@ export const THEMES: ThemeMeta[] = [
     freeTransition: true,
     scaleOption: true,
     titleSlide: false,
-    defaultLook: 'natural'
+    defaultLook: 'natural',
+    cropEdit: true,
+    textAsCaption: false
   },
   {
     id: 'magazine',
     name: { de: 'Magazin', en: 'Magazine' },
-    description: { de: 'Redaktionelle Layouts mit großer Typografie', en: 'Editorial layouts with bold type' },
-    maxPerSlide: 3,
-    pattern: [2, 3, 1, 3, 2],
-    photoSeconds: 4,
-    transition: 1,
+    description: { de: 'Fotoraster wie im Magazin, Zellen blenden nacheinander ein', en: 'Magazine photo grids, cells fade in one after another' },
+    maxPerSlide: 6,
+    pattern: [2, 3, 6, 4, 3, 5, 2, 4, 1, 3],
+    photoSeconds: 3.5,
+    transition: 1.2,
     kenBurns: false,
     freeTransition: false,
     scaleOption: false,
-    titleSlide: true,
-    defaultLook: 'natural'
+    titleSlide: false,
+    defaultLook: 'natural',
+    cropEdit: true,
+    textAsCaption: true
   },
   {
     id: 'retro',
@@ -135,7 +153,9 @@ export const THEMES: ThemeMeta[] = [
     freeTransition: false,
     scaleOption: false,
     titleSlide: false,
-    defaultLook: 'faded'
+    defaultLook: 'faded',
+    cropEdit: true,
+    textAsCaption: false
   }
 ]
 

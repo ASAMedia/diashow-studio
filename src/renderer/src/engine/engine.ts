@@ -5,7 +5,7 @@ import { ExportVideoStore, ImageStore, TextStore, VideoPool } from './media'
 import type { Ctx, SlideState, Theme } from './types'
 import { classic, kenburns, retro } from './themes/simple'
 import { magazine, origami, panels, reflections, vintage } from './themes/scene'
-import { clamp01 } from './draw'
+import { clamp01, smooth, type Box } from './draw'
 
 export const THEME_IMPL: Record<ThemeId, Theme> = { classic, kenburns, retro, magazine, origami, panels, reflections, vintage }
 
@@ -157,12 +157,42 @@ export class Engine {
       theme.background?.(ctx, states)
       for (const s of states) theme.drawSlide(ctx, s)
     }
+    if (!theme.ownCaption) for (const s of states) this.caption(ctx, s, theme)
 
     const post: PostParams = { ...NEUTRAL_POST, ...LOOK_POST[this.project.settings.look], ...(theme.post?.(ctx) ?? {}), time: t }
     c.post(c.targetTex(0), post)
     this.images.tick()
     this.texts.tick()
     this.videos?.sweep()
+  }
+
+  /** Lower-third caption for themes that don't place captions themselves. */
+  private caption(ctx: Ctx, s: SlideState, theme: Theme): void {
+    const cap = s.slide.caption
+    if (!cap) return
+    const { W, H } = this.c
+    const light = theme.clear[0] + theme.clear[1] + theme.clear[2] > 1.5
+    const o = smooth((s.inP - 0.3) / 0.5) * (1 - smooth(s.outP / 0.6))
+    if (o <= 0.001) return
+    const tex = ctx.text({
+      text: [cap.text, cap.subtitle].filter(Boolean).join('\n'),
+      font: 'sans',
+      size: H * 0.04,
+      weight: 600,
+      color: light ? '#2b2e2c' : '#ffffff',
+      shadow: !light,
+      align: 'left',
+      maxWidth: W * 0.6,
+      lineHeight: 1.15
+    })
+    if (tex) this.c.quad({ tex, x: H * 0.05, y: H * 0.95 - tex.h, w: tex.w, h: tex.h, opacity: o })
+  }
+
+  /** Resting cell rectangles of a slide for crop editing, in canvas pixels. */
+  editBoxes(slide: TimelineSlide): Box[] {
+    if (!this.project || slide.kind !== 'photos') return []
+    const theme = THEME_IMPL[this.project.settings.theme]
+    return theme.boxes?.(this.c.W, this.c.H, slide, this.project.settings) ?? []
   }
 
   /** Cube and flip are drawn as 3D quads; everything else is a full-screen shader. */
@@ -213,6 +243,6 @@ export class Engine {
 
 /** Fonts must be loaded before text textures are drawn (export renders immediately). */
 export async function loadFonts(): Promise<void> {
-  const specs = ['300 40px Inter', '400 40px Inter', '600 40px Inter', '700 40px Inter', '400 40px Anton', '400 40px Cinzel', '400 40px "Special Elite"', '400 40px "Playfair Display"']
+  const specs = ['300 40px Inter', '400 40px Inter', '600 40px Inter', '700 40px Inter', '400 40px Anton', '400 40px Cinzel', '400 40px "Special Elite"', '400 40px "Playfair Display"', '500 40px "Barlow Semi Condensed"', '600 40px "Barlow Semi Condensed"', '800 40px "Nunito Sans"']
   await Promise.all(specs.map((s) => document.fonts.load(s).catch(() => [])))
 }

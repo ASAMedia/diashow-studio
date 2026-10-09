@@ -3,7 +3,8 @@ import { Clock, LayoutTemplate, Music, Plus, SlidersHorizontal, Trash2, GripVert
 import { mediaUrl } from '@shared/api'
 import { LOOKS, THEMES, TRANSITIONS, themeMeta } from '@shared/themes'
 import type { AspectRatio, Direction, Entry, LookId, MediaItem, PhotoEntry, TextEntry, ThemeId, TransitionId, VideoEntry } from '@shared/types'
-import { MAX_PHOTO_SECONDS } from '@shared/timeline'
+import { MAX_PHOTO_SECONDS, type TimelineSlide } from '@shared/timeline'
+import { templatesFor, type Template } from '@shared/layout'
 import { useStore, type InspectorTab } from '../store'
 import { timelineOf } from '../timeline'
 import { fmtSeconds, fmtTime, localeTag, pick, t } from '../i18n'
@@ -117,13 +118,13 @@ function ThemeThumb({ id, thumbs }: { id: ThemeId; thumbs: string[] }) {
       )
     case 'magazine':
       return (
-        <div className="thumb" style={{ background: '#f6f5f1' }}>
-          <div style={{ position: 'absolute', left: '7%', top: '24%', fontFamily: 'Anton', fontSize: 22, lineHeight: 0.95, color: '#1c1b19' }}>
-            ABC
-            <br />
-            DEF
+        <div className="thumb" style={{ background: '#edf2ee' }}>
+          {img(0, abs(3.5, 6, 57, 88))}
+          {img(1, abs(63, 6, 33.5, 42.5))}
+          {img(2, abs(63, 51.5, 33.5, 42.5))}
+          <div style={{ position: 'absolute', right: '43%', bottom: '11%', fontFamily: "'Nunito Sans'", fontWeight: 800, fontSize: 9, color: '#fff', textShadow: '0 1px 3px rgba(0,0,0,.5)' }}>
+            TITEL
           </div>
-          {img(0, abs(52, 6, 42, 88))}
         </div>
       )
     case 'retro':
@@ -409,6 +410,69 @@ function DurationOverride({ entry }: { entry: Entry }) {
   )
 }
 
+function LayoutPicker({ slide }: { slide: TimelineSlide }) {
+  const project = useStore((s) => s.project)!
+  const setEntry = useStore((s) => s.setEntry)
+  const options = templatesFor(project.settings.theme, slide.entries.length)
+  // the override lives on the slide's first entry in filmstrip order
+  const order = new Map(project.entries.map((e, i) => [e.id, i]))
+  const first = [...slide.entries].sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))[0]
+  if (options.length < 2 || !first) return null
+  const mini = (tpl: Template) => (
+    <svg viewBox="0 0 160 90">
+      {tpl.slots.map((r, i) => (
+        <rect key={i} x={r.x * 156 + 3} y={r.y * 86 + 3} width={Math.max(1, r.w * 156 - 3)} height={Math.max(1, r.h * 86 - 3)} rx={2} fill="currentColor" opacity={0.55} />
+      ))}
+    </svg>
+  )
+  return (
+    <Section title={t('layout')}>
+      <div className="layouts">
+        <button className={!first.layout ? 'on' : ''} onClick={() => setEntry(first.id, { layout: undefined })}>
+          {t('layoutAuto')}
+        </button>
+        {options.map((tpl) => (
+          <button key={tpl.id} className={first.layout === tpl.id ? 'on' : ''} title={tpl.id} onClick={() => setEntry(first.id, { layout: tpl.id })}>
+            {mini(tpl)}
+          </button>
+        ))}
+      </div>
+    </Section>
+  )
+}
+
+function CaptionField({ entry }: { entry: Entry }) {
+  const setEntry = useStore((s) => s.setEntry)
+  return (
+    <Section title={t('caption')}>
+      <textarea
+        rows={2}
+        style={{ width: '100%', resize: 'vertical' }}
+        placeholder={t('captionPlaceholder')}
+        value={entry.caption ?? ''}
+        onChange={(e) => setEntry(entry.id, { caption: e.target.value || undefined })}
+      />
+    </Section>
+  )
+}
+
+function CropSection({ slide }: { slide: TimelineSlide }) {
+  const project = useStore((s) => s.project)!
+  const update = useStore((s) => s.update)
+  if (!themeMeta(project.settings.theme).cropEdit || slide.kind !== 'photos') return null
+  const ids = new Set(slide.entries.map((e) => e.id))
+  return (
+    <div className="section">
+      <p className="hint" style={{ marginTop: 0 }}>
+        {t('cropHint')}
+      </p>
+      <button className="btn small" onClick={() => update((p) => p.entries.forEach((e) => ids.has(e.id) && e.type === 'photo' && delete e.crop))}>
+        {t('cropReset')}
+      </button>
+    </div>
+  )
+}
+
 function SlidePanel() {
   const project = useStore((s) => s.project)!
   const selection = useStore((s) => s.selection)
@@ -420,22 +484,35 @@ function SlidePanel() {
   const media = (e: Entry): MediaItem | undefined => (e.type === 'text' ? undefined : project.media.find((m) => m.id === e.mediaId))
   const meta = themeMeta(project.settings.theme)
 
+  const slide = timelineOf(project).slides.find((sl) => sl.entries.some((x) => x.id === entries[0].id))
+
   if (entries.length > 1) {
-    return (
-      <Section title={`${entries.length} ${t('photos')}`}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 10 }}>
-          {entries.map((e) => {
-            const m = media(e)
-            return m?.thumb ? <img key={e.id} src={mediaUrl(m.thumb)} style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 4 }} alt="" /> : null
-          })}
-        </div>
-        <button className="btn small" onClick={() => useStore.getState().update((p) => entries.slice(1).forEach((x) => {
+    const order = new Map(project.entries.map((x, i) => [x.id, i]))
+    const first = [...entries].sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))[0]
+    const split = (): void =>
+      useStore.getState().update((p) =>
+        entries.forEach((x) => {
           const e = p.entries.find((y) => y.id === x.id)
-          if (e) e.groupBreak = 'force'
-        }))}>
-          {t('split')}
-        </button>
-      </Section>
+          if (e && x.id !== first.id) e.groupBreak = 'force'
+        })
+      )
+    return (
+      <>
+        <Section title={`${entries.length} ${t('photos')}`}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 10 }}>
+            {entries.map((e) => {
+              const m = media(e)
+              return m?.thumb ? <img key={e.id} src={mediaUrl(m.thumb)} style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 4 }} alt="" /> : null
+            })}
+          </div>
+          <button className="btn small" onClick={split}>
+            {t('split')}
+          </button>
+        </Section>
+        {slide && <LayoutPicker slide={slide} />}
+        {slide && <CropSection slide={slide} />}
+        <CaptionField entry={first} />
+      </>
     )
   }
 
@@ -448,6 +525,7 @@ function SlidePanel() {
           <input type="text" value={te.title} onChange={(ev) => setEntry(te.id, { title: ev.target.value })} />
           <input type="text" placeholder={t('subtitleText')} value={te.subtitle ?? ''} onChange={(ev) => setEntry(te.id, { subtitle: ev.target.value || undefined })} />
           <DurationOverride entry={te} />
+          {themeMeta(project.settings.theme).textAsCaption && <p className="hint">{t('captionOnNext')}</p>}
         </div>
       </Section>
     )
@@ -490,6 +568,7 @@ function SlidePanel() {
         <Section title={t('duration')}>
           <DurationOverride entry={ve} />
         </Section>
+        <CaptionField entry={ve} />
       </>
     )
   }
@@ -501,6 +580,8 @@ function SlidePanel() {
       <Section title={t('duration')}>
         <DurationOverride entry={pe} />
       </Section>
+      {slide && <CropSection slide={slide} />}
+      <CaptionField entry={pe} />
       {m.live && (
         <Section title="Live">
           <div className="row">

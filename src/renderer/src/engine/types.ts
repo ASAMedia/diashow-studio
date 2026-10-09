@@ -1,5 +1,6 @@
 import type { MediaItem, Project, ProjectSettings } from '@shared/types'
 import type { Timeline, TimelineSlide } from '@shared/timeline'
+import type { Box } from './draw'
 import type { Compositor, PostParams, Tex } from './gl'
 import type { TextSpec } from './media'
 
@@ -42,4 +43,8 @@ export interface Theme {
   /** Composite mode: transition shader and direction (uv space) for the incoming slide. */
   transition?(ctx: Ctx, incoming: SlideState): { kind: string; dir: [number, number] }
   post?(ctx: Ctx): Partial<PostParams>
+  /** Resting cell rectangles of a photo slide in canvas pixels (crop editing in the viewer). */
+  boxes?(W: number, H: number, slide: TimelineSlide, settings: ProjectSettings): Box[]
+  /** The theme draws slide captions itself; otherwise the engine adds a lower-third caption. */
+  ownCaption?: boolean
 }

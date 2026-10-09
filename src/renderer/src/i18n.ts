@@ -110,7 +110,14 @@ const S = {
   device: ['Gerät', 'Device'],
   date: ['Aufnahme', 'Taken'],
   size: ['Größe', 'Size'],
-  proxyNote: ['Für flüssige Wiedergabe optimiert', 'Optimized for smooth playback']
+  proxyNote: ['Für flüssige Wiedergabe optimiert', 'Optimized for smooth playback'],
+  layout: ['Layout', 'Layout'],
+  layoutAuto: ['Automatisch', 'Automatic'],
+  caption: ['Text auf dem Foto', 'Text on the photo'],
+  captionPlaceholder: ['z. B. SONNTAG – unser erster Tag', 'e.g. SUNDAY – our first day'],
+  cropHint: ['Im Vorschaubild ziehen verschiebt den Ausschnitt, Mausrad zoomt, Doppelklick setzt zurück.', 'Drag in the preview to move the framing, scroll to zoom, double-click to reset.'],
+  cropReset: ['Ausschnitte zurücksetzen', 'Reset framing'],
+  captionOnNext: ['Im Magazin-Thema erscheint dieser Text unten rechts auf der nächsten Folie.', 'In the Magazine theme this text appears at the bottom right of the next slide.']
 } satisfies Record<string, [string, string]>
 
 export type StringKey = keyof typeof S

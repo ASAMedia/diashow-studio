@@ -1,0 +1,101 @@
+// Visual check of the Magazine theme with real photos: set DIASHOW_VISUAL_DIR to a folder of
+// photos. Exports a 1080p show and writes still frames (rest and mid-transition) plus an
+// editor screenshot to test-results/magazine. Skipped when the variable is not set.
+import { _electron as electron, expect, test } from '@playwright/test'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+
+const root = resolve(__dirname, '..')
+const dir = process.env.DIASHOW_VISUAL_DIR
+const out = join(root, 'test-results', 'magazine')
+const ffmpeg = join(root, 'vendor/ffmpeg/bin/ffmpeg.exe')
+
+test('magazine theme with real photos', async () => {
+  test.skip(!dir, 'DIASHOW_VISUAL_DIR not set')
+  rmSync(out, { recursive: true, force: true })
+  mkdirSync(out, { recursive: true })
+  const files = readdirSync(dir!).filter((f) => /\.(jpe?g|heic|png)$/i.test(f)).sort().map((f) => join(dir!, f))
+  const dataDir = mkdtempSync(join(tmpdir(), 'diashow-mag-'))
+  const app = await electron.launch({ args: ['.'], cwd: root, env: { ...process.env, DIASHOW_DATA_DIR: dataDir } })
+  const page = await app.firstWindow()
+  const errors: string[] = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  await page.waitForFunction(() => !!(window as any).__diashow)
+  await page.evaluate(async (paths) => {
+    const d = (window as any).__diashow
+    await d.store.getState().createProject(paths, 'Skicamp 2026')
+  }, files)
+  await page.waitForFunction(() => {
+    const p = (window as any).__diashow.store.getState().project
+    return p && p.media.length > 0 && p.media.every((m: any) => m.status === 'ready' || m.status === 'error')
+  }, null, { timeout: 300_000 })
+
+  // Magazine, project title, a text slide in front of the 5th photo (becomes its caption)
+  const slides = await page.evaluate(() => {
+    const d = (window as any).__diashow
+    const s = d.store.getState()
+    s.setTheme('magazine')
+    s.setSettings({ timing: { mode: 'custom', customTotal: 70 }, subtitleText: '' })
+    s.update((p: any) => {
+      p.entries.splice(4, 0, { id: 'txt1', type: 'text', title: 'Sonntag', subtitle: 'Unser erster Tag im Skilager' })
+    })
+    return new Promise((r) =>
+      setTimeout(() => {
+        const tl = d.player.current.tl
+        r(tl.slides.map((x: any) => ({ start: x.start, dur: x.duration, transIn: x.transIn, transOut: x.transOut, n: x.entries.length, tpl: x.template?.id, caption: x.caption?.text })))
+      }, 300)
+    )
+  })
+  console.log(JSON.stringify(slides))
+
+  // editor with a multi-photo slide selected (crop cells visible on hover)
+  await page.evaluate(() => {
+    const d = (window as any).__diashow
+    const tl = d.player.current.tl
+    const multi = tl.slides.find((x: any) => x.entries.length >= 3)
+    d.store.getState().select(multi.entries.map((e: any) => e.id))
+    d.store.getState().set({ tab: 'slide' })
+  })
+  await page.waitForTimeout(800)
+  // drag the framing of the first cell and zoom it with the wheel
+  const cell = page.locator('.crop-cell').first()
+  const box = (await cell.boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2 + 20, { steps: 6 })
+  await page.mouse.up()
+  await page.mouse.wheel(0, -300)
+  await page.waitForTimeout(300)
+  const crop = await page.evaluate(() => {
+    const d = (window as any).__diashow
+    const tl = d.player.current.tl
+    const multi = tl.slides.find((x: any) => x.entries.length >= 3)
+    const id = multi.entries[0].id
+    return d.store.getState().project.entries.find((e: any) => e.id === id).crop
+  })
+  console.log('crop after drag', JSON.stringify(crop))
+  expect(crop).toBeTruthy()
+  expect(crop.zoom).toBeGreaterThan(1)
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.screenshot({ path: join(out, '_editor.png') })
+
+  const video = join(dataDir, 'magazine.mp4')
+  await page.evaluate(async (outPath) => {
+    const d = (window as any).__diashow
+    await d.exportShow(d.store.getState().project, { outPath, width: 1920, height: 1080, fps: 30, codec: 'h264', quality: 'standard', hardware: true }, 'de-DE', () => {}, new AbortController().signal)
+  }, video)
+  await app.close()
+
+  const times: [string, number][] = []
+  ;(slides as any[]).slice(0, 10).forEach((s, i) => {
+    times.push([`${String(i).padStart(2, '0')}-rest`, s.start + s.dur / 2])
+    if (s.transIn > 0) {
+      times.push([`${String(i).padStart(2, '0')}-in25`, s.start + s.transIn * 0.25])
+      times.push([`${String(i).padStart(2, '0')}-in60`, s.start + s.transIn * 0.6])
+    }
+  })
+  for (const [name, t] of times) execFileSync(ffmpeg, ['-v', 'error', '-ss', t.toFixed(3), '-i', video, '-frames:v', '1', '-y', join(out, `${name}.jpg`)])
+  expect(errors).toEqual([])
+})

@@ -2,7 +2,7 @@
 // preview, the fullscreen player and the export all use the same result.
 import type { AspectRatio, Entry, MediaItem, Project, TextEntry, VideoEntry } from './types'
 import { classicTransitionSeconds, themeMeta } from './themes'
-import { groupEntries, mediaAspect, pickTemplate, type Template } from './layout'
+import { groupEntries, mediaAspect, pickTemplate, templatesFor, type Template } from './layout'
 
 export type SlideKind = 'photos' | 'video' | 'text' | 'title'
 
@@ -28,6 +28,10 @@ export interface TimelineSlide {
   /** Title drawn over this slide (themes without a separate title slide). */
   titleOverlay?: boolean
   title?: { text: string; subtitle?: string }
+  /** Text shown on the slide: a preceding text slide (Magazine) or a photo's own caption. */
+  caption?: { text: string; subtitle?: string }
+  /** Text entry shown as this slide's caption (so the filmstrip can still select it). */
+  captionEntryId?: string
 }
 
 export interface Timeline {
@@ -101,8 +105,20 @@ export function buildTimeline(project: Project, locale = 'de-DE'): Timeline {
   }
 
   const entryAspect = (e: Entry): number => mediaAspect(e.type === 'text' ? undefined : byId.get(e.mediaId))
-  for (const g of groupEntries(usable, settings.theme, playsLive, entryAspect)) {
+  let prevTemplate: string | undefined
+  let pendingCaption: { text: string; subtitle?: string; id: string } | undefined
+  const groups = groupEntries(usable, settings.theme, playsLive, entryAspect)
+  for (const [gi, g] of groups.entries()) {
     const first = g.entries[0]
+    const nextIsMedia = groups[gi + 1] && groups[gi + 1].entries[0].type !== 'text'
+    if (first.type === 'text' && meta.textAsCaption && nextIsMedia) {
+      pendingCaption = { text: (first as TextEntry).title, subtitle: (first as TextEntry).subtitle, id: first.id }
+      continue
+    }
+    const ownCaption = g.entries.find((e) => e.caption?.trim())?.caption?.trim()
+    const caption = pendingCaption ? { text: pendingCaption.text, subtitle: pendingCaption.subtitle } : ownCaption ? { text: ownCaption } : undefined
+    const captionEntryId = pendingCaption?.id
+    pendingCaption = undefined
     if (first.type === 'text') {
       const e = first as TextEntry
       drafts.push({
@@ -118,17 +134,25 @@ export function buildTimeline(project: Project, locale = 'de-DE'): Timeline {
       const trimIn = Math.min(Math.max(0, e.trimIn ?? 0), Math.max(0, len - 0.5))
       const trimOut = Math.max(trimIn + 0.5, Math.min(len || trimIn + 0.5, e.trimOut ?? len))
       const clip = trimOut - trimIn
-      const slide = { id: e.id, index: 0, kind: 'video' as const, entries: [e], media: [m], customDuration: e.duration != null, video: { trimIn, trimOut } }
+      const slide = { id: e.id, index: 0, kind: 'video' as const, entries: [e], media: [m], customDuration: e.duration != null, video: { trimIn, trimOut }, caption, captionEntryId }
       if (e.duration != null) drafts.push({ slide, fixed: Math.min(e.duration, clip), weight: 0, min: 0 })
       else if (settings.playFullVideos) drafts.push({ slide, fixed: Math.max(1, clip), weight: 0, min: 0 })
       else drafts.push({ slide, weight: 1, min: Math.min(1, clip), max: clip })
     } else {
-      const media = g.entries.map((e) => byId.get((e as { mediaId: string }).mediaId)!)
-      const template = g.entries.length > 1 ? pickTemplate(media.map(mediaAspect), aspect) : undefined
+      let entries = g.entries
+      let media = entries.map((e) => byId.get((e as { mediaId: string }).mediaId)!)
+      let template: Template | undefined
+      if (entries.length > 1 || settings.theme === 'magazine') {
+        const placed = pickTemplate(media.map(mediaAspect), aspect, templatesFor(settings.theme, entries.length), prevTemplate, first.layout)
+        template = placed.template
+        prevTemplate = template.id
+        entries = placed.order.map((i) => entries[i])
+        media = placed.order.map((i) => media[i])
+      }
       const live = playsLive(first) ? { duration: media[0].live!.duration } : undefined
       const custom = g.entries.length === 1 && first.duration != null
       drafts.push({
-        slide: { id: first.id, index: 0, kind: 'photos', entries: g.entries, media, template, customDuration: custom, live },
+        slide: { id: first.id, index: 0, kind: 'photos', entries, media, template, customDuration: custom, live, caption, captionEntryId },
         fixed: custom ? first.duration : undefined,
         weight: 1 + 0.4 * (g.entries.length - 1),
         min: live ? live.duration + 0.8 : 0

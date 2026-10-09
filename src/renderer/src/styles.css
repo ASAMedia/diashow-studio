@@ -231,3 +231,16 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--accent); margi
 .kb .rect.end span { background: #ff6b6b; }
 .kb-bar { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); display: flex; gap: 8px; align-items: center; background: rgba(30, 30, 32, 0.9); padding: 6px 10px; border-radius: 10px; }
 .empty-stage { color: var(--text-2); text-align: center; max-width: 360px; }
+
+/* crop editing of photo cells in the viewer */
+.crop-cell { position: absolute; cursor: grab; outline: 1px dashed rgba(255, 255, 255, 0); outline-offset: -1px; }
+.frame:hover .crop-cell { outline-color: rgba(255, 255, 255, 0.35); }
+.crop-cell:hover, .crop-cell.active { outline: 2px solid var(--accent) !important; }
+.crop-cell.active { cursor: grabbing; }
+.layouts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.layouts button { border: 1px solid var(--line); background: var(--bg); border-radius: 6px; padding: 4px; color: var(--text-3); font-size: 11px; }
+.layouts button.on { border-color: var(--accent); color: var(--accent); }
+.layouts svg { display: block; width: 100%; height: auto; }
+.cap-badge { position: absolute; left: 4px; bottom: 4px; background: #f2f2f2; color: #111; font-weight: 700; font-size: 10px; padding: 0 5px; border-radius: 3px; cursor: pointer; }
+.cap-badge:hover { background: var(--accent); color: #fff; }
+.card.cap-selected { outline-color: rgba(77, 159, 255, 0.55); }

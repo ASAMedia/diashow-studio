@@ -236,7 +236,7 @@ export class ExportVideoStore {
   }
 }
 
-export type FontRole = 'sans' | 'light' | 'display' | 'serif' | 'type' | 'editorial'
+export type FontRole = 'sans' | 'light' | 'display' | 'serif' | 'type' | 'editorial' | 'caption' | 'rounded'
 
 const FONT_FAMILY: Record<FontRole, string> = {
   sans: "'Inter', 'Segoe UI', sans-serif",
@@ -244,7 +244,9 @@ const FONT_FAMILY: Record<FontRole, string> = {
   display: "'Anton', 'Impact', sans-serif",
   serif: "'Cinzel', 'Georgia', serif",
   type: "'Special Elite', 'Courier New', monospace",
-  editorial: "'Playfair Display', 'Georgia', serif"
+  editorial: "'Playfair Display', 'Georgia', serif",
+  caption: "'Barlow Semi Condensed', 'Bahnschrift', sans-serif",
+  rounded: "'Nunito Sans', 'Segoe UI', sans-serif"
 }
 
 export interface TextSpec {

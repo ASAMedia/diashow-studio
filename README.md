@@ -6,6 +6,10 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
 
 - **8 themes.** The seven Photos themes are Ken Burns, Origami, Reflections, Sliding Panels, Vintage Prints, Classic and Magazine. Retro Film adds an eighth, a Super 8 look.
   - Multi-photo themes group photos into layouts automatically. You can split a group or join photos into one slide.
+  - Magazine follows a reference show exported from Photos: background #EDF2EE, equal margins and gutters, and 1 to 6 photos per slide on measured grids. Cells fade in one after another.
+    - Text slides become white captions at the bottom right of the next slide, and the title sits on the first slide.
+    - Unlike Photos, there are no half-empty slides: a lone portrait photo is paired with the next photo.
+  - Cropped layouts (Magazine, Origami, Sliding Panels, Classic in fill mode, Retro Film) let you drag each photo inside its cell in the preview, zoom it with the mouse wheel and reset it with a double-click. You can also choose the layout per slide.
 - **Colour looks:** Natural, Vivid, Warm, Cool, Dramatic, Faded, Mono and Noir.
 - **Timing like Photos:**
   - "Fit to music" or a custom total length.

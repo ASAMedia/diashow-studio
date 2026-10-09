@@ -109,6 +109,11 @@ export function Filmstrip() {
                 key={s.id}
                 slide={s}
                 selected={s.entries.some((e) => sel.has(e.id))}
+                captionSelected={!!s.captionEntryId && sel.has(s.captionEntryId)}
+                onCaption={() => {
+                  select([s.captionEntryId!])
+                  useStore.getState().set({ tab: 'slide' })
+                }}
                 dragging={drag === s.index}
                 onClick={(e) => clickSlide(s, e)}
                 onMenu={(e) => {
@@ -190,6 +195,8 @@ export function Filmstrip() {
 function SlideCard(props: {
   slide: TimelineSlide
   selected: boolean
+  captionSelected: boolean
+  onCaption: () => void
   dragging: boolean
   onClick: (e: React.MouseEvent) => void
   onMenu: (e: React.MouseEvent) => void
@@ -203,7 +210,7 @@ function SlideCard(props: {
   const ve = s.kind === 'video' ? (s.entries[0] as VideoEntry) : null
   return (
     <div
-      className={`card ${props.selected ? 'selected' : ''} ${props.dragging ? 'dragging' : ''}`}
+      className={`card ${props.selected ? 'selected' : ''} ${props.captionSelected ? 'cap-selected' : ''} ${props.dragging ? 'dragging' : ''}`}
       draggable={s.kind !== 'title'}
       onDragStart={(e) => {
         e.dataTransfer.effectAllowed = 'move'
@@ -240,6 +247,18 @@ function SlideCard(props: {
           {ve && m0?.hasAudio && <span className="badge">{ve.muted ? <VolumeX size={10} /> : <Volume2 size={10} />}</span>}
         </span>
       </div>
+      {s.captionEntryId && (
+        <span
+          className="cap-badge"
+          title={s.caption?.text}
+          onClick={(e) => {
+            e.stopPropagation()
+            props.onCaption()
+          }}
+        >
+          T
+        </span>
+      )}
       {busy && <div className="progress" style={{ width: `${Math.round((busy.progress ?? 0.05) * 100)}%` }} />}
       {failed && <div className="err">{failed.error === 'missing' ? t('missing') : failed.format}</div>}
       <span className="num">{s.index + 1}</span>

@@ -72,7 +72,17 @@ interface BaseEntry {
   duration?: number
   /** Multi-photo themes: force a new slide before this entry, or join it with the previous one. */
   groupBreak?: GroupBreak
+  /** Text shown on the slide (Magazine: bottom right of the main photo). */
   caption?: string
+  /** Layout template chosen by the user for the slide that starts with this entry. */
+  layout?: string
+}
+
+/** Framing of a photo cropped into a cell: focus point (0..1 of the image) and zoom (>= 1). */
+export interface Crop {
+  x: number
+  y: number
+  zoom: number
 }
 
 export interface PhotoEntry extends BaseEntry {
@@ -80,6 +90,8 @@ export interface PhotoEntry extends BaseEntry {
   mediaId: string
   /** Ken Burns start/end framing; default motion when undefined. */
   kenBurns?: { start: Rect; end: Rect }
+  /** Framing in cropped layouts (Magazine, Origami, Sliding Panels, Classic fill). */
+  crop?: Crop
   /** Play the motion part of a Live/Motion photo; undefined = project default. */
   playLive?: boolean
 }

@@ -1,4 +1,4 @@
-import type { MediaItem, PhotoEntry, Rect } from '@shared/types'
+import type { Entry, MediaItem, PhotoEntry, Rect } from '@shared/types'
 import type { TimelineSlide } from '@shared/timeline'
 import type { QuadSpec, Tex, UvRect } from './gl'
 import type { Ctx, SlideState } from './types'
@@ -77,6 +77,21 @@ export function defaultKenBurns(mediaAspect: number, frameAspect: number, seed: 
   }
   const inner = { x: sx, y: sy, ...small }
   return r() < 0.5 ? { start: full, end: inner } : { start: inner, end: full }
+}
+
+/** Default vertical focus: slightly above the middle, where heads usually are. */
+export const DEFAULT_FOCUS_Y = 0.42
+
+/** Crop of a photo filling a cell, honouring the user's framing (focus point and zoom). */
+export function photoUv(entry: Entry | undefined, m: MediaItem | undefined, boxAspect: number, tex?: Tex | null): UvRect {
+  const base = coverRect(aspectOf(m, tex), boxAspect)
+  const crop = entry?.type === 'photo' ? entry.crop : undefined
+  const z = Math.min(4, Math.max(1, crop?.zoom ?? 1))
+  const w = base.w / z
+  const h = base.h / z
+  const fx = crop?.x ?? 0.5
+  const fy = crop?.y ?? DEFAULT_FOCUS_Y
+  return { x: Math.min(1 - w, Math.max(0, fx - w / 2)), y: Math.min(1 - h, Math.max(0, fy - h / 2)), w, h }
 }
 
 export function lerpRect(a: Rect, b: Rect, t: number): Rect {
