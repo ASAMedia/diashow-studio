@@ -2,7 +2,7 @@
 // Classic, Ken Burns and Retro Film.
 import type { PhotoEntry } from '@shared/types'
 import type { Ctx, SlideState, Theme } from '../types'
-import { aspectOf, dirVector, drawFitted, drawMedia, drawText, kenBurnsUv, photoUv, slideTexture, titleOpacity, lerp, rng } from '../draw'
+import { aspectOf, dirVector, drawFitted, drawMedia, drawText, kenBurnsUv, photoUv, slideTexture, titleOpacity, rng } from '../draw'
 import type { FontRole } from '../media'
 import type { Box } from '../draw'
 
@@ -107,7 +107,9 @@ export const retro: Theme = {
       drawCenteredText(ctx, s, 'type', '#f3e9d2', { dx, dy, scale: 0.95 })
       return
     }
-    fullFrameMedia(ctx, s, 'cover', { zoom: lerp(1.02, 1.08, s.p), dx, dy })
+    // constant slight zoom (room for the weave): a drifting zoom made the two pictures in a
+    // burn transition differ in size
+    fullFrameMedia(ctx, s, 'cover', { zoom: 1.04, dx, dy })
     if (sl.titleOverlay) drawCenteredText(ctx, s, 'type', '#f3e9d2', { opacity: titleOpacity(s.local), shadow: true, dx, dy })
   },
   transition() {

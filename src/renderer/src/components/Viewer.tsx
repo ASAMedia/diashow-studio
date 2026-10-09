@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ImagePlus, FolderPlus, Pause, Play, Repeat } from 'lucide-react'
 import { mediaUrl } from '@shared/api'
-import type { MediaItem, PhotoEntry, Rect } from '@shared/types'
+import type { Crop, MediaItem, PhotoEntry, Rect, VideoEntry } from '@shared/types'
 import type { TimelineSlide } from '@shared/timeline'
 import { themeMeta } from '@shared/themes'
 import { aspectValue } from '@shared/timeline'
@@ -252,11 +252,11 @@ function CropEditor({ slide, scale }: { slide: TimelineSlide; scale: number }) {
   const engine = playerRef.current?.engine
   const boxes: Box[] = engine ? engine.editBoxes(slide) : []
   // one project update per animation frame while dragging
-  const write = (id: string, crop: PhotoEntry['crop']): void => {
+  const write = (id: string, crop: Crop): void => {
     cancelAnimationFrame(frame.current)
     frame.current = requestAnimationFrame(() => setEntry(id, { crop } as Partial<PhotoEntry>))
   }
-  const center = (e: PhotoEntry, m: MediaItem, b: Box) => {
+  const center = (e: PhotoEntry | VideoEntry, m: MediaItem, b: Box) => {
     const uv = photoUv(e, m, b.w / b.h)
     return { uv, x: uv.x + uv.w / 2, y: uv.y + uv.h / 2, zoom: e.crop?.zoom ?? 1 }
   }
@@ -265,7 +265,7 @@ function CropEditor({ slide, scale }: { slide: TimelineSlide; scale: number }) {
       {boxes.map((b, i) => {
         const e = slide.entries[i]
         const m = slide.media[i]
-        if (!e || e.type !== 'photo' || !m) return null
+        if (!e || e.type === 'text' || !m) return null
         return (
           <div
             key={e.id}

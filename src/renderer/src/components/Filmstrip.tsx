@@ -49,7 +49,14 @@ export function Filmstrip() {
   const [menu, setMenu] = useState<Menu | null>(null)
   const [drag, setDrag] = useState<number | null>(null)
   const [dropAt, setDropAt] = useState<number | null>(null)
+  const [mergeAt, setMergeAt] = useState<number | null>(null)
+  // drag events can arrive faster than React re-renders, so the handlers read refs
+  const dragRef = useRef<number | null>(null)
+  const dropRef = useRef<{ merge?: number; insert?: number }>({})
   const innerRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  // autoscroll pauses for a moment after the user scrolls the filmstrip by hand
+  const manualUntil = useRef(0)
   const sel = new Set(selection)
   const width = Math.max(tl.slides.length * STEP + CARD, 200)
 
@@ -86,22 +93,62 @@ export function Filmstrip() {
     useStore.getState().set({ tab: 'slide' })
   }
 
+  // Dropping on the middle of another slide combines both; near the edges it reorders.
   const onDragOver = (e: React.DragEvent): void => {
+    const drag = dragRef.current
     if (drag == null) return
     e.preventDefault()
     const rect = innerRef.current!.getBoundingClientRect()
     const x = e.clientX - rect.left
-    setDropAt(Math.max(0, Math.min(tl.slides.length, Math.round(x / STEP))))
+    const i = Math.floor(x / STEP)
+    const within = (x - i * STEP) / CARD
+    const target = tl.slides[i]
+    const source = tl.slides[drag]
+    const canMerge =
+      maxPer > 1 && target && source && i !== drag && target.kind !== 'title' && target.kind !== 'text' && source.kind !== 'text' &&
+      target.entries.length + source.entries.length <= maxPer
+    if (canMerge && within > 0.25 && within < 0.75) {
+      dropRef.current = { merge: i }
+      setMergeAt(i)
+      setDropAt(null)
+    } else {
+      const insert = Math.max(0, Math.min(tl.slides.length, Math.round(x / STEP)))
+      dropRef.current = { insert }
+      setMergeAt(null)
+      setDropAt(insert)
+    }
   }
+  const maxPer = themeMeta(project.settings.theme).maxPerSlide
+  const selectedSlides = tl.slides.filter((sl) => sl.entries.some((e) => sel.has(e.id)))
 
   return (
     <div className="strip">
-      <div className="strip-scroll">
-        <div className="strip-inner" ref={innerRef} style={{ width }} onDragOver={onDragOver} onDrop={(e) => {
+      <div
+        className="strip-scroll"
+        ref={scrollRef}
+        onWheel={(e) => {
+          manualUntil.current = performance.now() + 4000
+          if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) e.currentTarget.scrollLeft += e.deltaY
+        }}
+        onPointerDown={(e) => {
+          // grabbing the scrollbar (below the content) counts as manual scrolling
+          if (e.target === e.currentTarget) manualUntil.current = performance.now() + 4000
+        }}
+      >
+        <div className="strip-inner" ref={innerRef} style={{ width }} onDragOver={onDragOver} onDragLeave={() => setMergeAt(null)} onDrop={(e) => {
           e.preventDefault()
-          if (drag != null && dropAt != null && dropAt !== drag && dropAt !== drag + 1) moveSlide(drag, dropAt)
+          const drag = dragRef.current
+          const { merge, insert } = dropRef.current
+          if (drag != null && merge != null) {
+            const ids = [...tl.slides[merge].entries, ...tl.slides[drag].entries].map((x) => x.id)
+            useStore.getState().mergeEntries(ids)
+            select(ids)
+          } else if (drag != null && insert != null && insert !== drag && insert !== drag + 1) moveSlide(drag, insert)
+          dragRef.current = null
+          dropRef.current = {}
           setDrag(null)
           setDropAt(null)
+          setMergeAt(null)
         }}>
           <div className="cards">
             {tl.slides.map((s) => (
@@ -115,16 +162,22 @@ export function Filmstrip() {
                   useStore.getState().set({ tab: 'slide' })
                 }}
                 dragging={drag === s.index}
+                mergeTarget={mergeAt === s.index}
                 onClick={(e) => clickSlide(s, e)}
                 onMenu={(e) => {
                   e.preventDefault()
                   if (s.kind !== 'title' && !s.entries.some((x) => sel.has(x.id))) select(s.entries.map((x) => x.id))
                   setMenu({ x: e.clientX, y: e.clientY, slide: s })
                 }}
-                onDragStart={() => setDrag(s.index)}
+                onDragStart={() => {
+                  dragRef.current = s.index
+                  setDrag(s.index)
+                }}
                 onDragEnd={() => {
+                  dragRef.current = null
                   setDrag(null)
                   setDropAt(null)
+                  setMergeAt(null)
                 }}
               />
             ))}
@@ -134,7 +187,7 @@ export function Filmstrip() {
           </div>
           {dropAt != null && <div className="drop-indicator" style={{ left: dropAt * STEP - GAP / 2 - 1 }} />}
           <AudioLane tl={tl} width={width} />
-          <Playhead tl={tl} />
+          <Playhead tl={tl} scrollRef={scrollRef} manualUntil={manualUntil} />
         </div>
       </div>
       {menu && (
@@ -157,19 +210,26 @@ export function Filmstrip() {
               <button onClick={() => { setMenu(null); useStore.getState().addText() }}>
                 <Type size={14} /> {t('addText')}
               </button>
+              {selectedSlides.length > 1 && maxPer > 1 && selectedSlides.reduce((n, x) => n + x.entries.length, 0) <= maxPer && (
+                <button onClick={() => {
+                  useStore.getState().mergeEntries(selectedSlides.flatMap((x) => x.entries.map((e) => e.id)))
+                  setMenu(null)
+                }}>
+                  <Merge size={14} /> {t('merge')}
+                </button>
+              )}
               {menu.slide.entries.length > 1 && (
                 <button onClick={() => {
-                  const ids = new Set(menu.slide!.entries.slice(1).map((e) => e.id))
-                  update((p) => p.entries.forEach((e) => ids.has(e.id) && (e.groupBreak = 'force')))
+                  useStore.getState().splitSlide(menu.slide!.entries.map((e) => e.id))
                   setMenu(null)
                 }}>
                   <Split size={14} /> {t('split')}
                 </button>
               )}
-              {menu.slide.kind === 'photos' && themeMeta(project.settings.theme).maxPerSlide > 1 && menu.slide.index > 0 && tl.slides[menu.slide.index - 1]?.kind === 'photos' && (
+              {menu.slide.kind !== 'text' && maxPer > 1 && menu.slide.index > 0 && ['photos', 'video'].includes(tl.slides[menu.slide.index - 1]?.kind) && (
                 <button onClick={() => {
-                  const id = menu.slide!.entries[0].id
-                  update((p) => p.entries.forEach((e) => e.id === id && (e.groupBreak = 'join')))
+                  const prev = tl.slides[menu.slide!.index - 1]
+                  useStore.getState().mergeEntries([...prev.entries, ...menu.slide!.entries].map((e) => e.id))
                   setMenu(null)
                 }}>
                   <Merge size={14} /> {t('joinPrev')}
@@ -198,6 +258,7 @@ function SlideCard(props: {
   captionSelected: boolean
   onCaption: () => void
   dragging: boolean
+  mergeTarget: boolean
   onClick: (e: React.MouseEvent) => void
   onMenu: (e: React.MouseEvent) => void
   onDragStart: () => void
@@ -208,9 +269,10 @@ function SlideCard(props: {
   const busy = s.media.find((m) => m.status === 'pending' || m.status === 'processing')
   const failed = s.media.find((m) => m.status === 'error')
   const ve = s.kind === 'video' ? (s.entries[0] as VideoEntry) : null
+  const gridVideos = s.kind === 'photos' ? s.entries.filter((e) => e.type === 'video').length : 0
   return (
     <div
-      className={`card ${props.selected ? 'selected' : ''} ${props.captionSelected ? 'cap-selected' : ''} ${props.dragging ? 'dragging' : ''}`}
+      className={`card ${props.selected ? 'selected' : ''} ${props.captionSelected ? 'cap-selected' : ''} ${props.dragging ? 'dragging' : ''} ${props.mergeTarget ? 'merge-target' : ''}`}
       draggable={s.kind !== 'title'}
       onDragStart={(e) => {
         e.dataTransfer.effectAllowed = 'move'
@@ -234,6 +296,11 @@ function SlideCard(props: {
           {s.kind === 'video' && (
             <span className="badge">
               <Film size={10} /> {fmtTime(s.duration)}
+            </span>
+          )}
+          {gridVideos > 0 && (
+            <span className="badge">
+              <Film size={10} /> {gridVideos}
             </span>
           )}
           {m0?.live && <span className="badge">LIVE</span>}
@@ -317,7 +384,18 @@ function AudioLane({ tl, width }: { tl: Timeline; width: number }) {
   )
 }
 
-function Playhead({ tl }: { tl: Timeline }) {
+function Playhead({ tl, scrollRef, manualUntil }: { tl: Timeline; scrollRef: React.RefObject<HTMLDivElement | null>; manualUntil: React.RefObject<number> }) {
   const playhead = useStore((s) => s.playhead)
-  return <div className="playhead" style={{ left: timeToX(tl, playhead) - 1 }} />
+  const playing = useStore((s) => s.playing)
+  const x = timeToX(tl, playhead)
+  // keep the playhead inside the visible part of the filmstrip
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el || performance.now() < manualUntil.current) return
+    const px = x + 16
+    if (px < el.scrollLeft + 40 || px > el.scrollLeft + el.clientWidth - 80) {
+      el.scrollTo({ left: Math.max(0, px - el.clientWidth * 0.25), behavior: playing ? 'smooth' : 'auto' })
+    }
+  }, [x, playing, scrollRef, manualUntil])
+  return <div className="playhead" style={{ left: x - 1 }} />
 }

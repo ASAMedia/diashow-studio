@@ -23,6 +23,8 @@ export interface TimelineSlide {
   customDuration: boolean
   /** Video slide: source time at slide start, and the playable span. */
   video?: { trimIn: number; trimOut: number }
+  /** Grid slides: playable span of each video cell (null for photos), aligned with entries. */
+  clips?: ({ trimIn: number; trimOut: number } | null)[]
   /** Photo slide playing a Live/Motion photo first. */
   live?: { duration: number }
   /** Title drawn over this slide (themes without a separate title slide). */
@@ -87,6 +89,11 @@ export function buildTimeline(project: Project, locale = 'de-DE'): Timeline {
   const aspect = aspectValue(settings.aspect)
   const byId = new Map(project.media.map((m) => [m.id, m]))
   const usable = project.entries.filter((e) => e.type === 'text' || byId.get(e.mediaId)?.status !== 'error')
+  const span = (e: VideoEntry, m: MediaItem): { trimIn: number; trimOut: number } => {
+    const len = m.duration ?? 0
+    const trimIn = Math.min(Math.max(0, e.trimIn ?? 0), Math.max(0, len - 0.5))
+    return { trimIn, trimOut: Math.max(trimIn + 0.5, Math.min(len || trimIn + 0.5, e.trimOut ?? len)) }
+  }
   const playsLive = (e: Entry): boolean =>
     e.type === 'photo' && !!byId.get(e.mediaId)?.live && (e.playLive ?? settings.playLivePhotos)
 
@@ -127,12 +134,10 @@ export function buildTimeline(project: Project, locale = 'de-DE'): Timeline {
         weight: 0,
         min: 0
       })
-    } else if (first.type === 'video') {
+    } else if (first.type === 'video' && g.entries.length === 1) {
       const e = first as VideoEntry
       const m = byId.get(e.mediaId)!
-      const len = m.duration ?? 0
-      const trimIn = Math.min(Math.max(0, e.trimIn ?? 0), Math.max(0, len - 0.5))
-      const trimOut = Math.max(trimIn + 0.5, Math.min(len || trimIn + 0.5, e.trimOut ?? len))
+      const { trimIn, trimOut } = span(e, m)
       const clip = trimOut - trimIn
       const slide = { id: e.id, index: 0, kind: 'video' as const, entries: [e], media: [m], customDuration: e.duration != null, video: { trimIn, trimOut }, caption, captionEntryId }
       if (e.duration != null) drafts.push({ slide, fixed: Math.min(e.duration, clip), weight: 0, min: 0 })
@@ -151,11 +156,14 @@ export function buildTimeline(project: Project, locale = 'de-DE'): Timeline {
       }
       const live = playsLive(first) ? { duration: media[0].live!.duration } : undefined
       const custom = g.entries.length === 1 && first.duration != null
+      // videos in a grid play side by side; with "play in full" the slide lasts as long as the longest
+      const clips = entries.map((e, i) => (e.type === 'video' ? span(e, media[i]) : null))
+      const longest = Math.max(0, ...clips.map((c) => (c ? c.trimOut - c.trimIn : 0)))
       drafts.push({
-        slide: { id: first.id, index: 0, kind: 'photos', entries, media, template, customDuration: custom, live, caption, captionEntryId },
+        slide: { id: first.id, index: 0, kind: 'photos', entries, media, template, customDuration: custom, live, caption, captionEntryId, ...(longest > 0 ? { clips } : {}) },
         fixed: custom ? first.duration : undefined,
         weight: 1 + 0.4 * (g.entries.length - 1),
-        min: live ? live.duration + 0.8 : 0
+        min: Math.max(live ? live.duration + 0.8 : 0, settings.playFullVideos ? longest : 0)
       })
     }
   }
@@ -178,10 +186,13 @@ export function buildTimeline(project: Project, locale = 'de-DE'): Timeline {
   const transitionFor = (): number =>
     meta.freeTransition ? classicTransitionSeconds(settings.transition.speed) : meta.transition
 
+  // Every transition of a show has the same length; automatic slides are kept long enough
+  // for it, only very short fixed slides (a 1 s clip) shorten their own transitions.
+  const T = transitionFor()
+  const minAuto = Math.max(MIN_PHOTO_SECONDS, 2.4 * T)
   const durationsFor = (p: number): number[] =>
-    drafts.map((d) => (d.fixed != null ? d.fixed : Math.min(d.max ?? Infinity, Math.max(d.min, p * d.weight))))
-  const overlaps = (dur: number[]): number[] =>
-    dur.slice(0, -1).map((d, i) => Math.min(transitionFor(), 0.45 * d, 0.45 * dur[i + 1]))
+    drafts.map((d) => (d.fixed != null ? d.fixed : Math.min(d.max ?? Infinity, Math.max(d.min, minAuto, p * d.weight))))
+  const overlaps = (dur: number[]): number[] => dur.slice(0, -1).map((d, i) => Math.min(T, 0.45 * d, 0.45 * dur[i + 1]))
   const lengthFor = (p: number): number => {
     const dur = durationsFor(p)
     return dur.reduce((s, d) => s + d, 0) - overlaps(dur).reduce((s, d) => s + d, 0)
@@ -191,7 +202,7 @@ export function buildTimeline(project: Project, locale = 'de-DE'): Timeline {
   const autoWeight = drafts.reduce((s, d) => s + (d.fixed == null ? d.weight : 0), 0)
   if (target != null && autoWeight > 0) {
     // length is monotonic in p, so bisect
-    let lo = MIN_PHOTO_SECONDS
+    let lo = minAuto
     let hi = MAX_PHOTO_SECONDS
     if (lengthFor(lo) >= target) p = lo
     else if (lengthFor(hi) <= target) p = hi

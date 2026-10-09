@@ -97,6 +97,62 @@ test('import, preview every theme, export', async () => {
   }
   await page.screenshot({ path: join(shots, '_editor.png') })
 
+  // autoscroll: while playing, the playhead stays inside the visible part of the filmstrip
+  await page.evaluate(() => (window as any).__diashow.store.getState().setTheme('kenburns'))
+  await page.evaluate(() => {
+    const pl = (window as any).__diashow.player.current
+    pl.seek(Math.max(0, pl.tl.duration - 14))
+    pl.play()
+  })
+  const samples: number[][] = []
+  for (let i = 0; i < 10; i++) {
+    await page.waitForTimeout(1000)
+    samples.push(
+      await page.evaluate(() => {
+        const ph = document.querySelector('.playhead')!.getBoundingClientRect()
+        const sc = document.querySelector('.strip-scroll')!.getBoundingClientRect()
+        return [ph.left, sc.left, sc.right]
+      })
+    )
+  }
+  await page.evaluate(() => (window as any).__diashow.player.current.pause())
+  console.log('playhead vs filmstrip', JSON.stringify(samples.map((x) => x.map(Math.round))))
+  expect(samples.every(([x, l, r]) => x >= l && x <= r)).toBe(true)
+
+  // slide grouping in Magazine: drag a slide onto another, and Ctrl+click + context menu
+  const slideIds = (): Promise<string[][]> =>
+    page.evaluate(() => (window as any).__diashow.player.current.tl.slides.map((s: any) => s.entries.map((e: any) => e.id)))
+  await page.evaluate(() => (window as any).__diashow.store.getState().setTheme('magazine'))
+  await page.waitForTimeout(300)
+  let before = await slideIds()
+  // two photo slides that fit together (at most 6 items)
+  const kinds: string[] = await page.evaluate(() => (window as any).__diashow.player.current.tl.slides.map((s: any) => s.kind))
+  const pairs: [number, number][] = []
+  for (let a = 0; a < before.length; a++) for (let b = a + 2; b < before.length; b++) {
+    if (kinds[a] !== 'text' && kinds[b] !== 'text' && before[a].length + before[b].length <= 6) pairs.push([a, b])
+  }
+  const [from, to] = pairs[0]
+  const cards = page.locator('.cards .card:not(.add)')
+  await cards.nth(from).scrollIntoViewIfNeeded()
+  await cards.nth(from).dragTo(cards.nth(to))
+  await page.waitForTimeout(300)
+  let after = await slideIds()
+  const wanted = [...before[from], ...before[to]]
+  expect(after.some((s) => wanted.every((id) => s.includes(id)))).toBe(true)
+  before = after
+  const pairs2: [number, number][] = []
+  for (let a = 0; a < before.length; a++) for (let b = a + 1; b < before.length; b++) if (before[a].length + before[b].length <= 6) pairs2.push([a, b])
+  const [x, y] = pairs2[0]
+  await cards.nth(x).scrollIntoViewIfNeeded()
+  await cards.nth(x).click()
+  await cards.nth(y).click({ modifiers: ['Control'] })
+  await cards.nth(y).click({ button: 'right' })
+  await page.getByText('Zu einer Folie zusammenfassen').click()
+  await page.waitForTimeout(300)
+  after = await slideIds()
+  const wanted2 = [...before[x], ...before[y]]
+  expect(after.some((s) => wanted2.every((id) => s.includes(id)))).toBe(true)
+
   const out = join(dataDir, 'export.mp4')
   await page.evaluate(
     async (outPath) => {

@@ -85,7 +85,7 @@ export const DEFAULT_FOCUS_Y = 0.42
 /** Crop of a photo filling a cell, honouring the user's framing (focus point and zoom). */
 export function photoUv(entry: Entry | undefined, m: MediaItem | undefined, boxAspect: number, tex?: Tex | null): UvRect {
   const base = coverRect(aspectOf(m, tex), boxAspect)
-  const crop = entry?.type === 'photo' ? entry.crop : undefined
+  const crop = entry?.type === 'photo' || entry?.type === 'video' ? entry.crop : undefined
   const z = Math.min(4, Math.max(1, crop?.zoom ?? 1))
   const w = base.w / z
   const h = base.h / z
@@ -107,6 +107,7 @@ export function kenBurnsUv(entry: PhotoEntry, m: MediaItem, frameAspect: number,
 export function slideTexture(ctx: Ctx, s: SlideState, i = 0): Tex | null {
   const sl = s.slide
   if (sl.kind === 'video') return ctx.video(sl, s.local)
+  if (sl.entries[i]?.type === 'video') return ctx.video(sl, s.local, i) ?? ctx.image(sl.media[i])
   if (i === 0 && sl.live && s.local < sl.live.duration) {
     const v = ctx.video(sl, s.local)
     if (v) return v

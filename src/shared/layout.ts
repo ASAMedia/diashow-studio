@@ -146,9 +146,10 @@ export interface Group {
 }
 
 /**
- * Splits the flat entry list into slides. Videos, text and playing Live Photos are always
- * alone; consecutive photos are combined following the theme's pattern. `groupBreak`
- * lets the user force a new slide ('force') or attach a photo to the previous one ('join').
+ * Splits the flat entry list into slides. Text and playing Live Photos are always alone, and
+ * so are videos unless the theme puts them into grids (Magazine). Consecutive photos (and
+ * videos) are combined following the theme's pattern. `groupBreak` lets the user force a new
+ * slide ('force') or attach an entry to the previous slide ('join').
  */
 export function groupEntries(
   entries: Entry[],
@@ -161,7 +162,8 @@ export function groupEntries(
   let current: { entries: Entry[]; target: number } | null = null
   let k = 0
   for (const e of entries) {
-    if (e.type !== 'photo' || meta.maxPerSlide === 1 || isSolo(e)) {
+    const groupable = e.type === 'photo' || (e.type === 'video' && !!meta.videoInGrid)
+    if (!groupable || meta.maxPerSlide === 1 || isSolo(e)) {
       current = null
       groups.push({ entries: [e] })
       continue

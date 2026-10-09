@@ -117,6 +117,13 @@ const S = {
   captionPlaceholder: ['z. B. SONNTAG – unser erster Tag', 'e.g. SUNDAY – our first day'],
   cropHint: ['Im Vorschaubild ziehen verschiebt den Ausschnitt, Mausrad zoomt, Doppelklick setzt zurück.', 'Drag in the preview to move the framing, scroll to zoom, double-click to reset.'],
   cropReset: ['Ausschnitte zurücksetzen', 'Reset framing'],
+  items: ['Elemente auf dieser Folie', 'Items on this slide'],
+  release: ['Aus Folie lösen', 'Take out of this slide'],
+  merge: ['Zu einer Folie zusammenfassen', 'Combine into one slide'],
+  soundOn: ['Ton an', 'Sound on'],
+  soundOff: ['Ton aus', 'Sound off'],
+  multiVideoHint: ['Bei mehreren Videos auf einer Folie ist nur das erste hörbar; weitere über den Lautsprecher einschalten.', 'With several videos on a slide only the first is heard; switch others on with the speaker.'],
+  groupHint: ['Folien zusammenstellen: Folie auf eine andere ziehen, Strg+Klick und Rechtsklick → zusammenfassen, oder hier Elemente hinzunehmen und abgeben.', 'Build slides: drag a slide onto another, Ctrl+click and right-click → combine, or add and remove items here.'],
   captionOnNext: ['Im Magazin-Thema erscheint dieser Text unten rechts auf der nächsten Folie.', 'In the Magazine theme this text appears at the bottom right of the next slide.']
 } satisfies Record<string, [string, string]>
 

@@ -9,14 +9,15 @@ import { join, resolve } from 'node:path'
 
 const root = resolve(__dirname, '..')
 const dir = process.env.DIASHOW_VISUAL_DIR
-const out = join(root, 'test-results', 'magazine')
+const theme = process.env.DIASHOW_THEME ?? 'magazine'
+const out = join(root, 'test-results', theme)
 const ffmpeg = join(root, 'vendor/ffmpeg/bin/ffmpeg.exe')
 
-test('magazine theme with real photos', async () => {
+test(`${theme} theme with real photos`, async () => {
   test.skip(!dir, 'DIASHOW_VISUAL_DIR not set')
   rmSync(out, { recursive: true, force: true })
   mkdirSync(out, { recursive: true })
-  const files = readdirSync(dir!).filter((f) => /\.(jpe?g|heic|png)$/i.test(f)).sort().map((f) => join(dir!, f))
+  const files = readdirSync(dir!).filter((f) => /\.(jpe?g|heic|png|mp4|mov|webm)$/i.test(f)).sort().map((f) => join(dir!, f))
   const dataDir = mkdtempSync(join(tmpdir(), 'diashow-mag-'))
   const app = await electron.launch({ args: ['.'], cwd: root, env: { ...process.env, DIASHOW_DATA_DIR: dataDir } })
   const page = await app.firstWindow()
@@ -33,28 +34,31 @@ test('magazine theme with real photos', async () => {
   }, null, { timeout: 300_000 })
 
   // Magazine, project title, a text slide in front of the 5th photo (becomes its caption)
-  const slides = await page.evaluate(() => {
+  const slides = await page.evaluate((th) => {
     const d = (window as any).__diashow
     const s = d.store.getState()
-    s.setTheme('magazine')
+    s.setTheme(th)
     s.setSettings({ timing: { mode: 'custom', customTotal: 70 }, subtitleText: '' })
     s.update((p: any) => {
       p.entries.splice(4, 0, { id: 'txt1', type: 'text', title: 'Sonntag', subtitle: 'Unser erster Tag im Skilager' })
     })
+    // several videos on one slide, if the folder has videos
+    const videos = d.store.getState().project.entries.filter((e: any) => e.type === 'video').map((e: any) => e.id)
+    if (videos.length > 1) d.store.getState().mergeEntries(videos.slice(0, 3))
     return new Promise((r) =>
       setTimeout(() => {
         const tl = d.player.current.tl
-        r(tl.slides.map((x: any) => ({ start: x.start, dur: x.duration, transIn: x.transIn, transOut: x.transOut, n: x.entries.length, tpl: x.template?.id, caption: x.caption?.text })))
+        r(tl.slides.map((x: any) => ({ start: x.start, dur: x.duration, transIn: x.transIn, transOut: x.transOut, n: x.entries.length, videos: x.entries.filter((e: any) => e.type === 'video').length, tpl: x.template?.id, caption: x.caption?.text })))
       }, 300)
     )
-  })
+  }, theme)
   console.log(JSON.stringify(slides))
 
   // editor with a multi-photo slide selected (crop cells visible on hover)
   await page.evaluate(() => {
     const d = (window as any).__diashow
     const tl = d.player.current.tl
-    const multi = tl.slides.find((x: any) => x.entries.length >= 3)
+    const multi = tl.slides.find((x: any) => x.entries.length >= 3) ?? tl.slides.find((x: any) => x.kind === 'photos')
     d.store.getState().select(multi.entries.map((e: any) => e.id))
     d.store.getState().set({ tab: 'slide' })
   })
@@ -71,7 +75,7 @@ test('magazine theme with real photos', async () => {
   const crop = await page.evaluate(() => {
     const d = (window as any).__diashow
     const tl = d.player.current.tl
-    const multi = tl.slides.find((x: any) => x.entries.length >= 3)
+    const multi = tl.slides.find((x: any) => x.entries.length >= 3) ?? tl.slides.find((x: any) => x.kind === 'photos')
     const id = multi.entries[0].id
     return d.store.getState().project.entries.find((e: any) => e.id === id).crop
   })

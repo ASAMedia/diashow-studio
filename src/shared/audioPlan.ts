@@ -1,8 +1,8 @@
 // Builds the audio mix for a timeline: the music playlist (repeated if needed, with
 // crossfades and fades) and the sound of video clips, with the music ducked while a
 // clip with sound plays. Preview (Web Audio) and export (FFmpeg mixer) both consume it.
-import type { AudioPlan, AudioPlanClip, GainPoint, Project, VideoEntry } from './types'
-import type { Timeline } from './timeline'
+import type { AudioPlan, AudioPlanClip, GainPoint, MediaItem, Project, VideoEntry } from './types'
+import type { Timeline, TimelineSlide } from './timeline'
 
 /** Linear interpolation of gain points; clamps before the first and after the last point. */
 export function gainAt(points: GainPoint[], t: number): number {
@@ -23,17 +23,39 @@ export interface DuckInterval {
   end: number
 }
 
+export interface AudibleClip {
+  entry: VideoEntry
+  media: MediaItem
+  trimIn: number
+  trimOut: number
+}
+
+/**
+ * Videos of a slide whose sound plays. With several videos on one slide only the first one
+ * is heard unless another is switched on explicitly (muted === false).
+ */
+export function audibleClips(s: TimelineSlide): AudibleClip[] {
+  const out: AudibleClip[] = []
+  let first = true
+  s.entries.forEach((e, i) => {
+    if (e.type !== 'video') return
+    const m = s.media[i]
+    const span = s.kind === 'video' ? s.video : s.clips?.[i]
+    if (!m?.hasAudio || !m.audio || !span || (e.volume ?? 1) <= 0) return
+    const on = e.muted === false || (first && !e.muted)
+    if (m.hasAudio && !e.muted) first = false
+    if (on) out.push({ entry: e, media: m, trimIn: span.trimIn, trimOut: span.trimOut })
+  })
+  return out
+}
+
 /** Timeline intervals during which a video plays its sound and the music should duck. */
 export function duckIntervals(project: Project, tl: Timeline): DuckInterval[] {
   const a = project.settings.audio
   if (!a.videoSound) return []
   const raw: DuckInterval[] = []
   for (const s of tl.slides) {
-    if (s.kind !== 'video') continue
-    const e = s.entries[0] as VideoEntry
-    const m = s.media[0]
-    if (!m?.hasAudio || e.muted || (e.volume ?? 1) <= 0) continue
-    if (!(e.duck ?? a.duck)) continue
+    if (!audibleClips(s).some((c) => c.entry.duck ?? a.duck)) continue
     raw.push({ start: s.start, end: s.start + s.duration })
   }
   // merge intervals that touch or nearly touch, so the music doesn't pump in between
@@ -98,22 +120,17 @@ export function buildAudioPlan(project: Project, tl: Timeline): AudioPlan {
   }
 
   if (a.videoSound) {
-    for (const s of tl.slides) {
-      if (s.kind !== 'video' || !s.video) continue
-      const e = s.entries[0] as VideoEntry
-      const m = s.media[0]
-      if (!m?.hasAudio || !m.audio || e.muted) continue
-      const vol = Math.min(2, Math.max(0, e.volume ?? 1))
-      if (vol <= 0) continue
-      const dur = Math.min(s.duration, s.video.trimOut - s.video.trimIn)
+    for (const s of tl.slides) for (const c of audibleClips(s)) {
+      const vol = Math.min(2, Math.max(0, c.entry.volume ?? 1))
+      const dur = Math.min(s.duration, c.trimOut - c.trimIn)
       const fi = Math.max(0.15, Math.min(s.transIn, dur / 2))
       const fo = Math.max(0.15, Math.min(s.transOut, dur / 2))
       clips.push({
-        id: `video-${s.id}`,
+        id: `video-${c.entry.id}`,
         kind: 'video',
-        src: m.audio,
+        src: c.media.audio!,
         start: s.start,
-        offset: s.video.trimIn,
+        offset: c.trimIn,
         duration: dur,
         gain: [
           { t: s.start, g: 0 },

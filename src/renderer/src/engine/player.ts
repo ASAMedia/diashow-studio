@@ -147,6 +147,10 @@ export class Player {
     }
   }
 
+  /** Frame pacing while playing (for diagnostics and tests): interval, render cost, textures still loading. */
+  frameLog: { t: number; dt: number; render: number; missing: number }[] = []
+  private lastFrame = 0
+
   private frame(): void {
     if (!this.tl) return
     const now = performance.now()
@@ -165,7 +169,13 @@ export class Player {
     this.lastPausedRender = now
     this.dirty = false
     this.engine.playing = this.playing
+    const r0 = performance.now()
     this.engine.render(Math.min(this.t, Math.max(0, this.tl.duration - 0.001)))
+    if (this.playing) {
+      if (this.frameLog.length > 20000) this.frameLog.shift()
+      this.frameLog.push({ t: this.t, dt: now - this.lastFrame, render: performance.now() - r0, missing: this.engine.missing })
+    }
+    this.lastFrame = now
   }
 
   dispose(): void {

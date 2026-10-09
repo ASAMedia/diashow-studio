@@ -23,8 +23,9 @@ export const origami: Theme = {
   drawSlide(ctx, s) {
     const { W, H } = ctx
     const sl = s.slide
-    const vertical = sl.index % 2 === 1
-    const fromEnd = sl.index % 4 >= 2
+    // every slide folds in the same way, from the left edge
+    const vertical = false
+    const fromEnd = false
     const fold = (q: number, draw: (o: { rotX?: number; rotY?: number; pivot: [number, number]; shade: number }) => void): void => {
       if (q <= 0.001) return
       const e = easeInOut(q)
@@ -287,7 +288,11 @@ export const magazine: Theme = {
     const { W, H } = ctx
     const sl = s.slide
     // the old slide fades out quickly while the new cells fade in one after another
-    const fadeOut = 1 - smooth(s.outP / 0.3)
+    // Timings in seconds for the standard 1.2 s transition, so every slide change has the same
+    // rhythm whatever the number of cells; scaled down only when a transition had to be shorter.
+    const kIn = sl.transIn > 0 ? sl.transIn / 1.2 : 1
+    const kOut = sl.transOut > 0 ? sl.transOut / 1.2 : 1
+    const fadeOut = sl.transOut > 0 ? 1 - smooth((s.local - (sl.duration - sl.transOut)) / (0.36 * kOut)) : 1
     if (sl.kind === 'title' || sl.kind === 'text') {
       const o = smooth(s.inP) * fadeOut
       const t = drawText(ctx, { text: sl.title?.text ?? '', font: 'rounded', size: H * 0.09, weight: 800, color: '#2b2e2c', uppercase: true, maxWidth: W * 0.8 }, W / 2, H * 0.47, { opacity: o })
@@ -295,11 +300,8 @@ export const magazine: Theme = {
       return
     }
     const boxes = magazineBoxes(W, H, sl)
-    const n = boxes.length
-    const fade = 0.28
-    const step = n > 1 ? Math.min(0.13, (0.95 - 0.05 - fade) / (n - 1)) : 0
     boxes.forEach((box, i) => {
-      const q = smooth((s.inP - 0.05 - i * step) / fade)
+      const q = sl.transIn > 0 ? smooth((s.local - (0.06 + i * 0.15) * kIn) / (0.33 * kIn)) : 1
       const opacity = q * fadeOut
       if (opacity <= 0.001) return
       const tex = slideTexture(ctx, s, i)
@@ -309,7 +311,7 @@ export const magazine: Theme = {
     })
     // texts sit on the largest cell, bottom right
     const main = boxes.reduce((a, b) => (b.w * b.h > a.w * a.h ? b : a), boxes[0])
-    const textOpacity = smooth((s.inP - 0.3) / 0.4) * fadeOut
+    const textOpacity = (sl.transIn > 0 ? smooth((s.local - 0.36 * kIn) / (0.48 * kIn)) : 1) * fadeOut
     let bottom = main
     if (sl.titleOverlay && sl.title) {
       const t = cornerText(ctx, main, sl.title.text, 'rounded', H * 0.072, textOpacity)

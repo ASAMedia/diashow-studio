@@ -106,6 +106,8 @@ export interface VideoEntry extends BaseEntry {
   muted?: boolean
   /** Override project ducking for this clip. */
   duck?: boolean
+  /** Framing when the clip is cropped into a grid cell (Magazine). */
+  crop?: Crop
 }
 
 export interface TextEntry extends BaseEntry {

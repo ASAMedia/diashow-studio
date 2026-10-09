@@ -5,5 +5,5 @@
     "resolveJsonModule": true, "composite": true, "types": [],
     "paths": { "@shared/*": ["./src/shared/*"], "@renderer/*": ["./src/renderer/src/*"] }
   },
-  "include": ["src/renderer/src/**/*", "src/shared/**/*", "src/preload/*.d.ts"]
+  "include": ["src/renderer/src/**/*", "src/shared/**/*", "src/preload/*.d.ts", "tests/grouping.test.ts"]
 }

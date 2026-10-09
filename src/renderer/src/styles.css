@@ -244,3 +244,13 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--accent); margi
 .cap-badge { position: absolute; left: 4px; bottom: 4px; background: #f2f2f2; color: #111; font-weight: 700; font-size: 10px; padding: 0 5px; border-radius: 3px; cursor: pointer; }
 .cap-badge:hover { background: var(--accent); color: #fff; }
 .card.cap-selected { outline-color: rgba(77, 159, 255, 0.55); }
+.card.merge-target { outline: 2px dashed var(--accent); outline-offset: 2px; transform: scale(0.96); }
+.items { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+.item { position: relative; border-radius: 5px; overflow: hidden; aspect-ratio: 4 / 3; background: var(--panel); }
+.item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.item .tools { position: absolute; right: 3px; top: 3px; display: flex; gap: 3px; }
+.item .tools button { border: none; width: 22px; height: 22px; border-radius: 4px; background: rgba(0, 0, 0, 0.62); color: #fff; display: grid; place-items: center; padding: 0; }
+.item .tools button:hover { background: var(--accent-2); }
+.item .kind { position: absolute; left: 3px; bottom: 3px; }
+.stepper { display: inline-flex; align-items: center; gap: 6px; }
+.stepper span { min-width: 18px; text-align: center; font-variant-numeric: tabular-nums; }

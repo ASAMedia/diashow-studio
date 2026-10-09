@@ -34,6 +34,14 @@ interface State {
   addText(): void
   removeEntries(ids: string[]): void
   setEntry(id: string, patch: Partial<Entry>): void
+  /** Grouping: the given entries become one slide at the position of the first of them. */
+  mergeEntries(ids: string[]): void
+  /** Every entry of a slide becomes a slide of its own. */
+  splitSlide(ids: string[]): void
+  /** Takes one entry out of a slide; it follows the slide as a slide of its own. */
+  releaseEntry(slideIds: string[], id: string): void
+  /** Pulls the next entry of the show into the slide, or hands the last one on. */
+  resizeSlide(slideIds: string[], delta: 1 | -1): void
   select(ids: string[]): void
   set(patch: Partial<State>): void
 }
@@ -174,6 +182,63 @@ export const useStore = create<State>((set, get) => ({
     get().update((p) => {
       const e = p.entries.find((x) => x.id === id)
       if (e) Object.assign(e, patch)
+    })
+  },
+
+  mergeEntries(ids) {
+    const want = new Set(ids)
+    get().update((p) => {
+      const block = p.entries.filter((e) => want.has(e.id) && e.type !== 'text')
+      if (block.length < 2) return
+      const firstIdx = p.entries.indexOf(block[0])
+      const moving = new Set(block)
+      const rest = p.entries.filter((e) => !moving.has(e))
+      const at = p.entries.slice(0, firstIdx).filter((e) => !moving.has(e)).length
+      rest.splice(at, 0, ...block)
+      block.forEach((e, i) => (e.groupBreak = i === 0 ? 'force' : 'join'))
+      const after = rest[at + block.length]
+      if (after) after.groupBreak = 'force'
+      p.entries = rest
+    })
+  },
+
+  splitSlide(ids) {
+    const want = new Set(ids)
+    get().update((p) => p.entries.forEach((e) => want.has(e.id) && (e.groupBreak = 'force')))
+  },
+
+  releaseEntry(slideIds, id) {
+    const want = new Set(slideIds)
+    get().update((p) => {
+      const slide = p.entries.filter((e) => want.has(e.id))
+      const e = p.entries.find((x) => x.id === id)
+      const keep = slide.filter((x) => x.id !== id)
+      if (!e || keep.length === 0) return
+      p.entries = p.entries.filter((x) => x !== e)
+      const at = p.entries.indexOf(keep[keep.length - 1]) + 1
+      p.entries.splice(at, 0, e)
+      e.groupBreak = 'force'
+      if (keep[0].groupBreak === 'join') keep[0].groupBreak = 'force'
+      const next = p.entries[at + 1]
+      if (next) next.groupBreak = 'force'
+    })
+  },
+
+  resizeSlide(slideIds, delta) {
+    const want = new Set(slideIds)
+    get().update((p) => {
+      const slide = p.entries.filter((e) => want.has(e.id))
+      if (!slide.length) return
+      const last = slide[slide.length - 1]
+      if (delta < 0) {
+        if (slide.length > 1) last.groupBreak = 'force'
+        return
+      }
+      const next = p.entries[p.entries.indexOf(last) + 1]
+      if (!next || next.type === 'text') return
+      next.groupBreak = 'join'
+      const after = p.entries[p.entries.indexOf(next) + 1]
+      if (after && after.groupBreak !== 'join') after.groupBreak = 'force'
     })
   },
 

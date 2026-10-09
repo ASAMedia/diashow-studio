@@ -1,10 +1,11 @@
 import { useState, type CSSProperties, type ReactNode } from 'react'
-import { Clock, LayoutTemplate, Music, Plus, SlidersHorizontal, Trash2, GripVertical, ArrowLeft, ArrowRight, ArrowUp, ArrowDown } from 'lucide-react'
+import { Clock, LayoutTemplate, Music, Plus, Minus, SlidersHorizontal, Trash2, GripVertical, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Film, Volume2, VolumeX, LogOut } from 'lucide-react'
 import { mediaUrl } from '@shared/api'
 import { LOOKS, THEMES, TRANSITIONS, themeMeta } from '@shared/themes'
 import type { AspectRatio, Direction, Entry, LookId, MediaItem, PhotoEntry, TextEntry, ThemeId, TransitionId, VideoEntry } from '@shared/types'
 import { MAX_PHOTO_SECONDS, type TimelineSlide } from '@shared/timeline'
 import { templatesFor, type Template } from '@shared/layout'
+import { audibleClips } from '@shared/audioPlan'
 import { useStore, type InspectorTab } from '../store'
 import { timelineOf } from '../timeline'
 import { fmtSeconds, fmtTime, localeTag, pick, t } from '../i18n'
@@ -466,9 +467,35 @@ function CropSection({ slide }: { slide: TimelineSlide }) {
       <p className="hint" style={{ marginTop: 0 }}>
         {t('cropHint')}
       </p>
-      <button className="btn small" onClick={() => update((p) => p.entries.forEach((e) => ids.has(e.id) && e.type === 'photo' && delete e.crop))}>
+      <button className="btn small" onClick={() => update((p) => p.entries.forEach((e) => ids.has(e.id) && e.type !== 'text' && delete e.crop))}>
         {t('cropReset')}
       </button>
+    </div>
+  )
+}
+
+/** How many items form this slide: take the next item of the show in, or hand the last one on. */
+function GroupControl({ slide }: { slide: TimelineSlide }) {
+  const project = useStore((s) => s.project)!
+  const meta = themeMeta(project.settings.theme)
+  if (meta.maxPerSlide < 2 || (slide.kind !== 'photos' && !(slide.kind === 'video' && meta.videoInGrid))) return null
+  const ids = slide.entries.map((e) => e.id)
+  const n = slide.entries.length
+  return (
+    <div className="section">
+      <div className="row">
+        <label>{t('items')}</label>
+        <div className="stepper">
+          <button className="btn small icon" disabled={n < 2} onClick={() => useStore.getState().resizeSlide(ids, -1)}>
+            <Minus size={13} />
+          </button>
+          <span>{n}</span>
+          <button className="btn small icon" disabled={n >= meta.maxPerSlide} onClick={() => useStore.getState().resizeSlide(ids, 1)}>
+            <Plus size={13} />
+          </button>
+        </div>
+      </div>
+      <p className="hint">{t('groupHint')}</p>
     </div>
   )
 }
@@ -489,26 +516,47 @@ function SlidePanel() {
   if (entries.length > 1) {
     const order = new Map(project.entries.map((x, i) => [x.id, i]))
     const first = [...entries].sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))[0]
-    const split = (): void =>
-      useStore.getState().update((p) =>
-        entries.forEach((x) => {
-          const e = p.entries.find((y) => y.id === x.id)
-          if (e && x.id !== first.id) e.groupBreak = 'force'
-        })
-      )
+    const ids = entries.map((x) => x.id)
+    const audible = new Set(slide ? audibleClips(slide).map((c) => c.entry.id) : [])
+    const videos = entries.filter((x) => x.type === 'video' && media(x)?.hasAudio).length
     return (
       <>
         <Section title={`${entries.length} ${t('photos')}`}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 10 }}>
+          <div className="items">
             {entries.map((e) => {
               const m = media(e)
-              return m?.thumb ? <img key={e.id} src={mediaUrl(m.thumb)} style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 4 }} alt="" /> : null
+              const isVideo = e.type === 'video'
+              return (
+                <div key={e.id} className="item" title={m?.name}>
+                  {m?.thumb && <img src={mediaUrl(m.thumb)} alt="" />}
+                  {isVideo && (
+                    <span className="badge kind">
+                      <Film size={10} /> {fmtTime(m?.duration ?? 0)}
+                    </span>
+                  )}
+                  <div className="tools">
+                    {isVideo && m?.hasAudio && (
+                      <button
+                        title={audible.has(e.id) ? t('soundOff') : t('soundOn')}
+                        onClick={() => setEntry(e.id, { muted: audible.has(e.id) } as Partial<VideoEntry>)}
+                      >
+                        {audible.has(e.id) ? <Volume2 size={12} /> : <VolumeX size={12} />}
+                      </button>
+                    )}
+                    <button title={t('release')} onClick={() => useStore.getState().releaseEntry(ids, e.id)}>
+                      <LogOut size={12} />
+                    </button>
+                  </div>
+                </div>
+              )
             })}
           </div>
-          <button className="btn small" onClick={split}>
+          {videos > 1 && <p className="hint">{t('multiVideoHint')}</p>}
+          <button className="btn small" onClick={() => useStore.getState().splitSlide(ids)}>
             {t('split')}
           </button>
         </Section>
+        {slide && <GroupControl slide={slide} />}
         {slide && <LayoutPicker slide={slide} />}
         {slide && <CropSection slide={slide} />}
         <CaptionField entry={first} />
@@ -568,6 +616,7 @@ function SlidePanel() {
         <Section title={t('duration')}>
           <DurationOverride entry={ve} />
         </Section>
+        {slide && <GroupControl slide={slide} />}
         <CaptionField entry={ve} />
       </>
     )
@@ -580,6 +629,7 @@ function SlidePanel() {
       <Section title={t('duration')}>
         <DurationOverride entry={pe} />
       </Section>
+      {slide && <GroupControl slide={slide} />}
       {slide && <CropSection slide={slide} />}
       <CaptionField entry={pe} />
       {m.live && (

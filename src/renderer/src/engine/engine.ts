@@ -31,6 +31,8 @@ export class Engine {
   project?: Project
   tl?: Timeline
   playing = false
+  /** Photos drawn from a placeholder in the last frame because their full image wasn't loaded yet. */
+  missing = 0
 
   constructor(
     canvas: HTMLCanvasElement | OffscreenCanvas,
@@ -67,11 +69,14 @@ export class Engine {
     })
   }
 
-  /** Path and source time of the video for a slide at slide-local time. */
-  private videoSource(slide: TimelineSlide, local: number): { path: string; time: number } | null {
-    const m = slide.media[0]
+  /** Path and source time of the video in cell `index` of a slide at slide-local time. */
+  private videoSource(slide: TimelineSlide, local: number, index = 0): { path: string; time: number } | null {
+    const m = slide.media[index]
     if (slide.kind === 'video' && m?.playback) return { path: m.playback, time: (slide.video?.trimIn ?? 0) + local }
-    if (slide.live && m?.liveVideo) return { path: m.liveVideo, time: Math.min(local, slide.live.duration - 0.04) }
+    const clip = slide.clips?.[index]
+    // a clip shorter than its slide holds its last frame
+    if (clip && m?.playback) return { path: m.playback, time: clip.trimIn + Math.min(local, clip.trimOut - clip.trimIn - 0.04) }
+    if (index === 0 && slide.live && m?.liveVideo) return { path: m.liveVideo, time: Math.min(local, slide.live.duration - 0.04) }
     return null
   }
 
@@ -87,10 +92,13 @@ export class Engine {
       settings: project.settings,
       image: (m: MediaItem | undefined) => {
         if (!m) return null
-        return this.images.get(m.display) ?? this.images.get(m.thumb)
+        const full = this.images.get(m.display)
+        if (full) return full
+        this.missing++
+        return this.images.get(m.thumb)
       },
-      video: (slide, local) => {
-        const src = this.videoSource(slide, local)
+      video: (slide, local, index) => {
+        const src = this.videoSource(slide, local, index)
         if (!src) return null
         if (this.videos) return this.videos.frame(src.path, src.time, this.playing)
         return this.exportVideos!.get(src.path)
@@ -124,8 +132,8 @@ export class Engine {
     if (!this.tl || !this.project) return
     await Promise.all(this.neededMedia(t, 0).map((m) => (m.kind === 'photo' ? this.images.ensure(m.display) : Promise.resolve())))
     const paths = new Set<string>()
-    for (const s of this.states(t)) {
-      const src = this.videoSource(s.slide, s.local)
+    for (const s of this.states(t)) for (let i = 0; i < Math.max(1, s.slide.entries.length); i++) {
+      const src = this.videoSource(s.slide, s.local, i)
       if (!src) continue
       paths.add(src.path)
       await this.exportVideos?.prepare(src.path, src.time)
@@ -140,6 +148,7 @@ export class Engine {
     const ctx = this.ctx(t)
     if (this.mode === 'preview') for (const m of this.neededMedia(t, 6)) if (m.kind === 'photo') ctx.image(m)
     const states = this.states(t)
+    this.missing = 0
 
     if (states.length === 2 && theme.mode === 'composite') {
       const [a, b] = states

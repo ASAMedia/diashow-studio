@@ -26,6 +26,8 @@ export interface ThemeMeta {
   cropEdit: boolean
   /** Text slides become captions on the following slide instead of slides of their own. */
   textAsCaption: boolean
+  /** Videos take part in multi-photo grids instead of always getting a slide of their own. */
+  videoInGrid?: boolean
 }
 
 export const THEMES: ThemeMeta[] = [
@@ -139,7 +141,8 @@ export const THEMES: ThemeMeta[] = [
     titleSlide: false,
     defaultLook: 'natural',
     cropEdit: true,
-    textAsCaption: true
+    textAsCaption: true,
+    videoInGrid: true
   },
   {
     id: 'retro',

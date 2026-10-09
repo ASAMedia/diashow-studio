@@ -9,7 +9,12 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
   - Magazine follows a reference show exported from Photos: background #EDF2EE, equal margins and gutters, and 1 to 6 photos per slide on measured grids. Cells fade in one after another.
     - Text slides become white captions at the bottom right of the next slide, and the title sits on the first slide.
     - Unlike Photos, there are no half-empty slides: a lone portrait photo is paired with the next photo.
-  - Cropped layouts (Magazine, Origami, Sliding Panels, Classic in fill mode, Retro Film) let you drag each photo inside its cell in the preview, zoom it with the mouse wheel and reset it with a double-click. You can also choose the layout per slide.
+  - Cropped layouts (Magazine, Origami, Sliding Panels, Classic in fill mode, Retro Film) let you drag each photo or video inside its cell in the preview, zoom it with the mouse wheel and reset it with a double-click. You can also choose the layout per slide.
+  - Magazine puts videos into its grids too: several clips play side by side, and the slide lasts as long as the longest clip. Only the first clip is heard unless you switch others on.
+  - You decide which photos and videos form a slide:
+    - Drag one slide onto another, or Ctrl+click several slides and choose "Combine into one slide".
+    - Add or remove items with +/− in the Slide tab, or take a single item out of a slide.
+  - Every transition in a show has the same length; slides are kept long enough for it.
 - **Colour looks:** Natural, Vivid, Warm, Cool, Dramatic, Faded, Mono and Noir.
 - **Timing like Photos:**
   - "Fit to music" or a custom total length.
@@ -21,7 +26,7 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
   - You set the level and ramp time, plus a per-clip override and mute.
   - The audio lane under the filmstrip shows the resulting music volume.
 - **Live Photos** (iPhone HEIC + MOV) and **Motion Photos** (Android): you choose per slide whether the motion part plays.
-- **Preview** in the editor, a **fullscreen player** (Space, arrow keys, Esc), and **export** to MP4 (H.264/HEVC) up to 4K.
+- **Preview** in the editor, with a filmstrip that scrolls along with the playhead, a **fullscreen player** (Space, arrow keys, Esc), and **export** to MP4 (H.264/HEVC) up to 4K.
   - Export uses NVENC, Quick Sync or AMF when available.
   - Aspect ratios: 16:9, 4:3, 1:1, 9:16.
 - German and English UI, following the Windows language.
