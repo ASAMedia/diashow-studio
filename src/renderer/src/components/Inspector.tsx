@@ -2,7 +2,8 @@ import { useState, type CSSProperties, type ReactNode } from 'react'
 import { Clock, LayoutTemplate, Music, Plus, Minus, SlidersHorizontal, Trash2, GripVertical, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Film, Volume2, VolumeX, LogOut, Crop as CropIcon, Maximize } from 'lucide-react'
 import { mediaUrl } from '@shared/api'
 import { LOOKS, THEMES, TRANSITIONS, themeMeta } from '@shared/themes'
-import type { AspectRatio, Direction, Entry, LookId, MediaItem, PhotoEntry, TextEntry, ThemeId, TransitionId, VideoEntry } from '@shared/types'
+import type { AspectRatio, Direction, Entry, LookId, MediaItem, PhotoEntry, TextEntry, TextFont, TextPosition, TextStyle, ThemeId, TransitionId, VideoEntry } from '@shared/types'
+import { DEFAULT_TEXT_STYLE } from '@shared/types'
 import { MAX_PHOTO_SECONDS, type TimelineSlide } from '@shared/timeline'
 import { templatesFor, type Template } from '@shared/layout'
 import { audibleClips } from '@shared/audioPlan'
@@ -178,7 +179,79 @@ function ThemesPanel() {
           </div>
         )}
       </Section>
+      <TextStyleSection />
     </>
+  )
+}
+
+const FONTS: { id: TextFont; label: string; family: string }[] = [
+  { id: 'sans', label: 'Inter', family: 'Inter' },
+  { id: 'rounded', label: 'Nunito Sans', family: 'Nunito Sans' },
+  { id: 'caption', label: 'Barlow Semi Condensed', family: 'Barlow Semi Condensed' },
+  { id: 'display', label: 'Anton', family: 'Anton' },
+  { id: 'serif', label: 'Cinzel', family: 'Cinzel' },
+  { id: 'editorial', label: 'Playfair Display', family: 'Playfair Display' },
+  { id: 'type', label: 'Special Elite', family: 'Special Elite' }
+]
+
+const COLORS: Record<string, string> = { theme: '', white: '#ffffff', black: '#1c1c1c', custom: '#ffd75e' }
+
+function TextStyleSection() {
+  const project = useStore((s) => s.project)!
+  const setSettings = useStore((s) => s.setSettings)
+  const ts = { ...DEFAULT_TEXT_STYLE, ...project.settings.text }
+  const set = (patch: Partial<TextStyle>): void => setSettings({ text: { ...ts, ...patch } })
+  const colorMode = ts.color === '' ? 'theme' : ts.color === '#ffffff' ? 'white' : ts.color === '#1c1c1c' ? 'black' : 'custom'
+  return (
+    <Section title={t('textStyle')}>
+      <div className="stack">
+        <div className="row">
+          <label>{t('font')}</label>
+          <select value={ts.font} onChange={(e) => set({ font: e.target.value as TextFont })}>
+            <option value="theme">{t('themeDefault')}</option>
+            {FONTS.map((f) => (
+              <option key={f.id} value={f.id} style={{ fontFamily: f.family }}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <Slider label={t('textSize')} value={ts.scale} min={0.6} max={1.8} step={0.05} display={`${Math.round(ts.scale * 100)} %`} onChange={(v) => set({ scale: v })} />
+        <div className="row">
+          <label>{t('textColor')}</label>
+          <select value={colorMode} onChange={(e) => set({ color: COLORS[e.target.value] ?? '' })}>
+            <option value="theme">{t('themeDefault')}</option>
+            <option value="white">{t('white')}</option>
+            <option value="black">{t('black')}</option>
+            <option value="custom">{t('customColor')}</option>
+          </select>
+          {colorMode === 'custom' && (
+            <input type="color" value={ts.color} onChange={(e) => set({ color: e.target.value })} style={{ width: 32, height: 26, padding: 0, border: 'none', background: 'none' }} />
+          )}
+        </div>
+        <div className="row">
+          <label>{t('textPosition')}</label>
+          <select value={ts.position} onChange={(e) => set({ position: e.target.value as TextPosition })}>
+            <option value="theme">{t('themeDefault')}</option>
+            <option value="bottom-left">{t('posBL')}</option>
+            <option value="bottom-center">{t('posBC')}</option>
+            <option value="bottom-right">{t('posBR')}</option>
+            <option value="top-left">{t('posTL')}</option>
+            <option value="center">{t('posC')}</option>
+          </select>
+        </div>
+        <div className="row">
+          <label>{t('uppercase')}</label>
+          <div className="seg">
+            {(['theme', 'on', 'off'] as const).map((v) => (
+              <button key={v} className={ts.uppercase === v ? 'on' : ''} onClick={() => set({ uppercase: v })}>
+                {v === 'theme' ? t('themeDefault') : v === 'on' ? t('on') : t('off')}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </Section>
   )
 }
 
@@ -231,7 +304,10 @@ function MusicPanel() {
                 {tr.artist && <span className="ar">{tr.artist}</span>}
                 {tr.status === 'error' && <span className="ar" style={{ color: 'var(--danger)' }}>{tr.error}</span>}
               </span>
-              <span className="d">{tr.status === 'ready' ? fmtTime(tr.duration) : '…'}</span>
+              <span className="d">
+                {tr.status === 'ready' ? fmtTime(tr.duration) : '…'}
+                {tr.bpm ? <span className="ar">{Math.round(tr.bpm)} BPM</span> : null}
+              </span>
               <button title={t('delete')} onClick={() => update((p) => (p.music = p.music.filter((m) => m.id !== tr.id)))}>
                 <Trash2 size={13} />
               </button>
@@ -311,6 +387,10 @@ function TimingPanel() {
           ≈ {fmtSeconds(tl.photoSeconds)} {t('perPhoto')}
           {tl.photoSeconds >= MAX_PHOTO_SECONDS ? ' (max.)' : ''}
         </p>
+        <Check checked={!!st.timing.beatSync} onChange={(v) => setSettings({ timing: { ...st.timing, beatSync: v } })}>
+          {t('beatSync')}
+        </Check>
+        {st.timing.beatSync && !project.music.some((m) => m.beats?.length) && <p className="hint">{t('beatSyncHint')}</p>}
       </Section>
       <Section title={t('themeOptions')}>
         {meta.freeTransition ? (

@@ -4,7 +4,7 @@ import type { Compositor, Tex } from '../gl'
 import type { Ctx, Theme } from '../types'
 import type { TimelineSlide } from '@shared/timeline'
 import {
-  aspectOf, clamp01, containBox, drawCell, drawMedia, drawText, easeIn, easeInOut, easeOut, lerp, rng, slideTexture,
+  aspectOf, clamp01, containBox, drawCell, drawMedia, drawText, drawTextBlock, easeIn, easeInOut, easeOut, lerp, rng, slideTexture, textPosition,
   slotBoxes, smooth, titleOpacity, type Box
 } from '../draw'
 import { drawCenteredText } from './simple'
@@ -44,7 +44,7 @@ export const origami: Theme = {
       const q = stagger(s.inP, i, boxes.length)
       fold(q, (o) => drawCell(ctx, s, i, box, { ...o, zoom: lerp(1.06, 1, s.p) }))
     })
-    if (sl.titleOverlay) drawCenteredText(ctx, s, 'sans', '#ffffff', { opacity: titleOpacity(s.local), shadow: true })
+    if (sl.titleOverlay) drawCenteredText(ctx, s, 'sans', '#ffffff', { opacity: titleOpacity(s.local), shadow: true, overlay: true })
   }
 }
 
@@ -148,7 +148,11 @@ export const panels: Theme = {
       const drift = i % 2 ? lerp(1.0, 1.07, s.p) : lerp(1.07, 1.0, s.p)
       drawCell(ctx, s, i, { ...box, x: box.x + dx }, { zoom: drift })
     })
-    if (sl.titleOverlay && sl.title) {
+    if (sl.titleOverlay && sl.title && textPosition(ctx) !== 'theme') {
+      const specs = [{ text: sl.title.text, font: 'sans' as const, size: H * 0.085, weight: 700, color: '#ffffff', shadow: true }]
+      if (sl.title.subtitle) specs.push({ text: sl.title.subtitle, font: 'sans' as const, size: H * 0.032, weight: 500, color: '#ffffff', shadow: true })
+      drawTextBlock(ctx, specs, textPosition(ctx) as 'center', { x: 0, y: 0, w: W, h: H }, titleOpacity(s.local))
+    } else if (sl.titleOverlay && sl.title) {
       const o = titleOpacity(s.local)
       const slide = (1 - easeOut(s.local / 0.9)) * W * 0.15
       const t = drawText(ctx, { text: sl.title.text, font: 'sans', size: H * 0.085, weight: 700, color: '#ffffff', shadow: true, align: 'left' }, H * 0.06 - slide, H * 0.82, { opacity: o, anchor: 'left' })
@@ -244,7 +248,7 @@ export const vintage: Theme = {
       rot: g.rot + (1 - qi) * 0.06,
       dy: (1 - qi) * -H * 0.04
     })
-    if (sl.titleOverlay) drawCenteredText(ctx, s, 'serif', '#f6f1e6', { opacity: titleOpacity(s.local), uppercase: true, tracking: 0.12, shadow: true })
+    if (sl.titleOverlay) drawCenteredText(ctx, s, 'serif', '#f6f1e6', { opacity: titleOpacity(s.local), uppercase: true, tracking: 0.12, shadow: true, overlay: true })
   },
   post() {
     return { vignette: 0.35 }
@@ -304,6 +308,15 @@ export const magazine: Theme = {
     const main = boxes.reduce((a, b) => (b.w * b.h > a.w * a.h ? b : a), boxes[0])
     const textOpacity = (sl.transIn > 0 ? smooth((s.local - 0.36 * kIn) / (0.48 * kIn)) : 1) * fadeOut
     let bottom = main
+    const pos = textPosition(ctx)
+    if (pos !== 'theme') {
+      // one block with title and caption at the chosen position in the main cell
+      const specs = []
+      if (sl.titleOverlay && sl.title) specs.push({ text: sl.title.text, font: 'rounded' as const, size: H * 0.072, weight: 800, color: '#ffffff', uppercase: true, shadow: true, lineHeight: 1.08 })
+      if (sl.caption) for (const line of [sl.caption.text, sl.caption.subtitle].filter(Boolean)) specs.push({ text: line!, font: 'caption' as const, size: H * 0.046, weight: 600, color: '#ffffff', uppercase: true, shadow: true, lineHeight: 1.08 })
+      drawTextBlock(ctx, specs, pos, main, textOpacity)
+      return
+    }
     if (sl.titleOverlay && sl.title) {
       const t = cornerText(ctx, main, sl.title.text, 'rounded', H * 0.072, textOpacity)
       if (t) bottom = { ...main, h: t.y - main.y + H * 0.028 - H * 0.012 }

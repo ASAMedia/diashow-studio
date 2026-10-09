@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import type { EncoderInfo, ExportProgress, ExportQuality, VideoCodec } from '@shared/types'
+import type { AspectRatio, EncoderInfo, ExportProgress, ExportQuality, Project, VideoCodec } from '@shared/types'
 import { aspectValue } from '@shared/timeline'
 import { useStore } from '../store'
 import { exportShow } from '../engine/exporter'
-import { fmtTime, localeTag, t } from '../i18n'
+import { fmtTime, localeTag, pick, t } from '../i18n'
 
 const HEIGHTS = [720, 1080, 1440, 2160]
 
@@ -14,10 +14,31 @@ function dims(aspect: number, short: number): { w: number; h: number } {
 
 type Phase = 'setup' | 'running' | 'done' | 'error'
 
+interface Preset {
+  id: string
+  name: { de: string; en: string }
+  aspect?: AspectRatio
+  short: number
+  fps: number
+  codec: VideoCodec
+  quality: ExportQuality
+}
+
+const PRESETS: Preset[] = [
+  { id: 'youtube1080', name: { de: 'YouTube 1080p', en: 'YouTube 1080p' }, aspect: '16:9', short: 1080, fps: 30, codec: 'h264', quality: 'high' },
+  { id: 'youtube4k', name: { de: 'YouTube 4K', en: 'YouTube 4K' }, aspect: '16:9', short: 2160, fps: 30, codec: 'h264', quality: 'high' },
+  { id: 'reel', name: { de: 'Instagram Reel / TikTok (9:16)', en: 'Instagram Reel / TikTok (9:16)' }, aspect: '9:16', short: 1080, fps: 30, codec: 'h264', quality: 'high' },
+  { id: 'square', name: { de: 'Instagram Beitrag (1:1)', en: 'Instagram post (1:1)' }, aspect: '1:1', short: 1080, fps: 30, codec: 'h264', quality: 'high' },
+  { id: 'whatsapp', name: { de: 'WhatsApp / E-Mail (klein)', en: 'WhatsApp / e-mail (small)' }, aspect: '16:9', short: 720, fps: 30, codec: 'h264', quality: 'standard' },
+  { id: 'tv', name: { de: 'Fernseher / Beamer 1080p', en: 'TV / projector 1080p' }, aspect: '16:9', short: 1080, fps: 25, codec: 'h264', quality: 'max' }
+]
+
 export function ExportDialog() {
   const project = useStore((s) => s.project)!
   const set = useStore((s) => s.set)
-  const aspect = aspectValue(project.settings.aspect)
+  const [preset, setPreset] = useState('custom')
+  const [aspectId, setAspectId] = useState<AspectRatio>(project.settings.aspect)
+  const aspect = aspectValue(aspectId)
   const [short, setShort] = useState(1080)
   const [fps, setFps] = useState(30)
   const [codec, setCodec] = useState<VideoCodec>('h264')
@@ -28,6 +49,7 @@ export function ExportDialog() {
   const [phase, setPhase] = useState<Phase>('setup')
   const [progress, setProgress] = useState({ frame: 0, total: 1, speed: 0 })
   const [mainPhase, setMainPhase] = useState<ExportProgress['phase'] | null>(null)
+  const [prepare, setPrepare] = useState('')
   const [error, setError] = useState('')
   const [result, setResult] = useState('')
   const abort = useRef<AbortController | null>(null)
@@ -35,7 +57,10 @@ export function ExportDialog() {
 
   useEffect(() => {
     void window.api.encoders().then(setEnc)
-    return window.api.onExportProgress((p) => setMainPhase(p.phase))
+    return window.api.onExportProgress((p) => {
+      setMainPhase(p.phase)
+      if (p.phase === 'prepare') setPrepare(p.message ?? '')
+    })
   }, [])
 
   const hwName = enc?.hardware[codec]
@@ -54,7 +79,16 @@ export function ExportDialog() {
     setError('')
     abort.current = new AbortController()
     try {
-      const file = await exportShow(project, { outPath: out, width: w, height: h, fps, codec, quality, hardware: hardware && !!hwName }, localeTag(), setProgress, abort.current.signal)
+      // another shape than the project: layouts are rebuilt for it
+      let job: Project = aspectId === project.settings.aspect ? project : { ...project, settings: { ...project.settings, aspect: aspectId } }
+      // sharp 4K: videos that only have a 1080p proxy get a high-resolution version first
+      const proxied = job.media.filter((m) => m.kind === 'video' && m.proxied && Math.max(m.width, m.height) > 1920)
+      if (Math.max(w, h) > 1920 && proxied.length) {
+        setMainPhase('prepare')
+        const paths = await window.api.prepareHires(proxied.map((m) => m.id), Math.max(w, h))
+        job = { ...job, media: job.media.map((m) => (paths[m.id] ? { ...m, playback: paths[m.id] } : m)) }
+      }
+      const file = await exportShow(job, { outPath: out, width: w, height: h, fps, codec, quality, hardware: hardware && !!hwName }, localeTag(), setProgress, abort.current.signal)
       setResult(file)
       setPhase('done')
     } catch (e) {
@@ -76,6 +110,27 @@ export function ExportDialog() {
         {phase === 'setup' && (
           <>
             <div className="grid">
+              <span>{t('preset')}</span>
+              <select
+                value={preset}
+                onChange={(e) => {
+                  setPreset(e.target.value)
+                  const pr = PRESETS.find((x) => x.id === e.target.value)
+                  if (!pr) return
+                  if (pr.aspect) setAspectId(pr.aspect)
+                  setShort(pr.short)
+                  setFps(pr.fps)
+                  setCodec(pr.codec)
+                  setQuality(pr.quality)
+                }}
+              >
+                <option value="custom">{t('presetCustom')}</option>
+                {PRESETS.map((pr) => (
+                  <option key={pr.id} value={pr.id}>
+                    {pick(pr.name)}
+                  </option>
+                ))}
+              </select>
               <span>{t('file')}</span>
               <div className="row">
                 <input type="text" readOnly value={path ?? ''} placeholder={`${project.name}.mp4`} style={{ flex: 1 }} />
@@ -83,6 +138,15 @@ export function ExportDialog() {
                   {t('choose')}
                 </button>
               </div>
+              <span>{t('aspect')}</span>
+              <select value={aspectId} onChange={(e) => setAspectId(e.target.value as AspectRatio)}>
+                {(['16:9', '4:3', '1:1', '9:16'] as AspectRatio[]).map((a) => (
+                  <option key={a} value={a}>
+                    {a}
+                    {a === project.settings.aspect ? ` (${t('projectAspect')})` : ''}
+                  </option>
+                ))}
+              </select>
               <span>{t('resolution')}</span>
               <select value={short} onChange={(e) => setShort(Number(e.target.value))}>
                 {HEIGHTS.map((s) => {
@@ -123,6 +187,7 @@ export function ExportDialog() {
               </label>
             </div>
             {enc && !hwName && <p className="hint">{t('noHardware')}</p>}
+            {aspectId !== project.settings.aspect && <p className="hint">{t('aspectRelayout')}</p>}
             {busy && <p className="warn">{t('stillProcessing')}</p>}
             <div className="actions">
               <button className="btn" onClick={() => set({ exportOpen: false })}>
@@ -136,7 +201,13 @@ export function ExportDialog() {
         )}
         {phase === 'running' && (
           <>
-            <p>{mainPhase === 'audio' && progress.frame === 0 ? t('mixingAudio') : t('exporting')}</p>
+            <p>
+              {mainPhase === 'prepare' && progress.frame === 0
+                ? `${t('preparingHires')} ${prepare}`
+                : mainPhase === 'audio' && progress.frame === 0
+                  ? t('mixingAudio')
+                  : t('exporting')}
+            </p>
             <div className="bar">
               <div style={{ width: `${pct}%` }} />
             </div>

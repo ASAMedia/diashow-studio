@@ -155,7 +155,8 @@ export function buildTimeline(project: Project, locale = 'de-DE'): Timeline {
         media = placed.order.map((i) => media[i])
       }
       const live = playsLive(first) ? { duration: media[0].live!.duration } : undefined
-      const custom = g.entries.length === 1 && first.duration != null
+      // a slide's own time lives on its first entry (in show order)
+      const custom = first.duration != null
       // videos in a grid play side by side; with "play in full" the slide lasts as long as the longest
       const clips = entries.map((e, i) => (e.type === 'video' ? span(e, media[i]) : null))
       const longest = Math.max(0, ...clips.map((c) => (c ? c.trimOut - c.trimIn : 0)))
@@ -224,8 +225,61 @@ export function buildTimeline(project: Project, locale = 'de-DE'): Timeline {
     slides.push({ ...d.slide, index: i, start: t, duration: dur[i], transIn: i > 0 ? ov[i - 1] : 0, transOut: ov[i] ?? 0 })
     t += dur[i] - (ov[i] ?? 0)
   })
+  if (settings.timing.beatSync) {
+    const beats = musicBeatTimes(project, t + 30)
+    snapToBeats(slides, beats, drafts.map((d) => d.fixed != null), minAuto * 0.8)
+  }
   const duration = slides.length ? slides[slides.length - 1].start + slides[slides.length - 1].duration : 0
   return { slides, duration, photoSeconds: p, musicDuration, aspect }
+}
+
+/** Beat times of the playlist on the show timeline (same placement as the audio plan). */
+export function musicBeatTimes(project: Project, until: number): number[] {
+  const a = project.settings.audio
+  const tracks = project.music.filter((tr) => tr.status === 'ready' && tr.duration > 0 && tr.playback)
+  const out: number[] = []
+  let t = 0
+  for (let i = 0; tracks.length && t < until && i < 500; i++) {
+    const tr = tracks[i % tracks.length]
+    for (const b of tr.beats ?? []) if (b < tr.duration && t + b < until) out.push(t + b)
+    if (!a.repeatMusic && i === tracks.length - 1) break
+    t += tr.duration - Math.min(a.crossfade, tr.duration / 2)
+  }
+  return out.sort((x, y) => x - y)
+}
+
+/**
+ * Moves every slide change (the middle of its transition) onto the nearest beat. Slides with a
+ * fixed length (videos, custom times) keep it; automatic slides never get shorter than minDur.
+ */
+export function snapToBeats(slides: TimelineSlide[], beats: number[], fixed: boolean[], minDur: number): void {
+  if (beats.length < 2 || slides.length < 2) return
+  const cuts = [0]
+  for (let k = 0; k < slides.length - 1; k++) {
+    const s = slides[k]
+    const span = s.duration - s.transIn / 2 - s.transOut / 2
+    if (fixed[k]) {
+      cuts.push(cuts[k] + span)
+      continue
+    }
+    const nominal = slides[k + 1].start + slides[k + 1].transIn / 2
+    const earliest = cuts[k] + Math.max(0.3, minDur - s.transIn / 2 - s.transOut / 2)
+    let best = Math.max(nominal, earliest)
+    let bestDist = Infinity
+    for (const b of beats) {
+      if (b < earliest) continue
+      const d = Math.abs(b - nominal)
+      if (d < bestDist) {
+        bestDist = d
+        best = b
+      } else if (b > nominal) break
+    }
+    cuts.push(best)
+  }
+  slides.forEach((s, k) => {
+    s.start = cuts[k] - s.transIn / 2
+    if (k < slides.length - 1) s.duration = cuts[k + 1] - cuts[k] + s.transIn / 2 + s.transOut / 2
+  })
 }
 
 /** Slides visible at time t (one, or two during a transition), in drawing order. */

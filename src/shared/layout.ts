@@ -115,6 +115,8 @@ export interface Placement {
  * another cell (a portrait into a tall cell), with a small cost so the filmstrip order wins
  * ties; repeating the previous slide's template costs a little to keep the show varied.
  */
+const placementCache = new Map<string, Placement>()
+
 export function pickTemplate(
   aspects: number[],
   frameAspect: number,
@@ -122,6 +124,18 @@ export function pickTemplate(
   prev?: string,
   override?: string
 ): Placement {
+  // the search tries every assignment (720 for six photos); big shows rebuild the timeline on
+  // every edit, so results are memoised
+  const key = `${aspects.map((a) => a.toFixed(2)).join(',')}|${frameAspect.toFixed(3)}|${options.map((o) => o.id).join(',')}|${prev ?? ''}|${override ?? ''}`
+  const hit = placementCache.get(key)
+  if (hit) return hit
+  const result = searchPlacement(aspects, frameAspect, options, prev, override)
+  if (placementCache.size > 20000) placementCache.clear()
+  placementCache.set(key, result)
+  return result
+}
+
+function searchPlacement(aspects: number[], frameAspect: number, options: Template[], prev?: string, override?: string): Placement {
   const forced = override ? options.find((t) => t.id === override) : undefined
   let best: Placement = { template: forced ?? options[0], order: aspects.map((_, i) => i) }
   let bestScore = Infinity

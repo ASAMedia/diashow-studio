@@ -1,10 +1,18 @@
 // Shared exiftool-vendored instance (one perl process pool for the whole app).
+import { availableParallelism } from 'node:os'
 import { ExifDateTime, ExifTool, type Tags } from 'exiftool-vendored'
 
 let instance: ExifTool | null = null
 
 export function exiftool(): ExifTool {
-  instance ??= new ExifTool({ maxProcs: 4, taskTimeoutMillis: 30_000, geolocation: false })
+  // A full read of a phone JPEG costs exiftool ~120 ms, so big imports need several processes; the
+  // default 1.5 s between spawns would keep the pool small for the first ~10 s of an import.
+  instance ??= new ExifTool({
+    maxProcs: Math.max(2, Math.min(8, Math.floor(availableParallelism() / 2))),
+    minDelayBetweenSpawnMillis: 100,
+    taskTimeoutMillis: 30_000,
+    geolocation: false
+  })
   return instance
 }
 

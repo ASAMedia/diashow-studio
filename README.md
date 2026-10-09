@@ -18,6 +18,21 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
     - Add or remove items with +/− in the Slide tab, or take a single item out of a slide.
   - Every transition in a show has the same length; slides are kept long enough for it.
 - **Colour looks:** Natural, Vivid, Warm, Cool, Dramatic, Faded, Mono and Noir.
+- **Editing:**
+  - Undo and redo (Ctrl+Z / Ctrl+Y).
+  - Drag a filmstrip card's right edge to set its time; double-click the edge for automatic again.
+  - Day titles from the capture date, or chapters from folder names ("2_Sonntag Unser erster Tag" becomes "Sonntag" with the subtitle "Unser erster Tag").
+  - Sort by capture date.
+  - Text style for titles and captions: font, size, colour, position and capitals.
+- **Automatic help:**
+  - Offline face detection (MediaPipe BlazeFace, run on the whole picture and on tiles) keeps faces inside crops and gives Ken Burns a target.
+  - "Change slides on the beat" puts every slide change on a beat of the music.
+  - "Find rejects" lists blurry photos and near-duplicates (difference hash); of each duplicate group the sharpest photo stays.
+- **Export presets:** YouTube 1080p/4K, Instagram Reel 9:16, Instagram 1:1, WhatsApp, TV/projector. Another aspect ratio relays the show.
+  - 4K exports first prepare full-resolution versions of videos that only have a 1080p proxy.
+- **Large shows:** the filmstrip renders only what is visible, layout results are cached, and processing updates are batched.
+- **Pack project:** copies the project with all photos, videos and music into one folder for a USB stick or another PC. "Open project…" or a double-click on the .dshow loads it there.
+- **Presentation mode:** the show runs fullscreen on a second display (projector) while the laptop shows the current and next slide, time and controls.
 - **Timing like Photos:**
   - "Fit to music" or a custom total length.
   - "Play selected for" sets the time for a single slide.
@@ -58,7 +73,7 @@ Videos Chromium can't play directly are converted in the background into an H.26
 ## Development
 
 ```bash
-npm install          # also downloads FFmpeg 9.0 (BtbN GPL build) into vendor/ffmpeg
+npm install          # also downloads FFmpeg 9.0 (BtbN GPL build) and the face model into vendor/
 npm run dev          # start the app with hot reload
 npm test             # unit and pipeline tests (generates test media first)
 npm run e2e          # build + Playwright end-to-end test with screenshots of every theme
@@ -69,4 +84,4 @@ npm run dist         # Windows installer and portable exe in dist/
 
 ## Licence
 
-MIT for the app code. The bundled FFmpeg build is GPL; see `vendor/ffmpeg/LICENSE.txt`. Fonts are under the SIL Open Font License (Inter, Anton, Cinzel, Special Elite, Playfair Display).
+MIT for the app code. The bundled FFmpeg build is GPL; see `vendor/ffmpeg/LICENSE.txt`. MediaPipe and the BlazeFace model are Apache-2.0; their usage statistics are blocked inside the app. Fonts are under the SIL Open Font License (Inter, Anton, Cinzel, Special Elite, Playfair Display).

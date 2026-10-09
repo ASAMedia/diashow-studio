@@ -109,3 +109,42 @@ describe('crop or whole picture', () => {
     expect(showsWhole({ ...videoE, whole: false }, st, 0.56, 1.78)).toBe(false)
   })
 })
+
+describe('undo, durations and day titles', () => {
+  const day = (d: number, h = 10): number => new Date(2026, 1, d, h).getTime()
+  const media = [
+    { ...photo('a'), captureTime: day(14), path: 'D:/Ski/1_Samstag Lange Fahrt/a.jpg' },
+    { ...photo('b'), captureTime: day(15), path: 'D:/Ski/2_Sonntag Unser erster Tag/b.jpg' },
+    { ...photo('c'), captureTime: day(15, 14), path: 'D:/Ski/2_Sonntag Unser erster Tag/c.jpg' }
+  ]
+  const entries = (): Entry[] => media.map((m) => ({ id: m.id, type: 'photo', mediaId: m.id }))
+  const load = (): void => useStore.setState({ project: project(entries(), media, { theme: 'magazine' }) })
+  const p = (): Project => useStore.getState().project!
+
+  it('undoes and redoes, with slider moves as one step', () => {
+    load()
+    const s = useStore.getState()
+    s.setSettings({ look: 'warm' })
+    s.setSettings({ timing: { mode: 'custom', customTotal: 30 } })
+    s.setSettings({ timing: { mode: 'custom', customTotal: 31 } })
+    s.setSettings({ timing: { mode: 'custom', customTotal: 32 } })
+    useStore.getState().undo()
+    expect(p().settings.timing.mode).toBe('fitToMusic')
+    expect(p().settings.look).toBe('warm')
+    useStore.getState().redo()
+    expect(p().settings.timing.customTotal).toBe(32)
+  })
+
+  it('sets a slide time and inserts day titles from dates or folders', () => {
+    load()
+    useStore.getState().setSlideDuration(['a'], 7.04)
+    expect(p().entries[0].duration).toBe(7)
+    useStore.getState().insertDayTitles('folder')
+    const titles = p().entries.filter((e) => e.type === 'text') as { title: string; subtitle?: string }[]
+    expect(titles.map((t) => [t.title, t.subtitle])).toEqual([['Samstag', 'Lange Fahrt'], ['Sonntag', 'Unser erster Tag']])
+    useStore.getState().insertDayTitles('date')
+    expect(p().entries.filter((e) => e.type === 'text')).toHaveLength(2)
+    useStore.getState().removeAutoTitles()
+    expect(p().entries.some((e) => e.type === 'text')).toBe(false)
+  })
+})

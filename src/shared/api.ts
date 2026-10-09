@@ -1,6 +1,7 @@
 // Contract between renderer and main process. The preload script exposes an object
 // implementing DiashowApi as `window.api`; each method maps to one IPC channel.
 import type {
+  Rect,
   EncoderInfo,
   ExportOptions,
   ExportProgress,
@@ -52,6 +53,29 @@ export interface DiashowApi {
 
   setFullscreen(on: boolean): Promise<void>
   revealInFolder(path: string): Promise<void>
+
+  /** Store faces found by the renderer for a photo (persisted with the media cache). */
+  setFaces(id: string, faces: Rect[]): Promise<void>
+  /**
+   * Playable versions of proxied videos at up to maxEdge pixels (e.g. 3840) for sharp 4K
+   * exports. Reports ExportProgress with phase 'prepare'. Resolves with media id -> path.
+   */
+  prepareHires(ids: string[], maxEdge: number): Promise<Record<string, string>>
+
+  /** Pack a project with copies of all its photos, videos and music into a folder. */
+  pickPackDir(): Promise<string | null>
+  packProject(project: Project, dir: string): Promise<string>
+  /** Open a .dshow file (dialog), e.g. a packed project from another PC. */
+  openProjectFile(): Promise<Project | null>
+  importProjectFile(path: string): Promise<Project>
+  /** A .dshow file was opened with the app (double click / second instance). */
+  onOpenFile(cb: (path: string) => void): () => void
+
+  /** Presentation: the show fullscreen on a second display (or a second window). */
+  displays(): Promise<number>
+  presentStart(): Promise<void>
+  presentStop(): Promise<void>
+  onPresentClosed(cb: () => void): () => void
 }
 
 /** URL scheme served by the main process with HTTP Range support (needed for video seeking). */

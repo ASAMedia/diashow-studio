@@ -29,7 +29,8 @@ test('import, preview every theme, export', async () => {
   const page = await app.firstWindow()
   const errors: string[] = []
   page.on('console', (m) => {
-    if (m.type() === 'error') errors.push(m.text())
+    // MediaPipe prints its TFLite delegate info through console.error
+    if (m.type() === 'error' && !m.text().startsWith('INFO:')) errors.push(m.text())
   })
   page.on('pageerror', (e) => errors.push(e.message))
   await page.waitForFunction(() => !!(window as any).__diashow)
@@ -152,6 +153,49 @@ test('import, preview every theme, export', async () => {
   after = await slideIds()
   const wanted2 = [...before[x], ...before[y]]
   expect(after.some((s) => wanted2.every((id) => s.includes(id)))).toBe(true)
+
+  // Ctrl+Z restores the slides from before the merge, Ctrl+Y does it again
+  await page.locator('.stage').click({ position: { x: 5, y: 5 } })
+  await page.keyboard.press('Control+z')
+  await page.waitForTimeout(300)
+  expect(await slideIds()).toEqual(before)
+  await page.keyboard.press('Control+y')
+  await page.waitForTimeout(300)
+  expect(await slideIds()).toEqual(after)
+
+  // presentation: a second window plays the show, Esc in the editor ends it
+  const presentWin = app.waitForEvent('window')
+  await page.evaluate(() => (window as any).__diashow.store.getState().set({ presenting: true }))
+  const pw = await presentWin
+  await pw.waitForFunction(() => location.hash === '#present' && !!document.querySelector('canvas'))
+  await page.waitForTimeout(2500)
+  const presenterTime = await page.locator('.presenter .val').innerText()
+  console.log('presenter shows', presenterTime)
+  expect(presenterTime).not.toBe('0:00 / 0:00')
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(800)
+  expect(app.windows().length).toBe(1)
+
+  // pack the project into a folder and open the packed file again
+  const packDir = join(dataDir, 'pack')
+  mkdirSync(packDir, { recursive: true })
+  const packed = await page.evaluate(async (dir) => {
+    const d = (window as any).__diashow
+    const file = await (window as any).api.packProject(d.store.getState().project, dir)
+    const p = await (window as any).api.importProjectFile(file)
+    return { file, entries: p.entries.length, media: p.media.length }
+  }, packDir)
+  console.log('packed', JSON.stringify(packed))
+  expect(packed.file).toMatch(/\.dshow$/)
+  expect(packed.media).toBeGreaterThan(10)
+
+  // day titles from the project menu
+  await page.locator('.titlebar button[title="Weitere Aktionen"]').click()
+  await page.getByText('Tagestitel aus Aufnahmedatum').click()
+  await page.waitForTimeout(300)
+  const autoTitles = await page.evaluate(() => (window as any).__diashow.store.getState().project.entries.filter((e: any) => e.auto === 'day').length)
+  console.log('day titles', autoTitles)
+  expect(autoTitles).toBeGreaterThan(0)
 
   const out = join(dataDir, 'export.mp4')
   await page.evaluate(

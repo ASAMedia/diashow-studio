@@ -33,6 +33,21 @@ test(`${theme} theme with real photos`, async () => {
     return p && p.media.length > 0 && p.media.every((m: any) => m.status === 'ready' || m.status === 'error')
   }, null, { timeout: 300_000 })
 
+  // face detection runs in the background on every photo
+  const faces = await page.waitForFunction(
+    () => {
+      const p = (window as any).__diashow.store.getState().project
+      const photos = p.media.filter((m: any) => m.kind === 'photo' && m.status === 'ready')
+      const done = photos.filter((m: any) => m.faces !== undefined)
+      return done.length === photos.length ? { photos: photos.length, withFaces: done.filter((m: any) => m.faces.length).length, faces: done.reduce((n: number, m: any) => n + m.faces.length, 0) } : null
+    },
+    null,
+    { timeout: 180_000, polling: 1000 }
+  )
+  const fr = (await faces.jsonValue())!
+  console.log('faces', JSON.stringify(fr))
+  expect(fr.withFaces).toBeGreaterThan(0)
+
   // Magazine, project title, a text slide in front of the 5th photo (becomes its caption)
   const slides = await page.evaluate((th) => {
     const d = (window as any).__diashow

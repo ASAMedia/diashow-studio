@@ -42,6 +42,12 @@ export interface MediaItem {
   liveVideo?: string
   /** True when playback is a transcoded proxy. */
   proxied?: boolean
+  /** Faces found in the display image (normalised rects), set by the renderer's face detection. */
+  faces?: Rect[]
+  /** Photos: sharpness 0..1 (variance of the Laplacian on a small greyscale copy, normalised). */
+  sharpness?: number
+  /** Photos (and video thumbnails): 64-bit difference hash as 16 hex chars, for duplicate detection. */
+  hash?: string
 }
 
 export interface MusicTrack {
@@ -54,6 +60,9 @@ export interface MusicTrack {
   error?: string
   /** File playable by Chromium's <audio> (original or transcoded m4a). */
   playback?: string
+  /** Beat times in seconds from the start of the track, and the detected tempo. */
+  beats?: number[]
+  bpm?: number
 }
 
 /** Normalised rectangle (0..1) inside a source image. */
@@ -118,6 +127,8 @@ export interface TextEntry extends BaseEntry {
   type: 'text'
   title: string
   subtitle?: string
+  /** Created by "day titles" / "chapters from folders"; replaced when those run again. */
+  auto?: 'day'
 }
 
 export type Entry = PhotoEntry | VideoEntry | TextEntry
@@ -169,11 +180,26 @@ export interface AudioSettings {
   crossfade: number
 }
 
+export type TextFont = 'theme' | 'sans' | 'rounded' | 'caption' | 'display' | 'serif' | 'editorial' | 'type'
+export type TextPosition = 'theme' | 'bottom-left' | 'bottom-center' | 'bottom-right' | 'top-left' | 'center'
+
+/** Overrides for titles and captions; 'theme' keeps the theme's own choice. */
+export interface TextStyle {
+  font: TextFont
+  /** Size factor, 1 = theme default. */
+  scale: number
+  /** CSS colour, or '' for the theme colour. */
+  color: string
+  position: TextPosition
+  uppercase: 'theme' | 'on' | 'off'
+}
+
 export interface ProjectSettings {
   theme: ThemeId
   look: LookId
   aspect: AspectRatio
-  timing: { mode: 'fitToMusic' | 'custom'; customTotal: number }
+  /** beatSync: slide changes land on beats of the music. */
+  timing: { mode: 'fitToMusic' | 'custom'; customTotal: number; beatSync?: boolean }
   /** Used by themes with a free transition choice (Classic). */
   transition: { type: TransitionId; speed: number; direction: Direction }
   scaleToFill: boolean
@@ -185,7 +211,10 @@ export interface ProjectSettings {
   showTitle: boolean
   titleText?: string
   subtitleText?: string
+  text?: TextStyle
 }
+
+export const DEFAULT_TEXT_STYLE: TextStyle = { font: 'theme', scale: 1, color: '', position: 'theme', uppercase: 'theme' }
 
 export interface Project {
   version: 1
@@ -257,7 +286,7 @@ export interface EncoderInfo {
 }
 
 export interface ExportProgress {
-  phase: 'audio' | 'video' | 'finishing' | 'done' | 'error' | 'cancelled'
+  phase: 'prepare' | 'audio' | 'video' | 'finishing' | 'done' | 'error' | 'cancelled'
   frame?: number
   totalFrames?: number
   message?: string

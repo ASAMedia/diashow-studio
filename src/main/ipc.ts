@@ -2,11 +2,13 @@
 import { app, BrowserWindow, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
 import { join } from 'node:path'
 import { AUDIO_EXT, IMAGE_EXT, VIDEO_EXT } from '@shared/formats'
-import type { ExportOptions, ExportProgress, MediaItem, MusicTrack, Project } from '@shared/types'
+import type { ExportOptions, ExportProgress, MediaItem, MusicTrack, Project, Rect } from '@shared/types'
 import { resolveFfmpegDir } from './ffmpeg'
 import { endExiftool } from './media/exif'
 import { createMediaService, type MediaService } from './media/service'
-import { createProjectStore } from './projects'
+import { displayCount, isPresentationWindow, startPresentation, stopPresentation } from './presentation'
+import { importProjectFile, packProject } from './projectFile'
+import { createProjectStore, PROJECT_EXT } from './projects'
 import { cancelActiveExport, startExport, type ExportJob } from './export/encoder'
 
 function broadcast(channel: string, payload: unknown): void {
@@ -52,6 +54,17 @@ export function registerIpc(): void {
 
   let exportJob: ExportJob | null = null
   const sendProgress = (p: ExportProgress): void => broadcast('export:progress', p)
+  // Hi-res proxies and packing report through export:progress and stop with exportCancel
+  const preparing = new Set<AbortController>()
+  const prepareRun = async <T>(run: (signal: AbortSignal) => Promise<T>): Promise<T> => {
+    const ctrl = new AbortController()
+    preparing.add(ctrl)
+    try {
+      return await run(ctrl.signal)
+    } finally {
+      preparing.delete(ctrl)
+    }
+  }
 
   ipcMain.handle('app:locale', () => app.getLocale())
 
@@ -60,6 +73,7 @@ export function registerIpc(): void {
   ipcMain.handle('music:import', (_e, paths: string[]) => service.importMusic(stringList(paths)))
   ipcMain.handle('music:restore', (_e, tracks: MusicTrack[]) => service.restoreMusic(tracks))
   ipcMain.handle('audio:waveform', (_e, path: string, buckets: number) => service.waveform(path, buckets))
+  ipcMain.handle('media:faces', (_e, id: string, faces: Rect[]) => service.setFaces(id, faces))
 
   ipcMain.handle('dialog:media', async (e) => {
     const opts: Electron.OpenDialogOptions = {
@@ -108,12 +122,45 @@ export function registerIpc(): void {
     return /\.mp4$/i.test(r.filePath) ? r.filePath : `${r.filePath}.mp4`
   })
 
+  ipcMain.handle('dialog:pack', async (e) => {
+    const opts: Electron.OpenDialogOptions = { title: 'Projekt mit allen Medien packen – Zielordner', properties: ['openDirectory', 'createDirectory'] }
+    const win = windowOf(e)
+    const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+    return r.canceled || !r.filePaths.length ? null : r.filePaths[0]
+  })
+
+  ipcMain.handle('project:pack', (_e, project: Project, dir: string) => {
+    if (typeof dir !== 'string' || !dir) throw new Error('no target folder')
+    return prepareRun((signal) => packProject(project, dir, { signal, onProgress: sendProgress }))
+  })
+
+  ipcMain.handle('project:open-dialog', async (e) => {
+    const opts: Electron.OpenDialogOptions = {
+      title: 'Projekt öffnen',
+      properties: ['openFile'],
+      filters: [{ name: 'Diashow-Projekt', extensions: [PROJECT_EXT.slice(1)] }]
+    }
+    const win = windowOf(e)
+    const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+    if (r.canceled || !r.filePaths.length) return null
+    return importProjectFile(r.filePaths[0], projects)
+  })
+
+  ipcMain.handle('project:import-file', (_e, path: string) => {
+    if (typeof path !== 'string' || !path) throw new Error('no project file')
+    return importProjectFile(path, projects)
+  })
+
   ipcMain.handle('project:list', () => projects.list())
   ipcMain.handle('project:load', (_e, id: string) => projects.load(id))
   ipcMain.handle('project:save', (_e, project: Project) => projects.save(project))
   ipcMain.handle('project:delete', (_e, id: string) => projects.delete(id))
 
   ipcMain.handle('export:encoders', () => service.ffmpeg.encoders())
+
+  ipcMain.handle('export:hires', (_e, ids: string[], maxEdge: number) =>
+    prepareRun((signal) => service.prepareHires(stringList(ids), Number(maxEdge) || 0, { signal, onProgress: sendProgress }))
+  )
 
   ipcMain.handle('export:start', async (_e, options: ExportOptions) => {
     exportJob = null
@@ -139,8 +186,11 @@ export function registerIpc(): void {
   ipcMain.handle('export:cancel', async () => {
     const job = exportJob
     exportJob = null
+    const stopped = [...preparing]
+    for (const ctrl of stopped) ctrl.abort()
     if (job) await job.cancel()
     else await cancelActiveExport()
+    if (stopped.length && !job) sendProgress({ phase: 'cancelled' })
   })
 
   ipcMain.handle('win:fullscreen', (e, on: boolean) => {
@@ -151,6 +201,13 @@ export function registerIpc(): void {
     shell.showItemInFolder(path)
   })
 
+  ipcMain.handle('app:displays', () => displayCount())
+  ipcMain.handle('present:start', (e) => {
+    const win = windowOf(e)
+    startPresentation(isPresentationWindow(win) ? undefined : win)
+  })
+  ipcMain.handle('present:stop', () => stopPresentation())
+
   let quitting = false
   app.on('before-quit', (event) => {
     if (quitting) return
@@ -158,6 +215,7 @@ export function registerIpc(): void {
     event.preventDefault()
     const job = exportJob
     exportJob = null
+    for (const ctrl of preparing) ctrl.abort()
     const cleanup = Promise.allSettled([job ? job.cancel() : cancelActiveExport(), media?.dispose(), endExiftool()])
     // Never let a stuck child process block quitting
     const timeout = new Promise((resolve) => setTimeout(resolve, 4000))

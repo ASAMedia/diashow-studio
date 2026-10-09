@@ -3,6 +3,7 @@ import { Pause, Play, SkipBack, SkipForward, Volume2, X } from 'lucide-react'
 import { aspectValue } from '@shared/timeline'
 import { Player } from '../engine/player'
 import { useStore } from '../store'
+import { timelineOf } from '../timeline'
 import { fmtTime, localeTag, t } from '../i18n'
 
 export function FullscreenPlayer() {
@@ -57,7 +58,8 @@ export function FullscreenPlayer() {
     }
     const ro = new ResizeObserver(fit)
     ro.observe(rootRef.current!)
-    if (useStore.getState().project) p.setProject(useStore.getState().project!)
+    const proj = useStore.getState().project
+    if (proj) p.setProject(proj, timelineOf(proj))
     fit()
     // give the first textures a moment, then start like Photos does
     const startTimer = setTimeout(() => p.play(), 400)
@@ -70,7 +72,7 @@ export function FullscreenPlayer() {
   }, [])
 
   useEffect(() => {
-    if (project) playerRef.current?.setProject(project)
+    if (project) playerRef.current?.setProject(project, timelineOf(project))
   }, [project])
 
   useEffect(() => {

@@ -1,10 +1,10 @@
 import { create } from 'zustand'
 import type {
-  Entry, MediaItem, MusicTrack, Project, ProjectSettings, ProjectSummary, ThemeId
+  Entry, MediaItem, MusicTrack, Project, ProjectSettings, ProjectSummary, TextEntry, ThemeId
 } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import { themeMeta } from '@shared/themes'
-import { t } from './i18n'
+import { localeTag, t } from './i18n'
 import type { Player } from './engine/player'
 
 export type InspectorTab = 'themes' | 'music' | 'timing' | 'slide'
@@ -21,12 +21,30 @@ interface State {
   fullscreen: boolean
   exportOpen: boolean
   kbEdit: 'start' | 'end' | null
+  canUndo: boolean
+  canRedo: boolean
+  dialog: 'rejects' | 'pack' | null
+  presenting: boolean
   loadProjects(): Promise<void>
   createProject(paths?: string[], name?: string): Promise<Project>
   openProject(id: string): Promise<void>
   closeProject(): void
   deleteProject(id: string): Promise<void>
-  update(fn: (p: Project) => void): void
+  /**
+   * Changes the project and records an undo step. Edits with the same `key` that follow each
+   * other within a moment (slider and drag moves) form one step.
+   */
+  update(fn: (p: Project) => void, key?: string): void
+  undo(): void
+  redo(): void
+  /** Opens a project that came from a file (packed project). */
+  openProjectData(p: Project): Promise<void>
+  /** Custom on-screen time of a slide (undefined = automatic), stored on its first entry. */
+  setSlideDuration(slideIds: string[], seconds: number | undefined): void
+  /** Text slides at every new day ('date') or every new subfolder ('folder'). */
+  insertDayTitles(mode: 'date' | 'folder'): void
+  removeAutoTitles(): void
+  sortByDate(): void
   setSettings(patch: Partial<ProjectSettings>): void
   setTheme(theme: ThemeId): void
   importMedia(paths: string[]): Promise<void>
@@ -54,6 +72,44 @@ function scheduleSave(p: Project): void {
 
 const uid = (): string => crypto.randomUUID()
 
+// Undo history. Snapshots are whole projects (cheap to keep: media items are shared data);
+// restoring keeps the current processing state of media and music.
+const history = { past: [] as Project[], future: [] as Project[], key: '' as string | undefined, at: 0 }
+const HISTORY_LIMIT = 100
+
+function resetHistory(): void {
+  history.past = []
+  history.future = []
+  history.key = undefined
+}
+
+function withCurrentMedia(snapshot: Project, current: Project): Project {
+  const media = new Map(current.media.map((m) => [m.id, m]))
+  const music = new Map(current.music.map((m) => [m.id, m]))
+  return {
+    ...snapshot,
+    media: snapshot.media.map((m) => media.get(m.id) ?? m),
+    music: snapshot.music.map((m) => music.get(m.id) ?? m)
+  }
+}
+
+const dayKey = (time: number): string => {
+  const d = new Date(time)
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+}
+
+/** "2_Sonntag Unser erster Tag" -> title "Sonntag", subtitle "Unser erster Tag". */
+export function titleFromFolder(name: string): { title: string; subtitle?: string } {
+  const clean = name.replace(/^[\d\s._-]+/, '').trim() || name
+  const [first, ...rest] = clean.split(/\s+/)
+  return rest.length ? { title: first, subtitle: rest.join(' ') } : { title: first }
+}
+
+const parentFolder = (path: string): string => {
+  const parts = path.split(/[\\/]/)
+  return parts.length > 1 ? parts[parts.length - 2] : ''
+}
+
 function entriesFor(items: MediaItem[]): Entry[] {
   return items.map((m) => (m.kind === 'video' ? { id: uid(), type: 'video', mediaId: m.id } : { id: uid(), type: 'photo', mediaId: m.id }))
 }
@@ -69,6 +125,10 @@ export const useStore = create<State>((set, get) => ({
   fullscreen: false,
   exportOpen: false,
   kbEdit: null,
+  canUndo: false,
+  canRedo: false,
+  dialog: null,
+  presenting: false,
 
   async loadProjects() {
     set({ projects: await window.api.listProjects() })
@@ -87,26 +147,33 @@ export const useStore = create<State>((set, get) => ({
       music: [],
       settings: structuredClone(DEFAULT_SETTINGS)
     }
-    set({ project, view: 'editor', selection: [], playhead: 0, tab: 'themes' })
+    resetHistory()
+    set({ project, view: 'editor', selection: [], playhead: 0, tab: 'themes', canUndo: false, canRedo: false })
     await window.api.saveProject(project)
     if (paths.length) await get().importMedia(paths)
     return get().project!
   },
 
   async openProject(id) {
-    const p = await window.api.loadProject(id)
-    set({ project: p, view: 'editor', selection: [], playhead: 0, tab: 'themes' })
+    await get().openProjectData(await window.api.loadProject(id))
+  },
+
+  async openProjectData(p) {
+    resetHistory()
+    set({ project: p, view: 'editor', selection: [], playhead: 0, tab: 'themes', canUndo: false, canRedo: false })
     const [media, music] = await Promise.all([window.api.restoreMedia(p.media), window.api.restoreMusic(p.music)])
-    get().update((d) => {
-      d.media = media
-      d.music = music
-    })
+    const cur = get().project
+    if (!cur || cur.id !== p.id) return
+    const next = { ...cur, media, music }
+    set({ project: next })
+    scheduleSave(next)
   },
 
   closeProject() {
     const p = get().project
     if (p) void window.api.saveProject(p)
-    set({ project: null, view: 'home', selection: [], fullscreen: false })
+    resetHistory()
+    set({ project: null, view: 'home', selection: [], fullscreen: false, canUndo: false, canRedo: false })
     void get().loadProjects()
   },
 
@@ -115,18 +182,103 @@ export const useStore = create<State>((set, get) => ({
     await get().loadProjects()
   },
 
-  update(fn) {
+  update(fn, key) {
     const cur = get().project
     if (!cur) return
     const next = structuredClone(cur)
     fn(next)
     next.updatedAt = Date.now()
-    set({ project: next })
+    const now = performance.now()
+    if (!(key && key === history.key && now - history.at < 1000)) {
+      history.past.push(cur)
+      if (history.past.length > HISTORY_LIMIT) history.past.shift()
+    }
+    history.key = key
+    history.at = now
+    history.future = []
+    set({ project: next, canUndo: true, canRedo: false })
+    scheduleSave(next)
+  },
+
+  undo() {
+    const cur = get().project
+    const prev = history.past.pop()
+    if (!cur || !prev) return
+    history.future.push(cur)
+    history.key = undefined
+    const next = withCurrentMedia(prev, cur)
+    set({ project: next, canUndo: history.past.length > 0, canRedo: true })
+    scheduleSave(next)
+  },
+
+  redo() {
+    const cur = get().project
+    const fwd = history.future.pop()
+    if (!cur || !fwd) return
+    history.past.push(cur)
+    history.key = undefined
+    const next = withCurrentMedia(fwd, cur)
+    set({ project: next, canUndo: true, canRedo: history.future.length > 0 })
     scheduleSave(next)
   },
 
   setSettings(patch) {
-    get().update((p) => Object.assign(p.settings, patch))
+    get().update((p) => Object.assign(p.settings, patch), `settings:${Object.keys(patch).join(',')}`)
+  },
+
+  setSlideDuration(slideIds, seconds) {
+    const want = new Set(slideIds)
+    get().update((p) => {
+      const first = p.entries.find((e) => want.has(e.id))
+      if (first) first.duration = seconds == null ? undefined : Math.round(Math.min(120, Math.max(0.5, seconds)) * 10) / 10
+    }, `duration:${slideIds[0]}`)
+  },
+
+  insertDayTitles(mode) {
+    const fmtDay = new Intl.DateTimeFormat(localeTag(), { weekday: 'long' })
+    const fmtDate = new Intl.DateTimeFormat(localeTag(), { day: 'numeric', month: 'long', year: 'numeric' })
+    get().update((p) => {
+      const media = new Map(p.media.map((m) => [m.id, m]))
+      const out: Entry[] = []
+      let last = ''
+      for (const e of p.entries) {
+        if (e.type === 'text' && e.auto === 'day') continue
+        if (e.type !== 'text') {
+          const m = media.get(e.mediaId)
+          const key = m ? (mode === 'date' ? dayKey(m.captureTime) : parentFolder(m.path)) : ''
+          if (m && key && key !== last) {
+            const text = mode === 'date' ? { title: fmtDay.format(m.captureTime), subtitle: fmtDate.format(m.captureTime) } : titleFromFolder(key)
+            out.push({ id: uid(), type: 'text', auto: 'day', ...text } as TextEntry)
+            last = key
+          }
+        }
+        out.push(e)
+      }
+      p.entries = out
+    })
+  },
+
+  removeAutoTitles() {
+    get().update((p) => (p.entries = p.entries.filter((e) => !(e.type === 'text' && e.auto === 'day'))))
+  },
+
+  sortByDate() {
+    get().update((p) => {
+      const media = new Map(p.media.map((m) => [m.id, m]))
+      const time = (e: Entry): number => (e.type === 'text' ? Number.NaN : (media.get(e.mediaId)?.captureTime ?? 0))
+      // text slides keep their place relative to the following photo
+      const blocks: Entry[][] = []
+      let pending: Entry[] = []
+      for (const e of p.entries) {
+        if (e.type === 'text') pending.push(e)
+        else {
+          blocks.push([...pending, e])
+          pending = []
+        }
+      }
+      blocks.sort((a, b) => time(a[a.length - 1]) - time(b[b.length - 1]))
+      p.entries = [...blocks.flat(), ...pending]
+    })
   },
 
   setTheme(theme) {
@@ -182,7 +334,7 @@ export const useStore = create<State>((set, get) => ({
     get().update((p) => {
       const e = p.entries.find((x) => x.id === id)
       if (e) Object.assign(e, patch)
-    })
+    }, `entry:${id}:${Object.keys(patch).join(',')}`)
   },
 
   mergeEntries(ids) {
@@ -251,22 +403,41 @@ export const useStore = create<State>((set, get) => ({
   }
 }))
 
-/** Applies background processing updates from the main process to the open project. */
+/**
+ * Applies background processing updates from the main process to the open project. Updates
+ * are collected and applied once per animation frame: a big import sends thousands of them.
+ */
 export function wireMediaUpdates(): () => void {
-  const apply = <T extends { id: string }>(list: T[], item: T): T[] => list.map((x) => (x.id === item.id ? item : x))
-  const offMedia = window.api.onMediaUpdate((item: MediaItem) => {
+  const media = new Map<string, MediaItem>()
+  const music = new Map<string, MusicTrack>()
+  let frame = 0
+  const flush = (): void => {
+    frame = 0
     const p = useStore.getState().project
-    if (!p || !p.media.some((m) => m.id === item.id)) return
-    useStore.setState({ project: { ...p, media: apply(p.media, item) } })
-    scheduleSave(useStore.getState().project!)
+    if (!p || (media.size === 0 && music.size === 0)) return
+    const next = {
+      ...p,
+      media: media.size ? p.media.map((m) => media.get(m.id) ?? m) : p.media,
+      music: music.size ? p.music.map((m) => music.get(m.id) ?? m) : p.music
+    }
+    media.clear()
+    music.clear()
+    useStore.setState({ project: next })
+    scheduleSave(next)
+  }
+  const queue = (): void => {
+    if (!frame) frame = requestAnimationFrame(flush)
+  }
+  const offMedia = window.api.onMediaUpdate((item: MediaItem) => {
+    media.set(item.id, item)
+    queue()
   })
   const offMusic = window.api.onMusicUpdate((track: MusicTrack) => {
-    const p = useStore.getState().project
-    if (!p || !p.music.some((m) => m.id === track.id)) return
-    useStore.setState({ project: { ...p, music: apply(p.music, track) } })
-    scheduleSave(useStore.getState().project!)
+    music.set(track.id, track)
+    queue()
   })
   return () => {
+    cancelAnimationFrame(frame)
     offMedia()
     offMusic()
   }

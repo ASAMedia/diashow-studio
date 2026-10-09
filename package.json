@@ -8,7 +8,7 @@
   "license": "MIT",
   "private": true,
   "scripts": {
-    "postinstall": "node scripts/fetch-ffmpeg.mjs",
+    "postinstall": "node scripts/fetch-ffmpeg.mjs && node scripts/fetch-models.mjs",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
@@ -19,6 +19,7 @@
     "dist": "electron-vite build && electron-builder --win"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "^1.1.0",
     "exiftool-vendored": "^39.0.1",
     "libraw-wasm": "1.6.0",
     "sharp": "^0.35.5"

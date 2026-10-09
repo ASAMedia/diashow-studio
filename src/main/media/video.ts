@@ -63,15 +63,17 @@ export interface ProxyOptions {
   signal?: AbortSignal
   onProgress?: (fraction: number) => void
   encoders?: EncoderInfo
+  /** Long edge limit, default PROXY_MAX (export uses up to 3840). */
+  maxEdge?: number
 }
 
 /**
- * Transcodes to an H.264 High 8-bit yuv420p MP4 (long edge <= 1920, CFR <= 60 fps, ~1 s GOP,
+ * Transcodes to an H.264 High 8-bit yuv420p MP4 (long edge <= maxEdge (1920), CFR <= 60 fps, ~1 s GOP,
  * rotation baked in, HDR tone-mapped, no audio). A failing hardware encoder is retried with libx264.
  */
 export async function transcodeProxy(ff: Ffmpeg, src: string, info: VideoInfo, out: string, opts: ProxyOptions = {}): Promise<string> {
   const fps = info.proxyFps
-  const vf = videoFilter(info, PROXY_MAX, { fps })
+  const vf = videoFilter(info, opts.maxEdge ?? PROXY_MAX, { fps })
   const colorTags = info.hdr ? ['-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709', '-color_range', 'tv'] : []
   const tmp = `${out}.part.mp4`
   const hw = opts.encoders?.hardware.h264
@@ -112,9 +114,10 @@ export async function transcodeProxy(ff: Ffmpeg, src: string, info: VideoInfo, o
 /** Frame at ~10 % of the duration → JPEG, long edge 360. */
 export async function videoThumb(ff: Ffmpeg, src: string, info: VideoInfo, out: string, signal?: AbortSignal): Promise<void> {
   const vf = videoFilter(info, THUMB_MAX)
+  // Two decoder threads: thumbnails run many at a time, where frame threading only adds overhead
   const grab = (at: number): Promise<Buffer> =>
     ff.capture(
-      ['-ss', at.toFixed(3), '-i', src, '-map', `0:${info.stream.index}`, '-frames:v', '1', '-vf', vf, '-c:v', 'png', '-f', 'image2pipe', '-'],
+      ['-threads', '2', '-ss', at.toFixed(3), '-i', src, '-map', `0:${info.stream.index}`, '-frames:v', '1', '-vf', vf, '-c:v', 'png', '-f', 'image2pipe', '-'],
       { signal }
     )
   let png = await grab(info.duration > 1 ? info.duration * 0.1 : 0)

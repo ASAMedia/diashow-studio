@@ -58,7 +58,7 @@ export function Viewer() {
   }, [])
 
   useEffect(() => {
-    playerRef.current?.setProject(project)
+    playerRef.current?.setProject(project, timelineOf(project))
   }, [project])
 
   // The fullscreen player has its own engine; keep the preview quiet meanwhile.
@@ -166,7 +166,8 @@ function KenBurnsEditor(props: { entry: PhotoEntry; display?: string; mediaAspec
   const { entry, mediaAspect, frameAspect, w, h } = props
   const kbEdit = useStore((s) => s.kbEdit)!
   const setEntry = useStore((s) => s.setEntry)
-  const kb = entry.kenBurns ?? defaultKenBurns(mediaAspect, frameAspect, entry.id)
+  const media = useStore((s) => s.project?.media.find((m) => m.id === entry.mediaId))
+  const kb = entry.kenBurns ?? defaultKenBurns(mediaAspect, frameAspect, entry.id, media?.faces)
   const full = coverRect(mediaAspect, frameAspect)
   // image area inside the editor (contain)
   const iw = Math.min(w * 0.92, (h * 0.86) * mediaAspect)

@@ -33,7 +33,18 @@ const api: DiashowApi = {
   exportCancel: () => ipcRenderer.invoke('export:cancel'),
   onExportProgress: (cb) => subscribe('export:progress', cb),
   setFullscreen: (on) => ipcRenderer.invoke('win:fullscreen', on),
-  revealInFolder: (path) => ipcRenderer.invoke('shell:reveal', path)
+  revealInFolder: (path) => ipcRenderer.invoke('shell:reveal', path),
+  setFaces: (id, faces) => ipcRenderer.invoke('media:faces', id, faces),
+  prepareHires: (ids, maxEdge) => ipcRenderer.invoke('export:hires', ids, maxEdge),
+  pickPackDir: () => ipcRenderer.invoke('dialog:pack'),
+  packProject: (project, dir) => ipcRenderer.invoke('project:pack', project, dir),
+  openProjectFile: () => ipcRenderer.invoke('project:open-dialog'),
+  importProjectFile: (path) => ipcRenderer.invoke('project:import-file', path),
+  onOpenFile: (cb) => subscribe('app:open-file', cb),
+  displays: () => ipcRenderer.invoke('app:displays'),
+  presentStart: () => ipcRenderer.invoke('present:start'),
+  presentStop: () => ipcRenderer.invoke('present:stop'),
+  onPresentClosed: (cb) => subscribe('present:closed', cb)
 }
 
 contextBridge.exposeInMainWorld('api', api)

@@ -1,4 +1,5 @@
-import type { Entry, MediaItem, PhotoEntry, ProjectSettings, Rect } from '@shared/types'
+import type { Entry, MediaItem, PhotoEntry, ProjectSettings, Rect, TextPosition, TextStyle } from '@shared/types'
+import { DEFAULT_TEXT_STYLE } from '@shared/types'
 import type { TimelineSlide } from '@shared/timeline'
 import type { QuadSpec, Tex, UvRect } from './gl'
 import type { Ctx, SlideState } from './types'
@@ -60,9 +61,19 @@ export function aspectOf(m: MediaItem | undefined, tex?: Tex | null): number {
 }
 
 /** Default Ken Burns motion: zoom in or out and drift in a direction picked from the seed. */
-export function defaultKenBurns(mediaAspect: number, frameAspect: number, seed: string): { start: Rect; end: Rect } {
+export function defaultKenBurns(mediaAspect: number, frameAspect: number, seed: string, faces?: Rect[]): { start: Rect; end: Rect } {
   const full = coverRect(mediaAspect, frameAspect)
   const r = rng(seed)
+  if (faces?.length) {
+    // move towards (or away from) the faces instead of a random spot
+    const f = facesFocus({ faces } as MediaItem)
+    const wide = { ...full, x: Math.min(1 - full.w, Math.max(0, f.x - full.w / 2)), y: Math.min(1 - full.h, Math.max(0, f.y - full.h / 2)) }
+    const zoom = 0.78 + r() * 0.06
+    const w = full.w * zoom
+    const h = full.h * zoom
+    const close = { x: Math.min(1 - w, Math.max(0, f.x - w / 2)), y: Math.min(1 - h, Math.max(0, f.y - h / 2)), w, h }
+    return r() < 0.65 ? { start: wide, end: close } : { start: close, end: wide }
+  }
   const zoom = 0.82 + r() * 0.06
   const small = { w: full.w * zoom, h: full.h * zoom }
   const portraitInWide = mediaAspect < frameAspect * 0.8
@@ -82,6 +93,22 @@ export function defaultKenBurns(mediaAspect: number, frameAspect: number, seed: 
 /** Default vertical focus: slightly above the middle, where heads usually are. */
 export const DEFAULT_FOCUS_Y = 0.42
 
+/** Centre of the detected faces (weighted by size), or the default focus. */
+export function facesFocus(m: MediaItem | undefined): { x: number; y: number } {
+  const faces = m?.faces
+  if (!faces?.length) return { x: 0.5, y: DEFAULT_FOCUS_Y }
+  let sum = 0
+  let x = 0
+  let y = 0
+  for (const f of faces) {
+    const a = f.w * f.h
+    sum += a
+    x += (f.x + f.w / 2) * a
+    y += (f.y + f.h / 2) * a
+  }
+  return { x: x / sum, y: y / sum }
+}
+
 /** Crop of a photo filling a cell, honouring the user's framing (focus point and zoom). */
 export function photoUv(entry: Entry | undefined, m: MediaItem | undefined, boxAspect: number, tex?: Tex | null): UvRect {
   const base = coverRect(aspectOf(m, tex), boxAspect)
@@ -89,8 +116,9 @@ export function photoUv(entry: Entry | undefined, m: MediaItem | undefined, boxA
   const z = Math.min(4, Math.max(1, crop?.zoom ?? 1))
   const w = base.w / z
   const h = base.h / z
-  const fx = crop?.x ?? 0.5
-  const fy = crop?.y ?? DEFAULT_FOCUS_Y
+  const focus = crop ? null : facesFocus(m)
+  const fx = crop?.x ?? focus!.x
+  const fy = crop?.y ?? focus!.y
   return { x: Math.min(1 - w, Math.max(0, fx - w / 2)), y: Math.min(1 - h, Math.max(0, fy - h / 2)), w, h }
 }
 
@@ -99,7 +127,7 @@ export function lerpRect(a: Rect, b: Rect, t: number): Rect {
 }
 
 export function kenBurnsUv(entry: PhotoEntry, m: MediaItem, frameAspect: number, t: number): UvRect {
-  const kb = entry.kenBurns ?? defaultKenBurns(aspectOf(m), frameAspect, entry.id)
+  const kb = entry.kenBurns ?? defaultKenBurns(aspectOf(m), frameAspect, entry.id, m.faces)
   return lerpRect(kb.start, kb.end, easeInOut(clamp01(t)))
 }
 
@@ -184,6 +212,43 @@ export function drawCell(ctx: Ctx, s: SlideState, i: number, box: Box, o: MediaD
   const a = aspectOf(m, tex)
   if (tex && showsWhole(e, ctx.settings, a, box.w / box.h, tolerance)) return drawWhole(ctx, tex, a, box, o, fill)
   return drawMedia(ctx, tex, a, box, { ...o, uv: photoUv(e, m, box.w / box.h, tex) })
+}
+
+/** The show's text overrides (font, size, colour, capitals) applied to a theme's text. */
+export function applyTextStyle(spec: TextSpec, style: TextStyle | undefined): TextSpec {
+  const ts = { ...DEFAULT_TEXT_STYLE, ...style }
+  return {
+    ...spec,
+    font: ts.font === 'theme' ? spec.font : ts.font,
+    weight: ts.font === 'theme' ? spec.weight : undefined,
+    size: spec.size * ts.scale,
+    color: ts.color || spec.color,
+    uppercase: ts.uppercase === 'theme' ? spec.uppercase : ts.uppercase === 'on'
+  }
+}
+
+/** Position chosen for titles and captions on photos, or 'theme'. */
+export function textPosition(ctx: Ctx): TextPosition {
+  return ctx.settings.text?.position ?? 'theme'
+}
+
+/** Lines of text stacked into one block at a position inside an area. */
+export function drawTextBlock(ctx: Ctx, specs: TextSpec[], pos: Exclude<TextPosition, 'theme'>, area: Box, opacity: number): Box | null {
+  const align = pos === 'bottom-right' ? 'right' : pos === 'bottom-center' || pos === 'center' ? 'center' : 'left'
+  const texs = specs.map((sp) => ctx.text({ ...sp, align, maxWidth: Math.min(sp.maxWidth ?? Infinity, area.w * 0.8) })).filter((x): x is Tex => !!x)
+  if (!texs.length || opacity <= 0.001) return null
+  const w = Math.max(...texs.map((x) => x.w))
+  const h = texs.reduce((sum, x) => sum + x.h, 0)
+  const pad = ctx.H * 0.03
+  const x = pos === 'bottom-left' || pos === 'top-left' ? area.x + pad : pos === 'bottom-right' ? area.x + area.w - pad - w : area.x + (area.w - w) / 2
+  const y = pos === 'top-left' ? area.y + pad : pos === 'center' ? area.y + (area.h - h) / 2 : area.y + area.h - pad - h
+  let yy = y
+  for (const tex of texs) {
+    const xx = align === 'left' ? x : align === 'right' ? x + w - tex.w : x + (w - tex.w) / 2
+    ctx.c.quad({ tex, x: xx, y: yy, w: tex.w, h: tex.h, opacity })
+    yy += tex.h
+  }
+  return { x, y, w, h }
 }
 
 /** Draws a text texture with its centre (or left edge) at x,y. */

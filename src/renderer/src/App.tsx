@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { classify } from '@shared/formats'
 import { useStore, wireMediaUpdates, playerRef } from './store'
+import { startFaceQueue } from './faces'
 import { t } from './i18n'
 import { TitleBar } from './components/TitleBar'
 import { Home } from './components/Home'
@@ -9,6 +10,8 @@ import { Inspector } from './components/Inspector'
 import { Filmstrip } from './components/Filmstrip'
 import { ExportDialog } from './components/ExportDialog'
 import { FullscreenPlayer } from './components/FullscreenPlayer'
+import { PackDialog, RejectsDialog } from './components/Dialogs'
+import { PresenterPanel } from './components/Presentation'
 
 /** Routes dropped files: audio goes to the playlist, everything else into the show. */
 export async function handleDroppedPaths(paths: string[]): Promise<void> {
@@ -28,11 +31,18 @@ export function App() {
   const view = useStore((s) => s.view)
   const fullscreen = useStore((s) => s.fullscreen)
   const exportOpen = useStore((s) => s.exportOpen)
+  const dialog = useStore((s) => s.dialog)
+  const presenting = useStore((s) => s.presenting)
   const [dragging, setDragging] = useState(false)
 
   useEffect(() => {
     void useStore.getState().loadProjects()
-    return wireMediaUpdates()
+    const offMedia = wireMediaUpdates()
+    const offFaces = startFaceQueue()
+    return () => {
+      offMedia()
+      offFaces()
+    }
   }, [])
 
   useEffect(() => {
@@ -76,8 +86,14 @@ export function App() {
       const target = e.target as HTMLElement
       if (target.closest('input, textarea, select')) return
       const s = useStore.getState()
-      if (s.view !== 'editor' || s.fullscreen || s.exportOpen) return
+      if (s.view !== 'editor' || s.fullscreen || s.exportOpen || s.presenting || s.dialog) return
       const p = playerRef.current
+      if (e.ctrlKey && !e.altKey && (e.key === 'z' || e.key === 'Z' || e.key === 'y' || e.key === 'Y')) {
+        e.preventDefault()
+        if (e.key.toLowerCase() === 'y' || e.shiftKey) s.redo()
+        else s.undo()
+        return
+      }
       if (e.code === 'Space') {
         e.preventDefault()
         p?.toggle()
@@ -106,6 +122,9 @@ export function App() {
       )}
       {exportOpen && <ExportDialog />}
       {fullscreen && <FullscreenPlayer />}
+      {dialog === 'rejects' && <RejectsDialog />}
+      {dialog === 'pack' && <PackDialog />}
+      {presenting && <PresenterPanel />}
       {dragging && <div className="window-drop">{t('dropHere')}</div>}
     </div>
   )

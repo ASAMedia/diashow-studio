@@ -1,4 +1,4 @@
-import { FolderOpen, Plus, Trash2, Play } from 'lucide-react'
+import { FileUp, FolderOpen, Plus, Trash2, Play } from 'lucide-react'
 import { mediaUrl } from '@shared/api'
 import { useStore } from '../store'
 import { localeTag, t } from '../i18n'
@@ -24,6 +24,15 @@ export function Home() {
     <div className="home">
       <div className="hero">
         <h1>{t('yourProjects')}</h1>
+        <button
+          className="btn"
+          onClick={async () => {
+            const p = await window.api.openProjectFile()
+            if (p) await useStore.getState().openProjectData(p)
+          }}
+        >
+          <FileUp size={15} /> {t('openFile')}
+        </button>
         <button className="btn" onClick={quickShow} title={t('quickShowHint')}>
           <Play size={15} /> {t('quickShow')}
         </button>

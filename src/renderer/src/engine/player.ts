@@ -46,8 +46,9 @@ export class Player {
     this.raf = requestAnimationFrame(loop)
   }
 
-  setProject(project: Project): void {
-    this.tl = buildTimeline(project, this.locale)
+  /** `tl` lets callers share an already built timeline (the editor caches it per project). */
+  setProject(project: Project, tl?: Timeline): void {
+    this.tl = tl ?? buildTimeline(project, this.locale)
     this.engine.setProject(project, this.tl)
     this.plan = buildAudioPlan(project, this.tl)
     this.loop = project.settings.loop

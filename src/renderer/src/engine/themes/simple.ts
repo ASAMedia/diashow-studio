@@ -2,7 +2,7 @@
 // Classic, Ken Burns and Retro Film.
 import type { PhotoEntry } from '@shared/types'
 import type { Ctx, SlideState, Theme } from '../types'
-import { aspectOf, dirVector, drawCell, drawMedia, drawText, drawWhole, easeInOut, kenBurnsUv, showsWhole, titleOpacity, rng } from '../draw'
+import { aspectOf, dirVector, drawCell, drawMedia, drawText, drawTextBlock, drawWhole, easeInOut, kenBurnsUv, showsWhole, textPosition, titleOpacity, rng } from '../draw'
 import type { FontRole } from '../media'
 import type { Box } from '../draw'
 
@@ -11,13 +11,21 @@ export function drawCenteredText(
   s: SlideState,
   font: FontRole,
   color: string,
-  opts: { opacity?: number; uppercase?: boolean; tracking?: number; shadow?: boolean; scale?: number; dy?: number; dx?: number } = {}
+  opts: { opacity?: number; uppercase?: boolean; tracking?: number; shadow?: boolean; scale?: number; dy?: number; dx?: number; overlay?: boolean } = {}
 ): void {
   const { W, H } = ctx
   const title = s.slide.title
   if (!title) return
   const k = opts.scale ?? 1
   const size = H * 0.075 * k
+  const pos = textPosition(ctx)
+  if (opts.overlay && pos !== 'theme') {
+    // the show places titles on photos itself
+    const specs = [{ text: title.text, font, size, color, uppercase: opts.uppercase, tracking: opts.tracking, shadow: true }]
+    if (title.subtitle) specs.push({ text: title.subtitle, font: font === 'display' ? 'sans' : font, size: size * 0.42, color, uppercase: opts.uppercase, tracking: 0.04, shadow: true })
+    drawTextBlock(ctx, specs, pos, { x: 0, y: 0, w: W, h: H }, opts.opacity ?? 1)
+    return
+  }
   const y = H * 0.5 + (opts.dy ?? 0)
   const x = W / 2 + (opts.dx ?? 0)
   const main = drawText(
@@ -56,7 +64,7 @@ export const classic: Theme = {
       return
     }
     fullFrameMedia(ctx, s)
-    if (sl.titleOverlay) drawCenteredText(ctx, s, 'sans', '#ffffff', { opacity: titleOpacity(s.local), shadow: true })
+    if (sl.titleOverlay) drawCenteredText(ctx, s, 'sans', '#ffffff', { opacity: titleOpacity(s.local), shadow: true, overlay: true })
   },
   transition(ctx) {
     return { kind: ctx.settings.transition.type, dir: dirVector(ctx.settings.transition.direction) }
@@ -82,7 +90,7 @@ export const kenburns: Theme = {
       if (tex && showsWhole(sl.entries[0], ctx.settings, a, W / H)) drawWhole(ctx, tex, a, box, {}, 'blur', 1 + 0.06 * easeInOut(s.p))
       else drawMedia(ctx, tex, a, box, { uv: kenBurnsUv(sl.entries[0] as PhotoEntry, m, W / H, s.p) })
     } else fullFrameMedia(ctx, s)
-    if (sl.titleOverlay) drawCenteredText(ctx, s, 'light', '#ffffff', { opacity: titleOpacity(s.local), shadow: true, scale: 1.1 })
+    if (sl.titleOverlay) drawCenteredText(ctx, s, 'light', '#ffffff', { opacity: titleOpacity(s.local), shadow: true, scale: 1.1, overlay: true })
   },
   transition() {
     return { kind: 'dissolve', dir: [1, 0] }
@@ -108,7 +116,7 @@ export const retro: Theme = {
     // constant slight zoom (room for the weave): a drifting zoom made the two pictures in a
     // burn transition differ in size
     fullFrameMedia(ctx, s, { zoom: 1.04, dx, dy })
-    if (sl.titleOverlay) drawCenteredText(ctx, s, 'type', '#f3e9d2', { opacity: titleOpacity(s.local), shadow: true, dx, dy })
+    if (sl.titleOverlay) drawCenteredText(ctx, s, 'type', '#f3e9d2', { opacity: titleOpacity(s.local), shadow: true, dx, dy, overlay: true })
   },
   transition() {
     return { kind: 'burn', dir: [1, 0] }

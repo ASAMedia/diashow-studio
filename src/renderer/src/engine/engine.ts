@@ -5,7 +5,7 @@ import { ExportVideoStore, ImageStore, TextStore, VideoPool } from './media'
 import type { Ctx, SlideState, Theme } from './types'
 import { classic, kenburns, retro } from './themes/simple'
 import { magazine, origami, panels, reflections, vintage } from './themes/scene'
-import { clamp01, smooth, type Box } from './draw'
+import { applyTextStyle, clamp01, drawTextBlock, smooth, type Box } from './draw'
 
 export const THEME_IMPL: Record<ThemeId, Theme> = { classic, kenburns, retro, magazine, origami, panels, reflections, vintage }
 
@@ -103,7 +103,7 @@ export class Engine {
         if (this.videos) return this.videos.frame(src.path, src.time, this.playing)
         return this.exportVideos!.get(src.path)
       },
-      text: (spec) => this.texts.get(spec)
+      text: (spec) => this.texts.get(applyTextStyle(spec, project.settings.text))
     }
   }
 
@@ -183,18 +183,11 @@ export class Engine {
     const light = theme.clear[0] + theme.clear[1] + theme.clear[2] > 1.5
     const o = smooth((s.inP - 0.3) / 0.5) * (1 - smooth(s.outP / 0.6))
     if (o <= 0.001) return
-    const tex = ctx.text({
-      text: [cap.text, cap.subtitle].filter(Boolean).join('\n'),
-      font: 'sans',
-      size: H * 0.04,
-      weight: 600,
-      color: light ? '#2b2e2c' : '#ffffff',
-      shadow: !light,
-      align: 'left',
-      maxWidth: W * 0.6,
-      lineHeight: 1.15
-    })
-    if (tex) this.c.quad({ tex, x: H * 0.05, y: H * 0.95 - tex.h, w: tex.w, h: tex.h, opacity: o })
+    const pos = ctx.settings.text?.position && ctx.settings.text.position !== 'theme' ? ctx.settings.text.position : 'bottom-left'
+    const base = { font: 'sans' as const, weight: 600, color: light ? '#2b2e2c' : '#ffffff', shadow: !light, maxWidth: W * 0.6, lineHeight: 1.15 }
+    const specs = [{ ...base, text: cap.text, size: H * 0.04 }]
+    if (cap.subtitle) specs.push({ ...base, text: cap.subtitle, size: H * 0.03 })
+    drawTextBlock(ctx, specs, pos, { x: H * 0.02, y: H * 0.02, w: W - H * 0.04, h: H - H * 0.04 }, o)
   }
 
   /** Resting cell rectangles of a slide for crop editing, in canvas pixels. */

@@ -94,7 +94,7 @@ export function photoFormatLabel(path: string, tags: Tags): string {
   return SIMPLE_LABEL[ext] ?? ext.toUpperCase()
 }
 
-async function writeOutputs(img: Sharp, display: string, thumb: string): Promise<PhotoOutput> {
+async function writeOutputs(img: Sharp, display: string, thumb?: string): Promise<PhotoOutput> {
   const tmp = `${display}.part`
   const info = await img
     .resize({ width: DISPLAY_MAX, height: DISPLAY_MAX, fit: 'inside', withoutEnlargement: true })
@@ -102,6 +102,7 @@ async function writeOutputs(img: Sharp, display: string, thumb: string): Promise
     .jpeg({ quality: 92 })
     .toFile(tmp)
   await rename(tmp, display)
+  if (!thumb) return { width: info.width, height: info.height }
   const thumbTmp = `${thumb}.part`
   await sharp(display)
     .resize({ width: THUMB_MAX, height: THUMB_MAX, fit: 'inside', withoutEnlargement: true })
@@ -187,12 +188,33 @@ export interface PhotoDeps {
   raw: RawDecoding
 }
 
-/** Renders display.jpg + thumb.jpg for a still image. Returns the display dimensions. */
+/**
+ * Thumbnail straight from the original for formats sharp decodes (JPEGs are decoded at 1/8 scale,
+ * several times faster than the display render), so a big import shows every thumbnail long before
+ * the display images exist. Same orientation and colour handling as the display path.
+ */
+export async function renderThumb(path: string, out: string): Promise<void> {
+  const tmp = `${out}.part`
+  try {
+    await sharp(path, { failOn: 'none', limitInputPixels: 1e9 })
+      .rotate()
+      .resize({ width: THUMB_MAX, height: THUMB_MAX, fit: 'inside', withoutEnlargement: true })
+      .toColourspace('srgb')
+      .jpeg({ quality: 80 })
+      .toFile(tmp)
+    await rename(tmp, out)
+  } catch (err) {
+    await rm(tmp, { force: true })
+    throw err
+  }
+}
+
+/** Renders display.jpg (+ thumb.jpg unless out.thumb is omitted) for a still image. Returns the display dimensions. */
 export async function renderPhoto(
   deps: PhotoDeps,
   path: string,
   tags: Tags,
-  out: { display: string; thumb: string },
+  out: { display: string; thumb?: string },
   signal?: AbortSignal
 ): Promise<PhotoOutput & { via: string }> {
   const ext = extOf(path)
@@ -213,7 +235,7 @@ export async function renderPhoto(
     return { ...result, via }
   } catch (err) {
     await rm(`${out.display}.part`, { force: true })
-    await rm(`${out.thumb}.part`, { force: true })
+    if (out.thumb) await rm(`${out.thumb}.part`, { force: true })
     throw err
   }
 }

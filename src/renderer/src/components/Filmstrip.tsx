@@ -121,6 +121,33 @@ export function Filmstrip() {
   const maxPer = themeMeta(project.settings.theme).maxPerSlide
   const selectedSlides = tl.slides.filter((sl) => sl.entries.some((e) => sel.has(e.id)))
 
+  // Only the cards in view (plus a margin) are rendered; big shows have hundreds of slides.
+  const [view, setView] = useState({ left: 0, width: 2000 })
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    let frame = 0
+    const measure = (): void => {
+      frame = 0
+      setView((v) => (v.left === el.scrollLeft && v.width === el.clientWidth ? v : { left: el.scrollLeft, width: el.clientWidth }))
+    }
+    const onScroll = (): void => {
+      if (!frame) frame = requestAnimationFrame(measure)
+    }
+    measure()
+    el.addEventListener('scroll', onScroll)
+    const ro = new ResizeObserver(onScroll)
+    ro.observe(el)
+    return () => {
+      el.removeEventListener('scroll', onScroll)
+      ro.disconnect()
+      cancelAnimationFrame(frame)
+    }
+  }, [])
+  const n = tl.slides.length
+  const first = Math.max(0, Math.floor((view.left - 16) / STEP) - 8)
+  const last = Math.min(n - 1, Math.ceil((view.left + view.width) / STEP) + 8)
+
   return (
     <div className="strip">
       <div
@@ -151,7 +178,8 @@ export function Filmstrip() {
           setMergeAt(null)
         }}>
           <div className="cards">
-            {tl.slides.map((s) => (
+            {first > 0 && <div style={{ flex: '0 0 auto', width: first * STEP - GAP }} />}
+            {tl.slides.slice(first, last + 1).map((s) => (
               <SlideCard
                 key={s.id}
                 slide={s}
@@ -163,6 +191,7 @@ export function Filmstrip() {
                 }}
                 dragging={drag === s.index}
                 mergeTarget={mergeAt === s.index}
+                onDuration={(sec) => useStore.getState().setSlideDuration(s.entries.map((e) => e.id), sec)}
                 onClick={(e) => clickSlide(s, e)}
                 onMenu={(e) => {
                   e.preventDefault()
@@ -181,6 +210,7 @@ export function Filmstrip() {
                 }}
               />
             ))}
+            {last < n - 1 && <div style={{ flex: '0 0 auto', width: (n - 1 - last) * STEP - GAP }} />}
             <div className="card add" title={t('addMedia')} onClick={(e) => setMenu({ x: e.clientX, y: e.clientY - 120, add: true })}>
               <Plus size={20} />
             </div>
@@ -259,6 +289,8 @@ function SlideCard(props: {
   onCaption: () => void
   dragging: boolean
   mergeTarget: boolean
+  /** Drag on the right edge sets the slide's time; undefined = automatic again. */
+  onDuration: (seconds: number | undefined) => void
   onClick: (e: React.MouseEvent) => void
   onMenu: (e: React.MouseEvent) => void
   onDragStart: () => void
@@ -288,7 +320,7 @@ function SlideCard(props: {
         <div className="text-card">T</div>
       ) : (
         <div className="tiles">
-          {s.media.map((m, i) => (m.thumb ? <img key={i} src={mediaUrl(m.thumb)} alt="" draggable={false} /> : <div key={i} style={{ flex: 1, background: '#2b2b2f' }} />))}
+          {s.media.map((m, i) => (m.thumb ? <img key={i} src={mediaUrl(m.thumb)} alt="" draggable={false} loading="lazy" decoding="async" /> : <div key={i} style={{ flex: 1, background: '#2b2b2f' }} />))}
         </div>
       )}
       <div className="badges">
@@ -326,9 +358,51 @@ function SlideCard(props: {
           T
         </span>
       )}
+      {(s.kind === 'photos' || s.kind === 'text' || s.kind === 'video') && <DurationHandle slide={s} onDuration={props.onDuration} />}
       {busy && <div className="progress" style={{ width: `${Math.round((busy.progress ?? 0.05) * 100)}%` }} />}
       {failed && <div className="err">{failed.error === 'missing' ? t('missing') : failed.format}</div>}
       <span className="num">{s.index + 1}</span>
+    </div>
+  )
+}
+
+function DurationHandle({ slide, onDuration }: { slide: TimelineSlide; onDuration: (s: number | undefined) => void }) {
+  const [live, setLive] = useState<number | null>(null)
+  return (
+    <div
+      className={`dur-handle ${live != null ? 'active' : ''}`}
+      title={t('durationDrag')}
+      onMouseDown={(e) => {
+        // keeps the card's own drag-and-drop from starting
+        e.preventDefault()
+        e.stopPropagation()
+      }}
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => {
+        e.stopPropagation()
+        onDuration(undefined)
+      }}
+      onPointerDown={(e) => {
+        e.stopPropagation()
+        const el = e.currentTarget
+        el.setPointerCapture(e.pointerId)
+        const x0 = e.clientX
+        const d0 = slide.duration
+        const move = (ev: PointerEvent): void => {
+          const v = Math.round(Math.min(120, Math.max(0.5, d0 + (ev.clientX - x0) * 0.05)) * 10) / 10
+          setLive(v)
+          onDuration(v)
+        }
+        const up = (): void => {
+          el.removeEventListener('pointermove', move)
+          el.removeEventListener('pointerup', up)
+          setLive(null)
+        }
+        el.addEventListener('pointermove', move)
+        el.addEventListener('pointerup', up)
+      }}
+    >
+      {live != null && <span className="dur-tip">{live.toLocaleString(undefined, { minimumFractionDigits: 1 })} s</span>}
     </div>
   )
 }

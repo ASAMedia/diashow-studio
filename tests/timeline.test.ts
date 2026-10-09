@@ -159,3 +159,32 @@ describe('audio plan', () => {
     expect(last.start + last.duration).toBeCloseTo(plan.duration, 6)
   })
 })
+
+describe('beat sync and big shows', () => {
+  it('puts slide changes on beats', () => {
+    const media = Array.from({ length: 10 }, (_, i) => photo(`p${i}`))
+    const entries: Entry[] = media.map((m) => ({ id: m.id, type: 'photo', mediaId: m.id }))
+    const beatTrack = { ...track('s1', 60), beats: Array.from({ length: 120 }, (_, i) => 0.25 + i * 0.5), bpm: 120 }
+    const p = project(entries, media, [beatTrack], { timing: { mode: 'fitToMusic', customTotal: 60, beatSync: true } })
+    const tl = buildTimeline(p)
+    for (const s of tl.slides.slice(1)) {
+      const cut = s.start + s.transIn / 2
+      const offBeat = Math.abs(((cut - 0.25) / 0.5) % 1)
+      expect(Math.min(offBeat, 1 - offBeat)).toBeLessThan(1e-6)
+    }
+    expect(tl.duration).toBeGreaterThan(55)
+    expect(tl.duration).toBeLessThan(65)
+  })
+
+  it('builds the timeline of 1500 items quickly', () => {
+    const media = Array.from({ length: 1500 }, (_, i) => photo(`p${i}`, i % 3 ? 4000 : 3000, i % 3 ? 3000 : 4000))
+    const entries: Entry[] = media.map((m) => ({ id: m.id, type: 'photo', mediaId: m.id }))
+    const p = project(entries, media, [], { theme: 'magazine' })
+    buildTimeline(p)
+    const t0 = performance.now()
+    const tl = buildTimeline({ ...p, entries: [...p.entries] })
+    const ms = performance.now() - t0
+    expect(tl.slides.length).toBeGreaterThan(300)
+    expect(ms).toBeLessThan(150)
+  })
+})
