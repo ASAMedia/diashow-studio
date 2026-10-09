@@ -14,6 +14,9 @@ interface ImageEntry {
 export class ImageStore {
   private map = new Map<string, ImageEntry>()
   private frame = 0
+  /** Diagnostics: textures loaded and dropped so far. */
+  loads = 0
+  evictions = 0
 
   constructor(
     private c: Compositor,
@@ -55,6 +58,7 @@ export class ImageStore {
         bmp = resized
       }
       e.tex = this.c.upload(bmp, bmp.width, bmp.height, true)
+      this.loads++
       bmp.close()
     } catch {
       e.failed = true
@@ -70,6 +74,7 @@ export class ImageStore {
       if (e.used >= this.frame - 2) continue
       this.c.deleteTexture(e.tex!)
       this.map.delete(k)
+      this.evictions++
     }
   }
 
@@ -81,11 +86,15 @@ export class ImageStore {
 
 /** Preview: one muted <video> per file, kept in sync with the show clock. */
 export class VideoPool {
-  private els = new Map<string, { el: HTMLVideoElement; tex?: Tex; touched: boolean }>()
+  private els = new Map<string, { el: HTMLVideoElement; tex?: Tex; touched: boolean; idle: number; seeks: number }>()
+  /** Diagnostics: per file, how often it was sought and whether it plays. */
+  stats(): { path: string; seeks: number; paused: boolean; time: number }[] {
+    return [...this.els].map(([path, v]) => ({ path, seeks: v.seeks, paused: v.el.paused, time: v.el.currentTime }))
+  }
 
   constructor(private c: Compositor) {}
 
-  frame(path: string, time: number, playing: boolean): Tex | null {
+  private get(path: string): { el: HTMLVideoElement; tex?: Tex; touched: boolean; idle: number; seeks: number } {
     let v = this.els.get(path)
     if (!v) {
       const el = document.createElement('video')
@@ -94,20 +103,41 @@ export class VideoPool {
       el.playsInline = true
       el.crossOrigin = 'anonymous'
       el.src = mediaUrl(path)
-      v = { el, touched: true }
+      v = { el, touched: true, idle: 0, seeks: 0 }
       this.els.set(path, v)
     }
+    return v
+  }
+
+  /** Opens a video that will be needed soon and parks it on its first frame. */
+  preload(path: string, time: number): void {
+    const v = this.get(path)
     v.touched = true
+    if (!v.el.seeking && v.el.paused && Math.abs(v.el.currentTime - time) > 0.03) v.el.currentTime = time
+  }
+
+  /** `playing` false also covers a clip that holds its last frame. */
+  frame(path: string, time: number, playing: boolean): Tex | null {
+    const v = this.get(path)
+    v.touched = true
+    v.idle = 0
     const el = v.el
     const target = Math.max(0, Math.min(time, (el.duration || Infinity) - 0.03))
     if (playing) {
       if (el.paused) {
         el.currentTime = target
+        v.seeks++
         void el.play().catch(() => {})
-      } else if (Math.abs(el.currentTime - target) > 0.25) el.currentTime = target
+      } else if (Math.abs(el.currentTime - target) > 0.25) {
+        el.currentTime = target
+        v.seeks++
+      }
     } else {
       if (!el.paused) el.pause()
-      if (!el.seeking && Math.abs(el.currentTime - target) > 0.03) el.currentTime = target
+      if (!el.seeking && Math.abs(el.currentTime - target) > 0.03) {
+        el.currentTime = target
+        v.seeks++
+      }
     }
     if (el.readyState >= 2 && el.videoWidth > 0) {
       v.tex = this.c.upload(el, el.videoWidth, el.videoHeight, true, v.tex)
@@ -115,16 +145,23 @@ export class VideoPool {
     return v.tex ?? null
   }
 
-  /** Pause videos that were not drawn since the last sweep. */
+  /**
+   * Videos not drawn since the last sweep are paused, and released only after a while: a cell
+   * that skips a few frames (its staggered fade-in) must not lose its decoder and texture.
+   */
   sweep(): void {
     for (const [k, v] of this.els) {
-      if (!v.touched) {
-        v.el.pause()
-        if (v.tex) this.c.deleteTexture(v.tex)
-        v.el.removeAttribute('src')
-        v.el.load()
-        this.els.delete(k)
-      } else v.touched = false
+      if (v.touched) {
+        v.touched = false
+        continue
+      }
+      if (!v.el.paused) v.el.pause()
+      // decoders are heavy: keep idle ones only briefly, and only a few of them
+      if (++v.idle < 120 && this.els.size <= 12) continue
+      if (v.tex) this.c.deleteTexture(v.tex)
+      v.el.removeAttribute('src')
+      v.el.load()
+      this.els.delete(k)
     }
   }
 

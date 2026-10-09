@@ -70,13 +70,21 @@ export class Engine {
   }
 
   /** Path and source time of the video in cell `index` of a slide at slide-local time. */
-  private videoSource(slide: TimelineSlide, local: number, index = 0): { path: string; time: number } | null {
+  /**
+   * Path and source time of the video in cell `index` of a slide at slide-local time. `hold`
+   * is set once a clip has reached its end and shows its last frame (it must not keep playing).
+   */
+  private videoSource(slide: TimelineSlide, local: number, index = 0): { path: string; time: number; hold: boolean } | null {
     const m = slide.media[index]
-    if (slide.kind === 'video' && m?.playback) return { path: m.playback, time: (slide.video?.trimIn ?? 0) + local }
-    const clip = slide.clips?.[index]
-    // a clip shorter than its slide holds its last frame
-    if (clip && m?.playback) return { path: m.playback, time: clip.trimIn + Math.min(local, clip.trimOut - clip.trimIn - 0.04) }
-    if (index === 0 && slide.live && m?.liveVideo) return { path: m.liveVideo, time: Math.min(local, slide.live.duration - 0.04) }
+    const span = slide.kind === 'video' ? slide.video : slide.clips?.[index]
+    if (span && m?.playback) {
+      const end = span.trimOut - span.trimIn - 0.05
+      return { path: m.playback, time: span.trimIn + Math.max(0, Math.min(local, end)), hold: local >= end }
+    }
+    if (index === 0 && slide.live && m?.liveVideo) {
+      const end = slide.live.duration - 0.05
+      return { path: m.liveVideo, time: Math.min(local, end), hold: local >= end }
+    }
     return null
   }
 
@@ -100,7 +108,7 @@ export class Engine {
       video: (slide, local, index) => {
         const src = this.videoSource(slide, local, index)
         if (!src) return null
-        if (this.videos) return this.videos.frame(src.path, src.time, this.playing)
+        if (this.videos) return this.videos.frame(src.path, src.time, this.playing && !src.hold)
         return this.exportVideos!.get(src.path)
       },
       text: (spec) => this.texts.get(applyTextStyle(spec, project.settings.text))
@@ -146,7 +154,18 @@ export class Engine {
     const c = this.c
     const theme = THEME_IMPL[this.project.settings.theme] ?? kenburns
     const ctx = this.ctx(t)
-    if (this.mode === 'preview') for (const m of this.neededMedia(t, 6)) if (m.kind === 'photo') ctx.image(m)
+    if (this.mode === 'preview') {
+      for (const m of this.neededMedia(t, 6)) if (m.kind === 'photo') ctx.image(m)
+      // open the videos of the next seconds early, so a cell doesn't start with a blank frame
+      for (const s of this.tl.slides) {
+        if (s.start > t + 2.5) break
+        if (s.start <= t) continue
+        s.entries.forEach((_, i) => {
+          const src = this.videoSource(s, 0, i)
+          if (src) this.videos!.preload(src.path, src.time)
+        })
+      }
+    }
     const states = this.states(t)
     this.missing = 0
 
@@ -228,6 +247,11 @@ export class Engine {
       c.quad(faceA)
       c.quad(faceB)
     }
+  }
+
+  /** Diagnostics for tests: image texture traffic and preview video state. */
+  stats(): { imageLoads: number; imageEvictions: number; videos: { path: string; seeks: number; paused: boolean; time: number }[] } {
+    return { imageLoads: this.images.loads, imageEvictions: this.images.evictions, videos: this.videos?.stats() ?? [] }
   }
 
   readPixels(out: Uint8Array): void {
