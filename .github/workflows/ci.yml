@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # HEIC/HIF samples for the generated test media
+      - run: pip install pillow-heif numpy
+      # also downloads FFmpeg and the face model (postinstall)
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npx vitest run
+      - run: npx electron-vite build
+      # runners have no GPU: WebGL runs on SwiftShader
+      - run: npx playwright test e2e/app.spec.ts
+        env:
+          DIASHOW_SOFTWARE_GL: '1'
+        timeout-minutes: 25
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: test-results
+          if-no-files-found: ignore
