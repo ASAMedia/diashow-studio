@@ -1,4 +1,4 @@
-import type { Entry, MediaItem, PhotoEntry, Rect } from '@shared/types'
+import type { Entry, MediaItem, PhotoEntry, ProjectSettings, Rect } from '@shared/types'
 import type { TimelineSlide } from '@shared/timeline'
 import type { QuadSpec, Tex, UvRect } from './gl'
 import type { Ctx, SlideState } from './types'
@@ -151,6 +151,39 @@ export function drawFitted(ctx: Ctx, tex: Tex | null, aspect: number, box: Box, 
   const pv = o.pivot ?? [0.5, 0.5]
   const pivot: [number, number] = [(box.x + pv[0] * box.w - inner.x) / inner.w, (box.y + pv[1] * box.h - inner.y) / inner.h]
   return drawMedia(ctx, tex, aspect, inner, { ...o, fit: 'cover', pivot })
+}
+
+/**
+ * Whether an entry is shown whole (fitted into its cell) instead of cropped. Photos follow
+ * their own choice or the project's "crop to fill"; videos without a choice are cropped only
+ * when their shape is close to the cell's.
+ */
+export function showsWhole(e: Entry | undefined, settings: ProjectSettings, mediaAspect: number, boxAspect: number, tolerance = 0.22): boolean {
+  if (!e || e.type === 'text') return false
+  if (e.whole != null) return e.whole
+  if (e.type === 'video') return Math.abs(Math.log(mediaAspect / boxAspect)) >= tolerance
+  return !settings.scaleToFill
+}
+
+/** Whole picture inside a box, on a blurred copy of itself ('blur') or on the background ('none'). */
+export function drawWhole(ctx: Ctx, tex: Tex | null, aspect: number, box: Box, o: MediaDrawOpts = {}, fill: 'blur' | 'none' = 'blur', scale = 1): Box {
+  if (fill === 'blur' && tex) drawMedia(ctx, tex, aspect, box, { ...o, fit: 'cover', blur: 5, shade: Math.max(o.shade ?? 0, 0.68), zoom: 1.12 })
+  const c = containBox(aspect, box)
+  const inner = { x: c.x + (c.w * (1 - scale)) / 2, y: c.y + (c.h * (1 - scale)) / 2, w: c.w * scale, h: c.h * scale }
+  const pv = o.pivot ?? [0.5, 0.5]
+  const pivot: [number, number] = [(box.x + pv[0] * box.w - inner.x) / inner.w, (box.y + pv[1] * box.h - inner.y) / inner.h]
+  return drawMedia(ctx, tex, aspect, inner, { ...o, zoom: 1, fit: 'cover', pivot })
+}
+
+/** Entry i of a slide in a cell: cropped with the user's framing, or whole. */
+export function drawCell(ctx: Ctx, s: SlideState, i: number, box: Box, o: MediaDrawOpts = {}, fill: 'blur' | 'none' = 'blur', tolerance = 0.22): Box {
+  const sl = s.slide
+  const e = sl.entries[i]
+  const m = sl.media[i]
+  const tex = slideTexture(ctx, s, i)
+  const a = aspectOf(m, tex)
+  if (tex && showsWhole(e, ctx.settings, a, box.w / box.h, tolerance)) return drawWhole(ctx, tex, a, box, o, fill)
+  return drawMedia(ctx, tex, a, box, { ...o, uv: photoUv(e, m, box.w / box.h, tex) })
 }
 
 /** Draws a text texture with its centre (or left edge) at x,y. */

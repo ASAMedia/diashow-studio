@@ -4,7 +4,7 @@ import type { Compositor, Tex } from '../gl'
 import type { Ctx, Theme } from '../types'
 import type { TimelineSlide } from '@shared/timeline'
 import {
-  aspectOf, clamp01, containBox, drawFitted, drawMedia, drawText, easeIn, easeInOut, easeOut, lerp, photoUv, rng, slideTexture,
+  aspectOf, clamp01, containBox, drawCell, drawMedia, drawText, easeIn, easeInOut, easeOut, lerp, rng, slideTexture,
   slotBoxes, smooth, titleOpacity, type Box
 } from '../draw'
 import { drawCenteredText } from './simple'
@@ -42,10 +42,7 @@ export const origami: Theme = {
     const boxes = slotBoxes(sl, { x: 0, y: 0, w: W, h: H }, Math.max(2, H * 0.008))
     boxes.forEach((box, i) => {
       const q = stagger(s.inP, i, boxes.length)
-      const tex = slideTexture(ctx, s, i)
-      const a = aspectOf(sl.media[i], tex)
-      if (sl.kind === 'video') fold(q, (o) => drawFitted(ctx, tex, a, box, { ...o, zoom: lerp(1.06, 1, s.p) }))
-      else fold(q, (o) => drawMedia(ctx, tex, a, box, { ...o, uv: photoUv(sl.entries[i], sl.media[i], box.w / box.h, tex), zoom: lerp(1.06, 1, s.p) }))
+      fold(q, (o) => drawCell(ctx, s, i, box, { ...o, zoom: lerp(1.06, 1, s.p) }))
     })
     if (sl.titleOverlay) drawCenteredText(ctx, s, 'sans', '#ffffff', { opacity: titleOpacity(s.local), shadow: true })
   }
@@ -148,12 +145,8 @@ export const panels: Theme = {
     boxes.forEach((box, i) => {
       const q = easeInOut(stagger(s.inP, i, boxes.length, 0.14))
       const dx = (1 - q) * W - out
-      const tex = slideTexture(ctx, s, i)
       const drift = i % 2 ? lerp(1.0, 1.07, s.p) : lerp(1.07, 1.0, s.p)
-      const moved = { ...box, x: box.x + dx }
-      const a = aspectOf(sl.media[i], tex)
-      if (sl.kind === 'video') drawFitted(ctx, tex, a, moved, { zoom: drift })
-      else drawMedia(ctx, tex, a, moved, { uv: photoUv(sl.entries[i], sl.media[i], box.w / box.h, tex), zoom: drift })
+      drawCell(ctx, s, i, { ...box, x: box.x + dx }, { zoom: drift })
     })
     if (sl.titleOverlay && sl.title) {
       const o = titleOpacity(s.local)
@@ -304,10 +297,8 @@ export const magazine: Theme = {
       const q = sl.transIn > 0 ? smooth((s.local - (0.06 + i * 0.15) * kIn) / (0.33 * kIn)) : 1
       const opacity = q * fadeOut
       if (opacity <= 0.001) return
-      const tex = slideTexture(ctx, s, i)
-      const m = sl.media[i]
-      if (sl.kind === 'video') drawFitted(ctx, tex, aspectOf(m, tex), box, { opacity })
-      else drawMedia(ctx, tex, aspectOf(m, tex), box, { opacity, uv: photoUv(sl.entries[i], m, box.w / box.h, tex) })
+      // whole pictures sit on the paper, as in a printed magazine
+      drawCell(ctx, s, i, box, { opacity }, 'none')
     })
     // texts sit on the largest cell, bottom right
     const main = boxes.reduce((a, b) => (b.w * b.h > a.w * a.h ? b : a), boxes[0])

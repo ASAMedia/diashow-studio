@@ -2,7 +2,7 @@
 // Classic, Ken Burns and Retro Film.
 import type { PhotoEntry } from '@shared/types'
 import type { Ctx, SlideState, Theme } from '../types'
-import { aspectOf, dirVector, drawFitted, drawMedia, drawText, kenBurnsUv, photoUv, slideTexture, titleOpacity, rng } from '../draw'
+import { aspectOf, dirVector, drawCell, drawMedia, drawText, drawWhole, easeInOut, kenBurnsUv, showsWhole, titleOpacity, rng } from '../draw'
 import type { FontRole } from '../media'
 import type { Box } from '../draw'
 
@@ -38,14 +38,9 @@ export function drawCenteredText(
   }
 }
 
-function fullFrameMedia(ctx: Ctx, s: SlideState, fit: 'cover' | 'contain', extra: { zoom?: number; dx?: number; dy?: number } = {}): void {
-  const { W, H } = ctx
-  const sl = s.slide
-  const tex = slideTexture(ctx, s)
-  const a = aspectOf(sl.media[0], tex)
-  const box = { x: extra.dx ?? 0, y: extra.dy ?? 0, w: W, h: H }
-  if (fit === 'contain' || sl.kind === 'video') drawFitted(ctx, tex, a, box, { zoom: extra.zoom }, 0.08)
-  else drawMedia(ctx, tex, a, box, { uv: photoUv(sl.entries[0], sl.media[0], W / H, tex), zoom: extra.zoom })
+function fullFrameMedia(ctx: Ctx, s: SlideState, extra: { zoom?: number; dx?: number; dy?: number } = {}): void {
+  const box = { x: extra.dx ?? 0, y: extra.dy ?? 0, w: ctx.W, h: ctx.H }
+  drawCell(ctx, s, 0, box, { zoom: extra.zoom }, 'blur', 0.08)
 }
 
 const fullBox = (W: number, H: number): Box[] => [{ x: 0, y: 0, w: W, h: H }]
@@ -60,7 +55,7 @@ export const classic: Theme = {
       drawCenteredText(ctx, s, 'sans', '#ffffff', { scale: 0.9 })
       return
     }
-    fullFrameMedia(ctx, s, ctx.settings.scaleToFill ? 'cover' : 'contain')
+    fullFrameMedia(ctx, s)
     if (sl.titleOverlay) drawCenteredText(ctx, s, 'sans', '#ffffff', { opacity: titleOpacity(s.local), shadow: true })
   },
   transition(ctx) {
@@ -81,9 +76,12 @@ export const kenburns: Theme = {
     if (sl.kind === 'photos' && !(sl.live && s.local < sl.live.duration)) {
       const m = sl.media[0]
       const tex = ctx.image(m)
-      const uv = kenBurnsUv(sl.entries[0] as PhotoEntry, m, W / H, s.p)
-      drawMedia(ctx, tex, aspectOf(m, tex), { x: 0, y: 0, w: W, h: H }, { uv })
-    } else fullFrameMedia(ctx, s, 'contain')
+      const a = aspectOf(m, tex)
+      const box = { x: 0, y: 0, w: W, h: H }
+      // whole picture: a gentle zoom of the fitted photo instead of a pan across a crop
+      if (tex && showsWhole(sl.entries[0], ctx.settings, a, W / H)) drawWhole(ctx, tex, a, box, {}, 'blur', 1 + 0.06 * easeInOut(s.p))
+      else drawMedia(ctx, tex, a, box, { uv: kenBurnsUv(sl.entries[0] as PhotoEntry, m, W / H, s.p) })
+    } else fullFrameMedia(ctx, s)
     if (sl.titleOverlay) drawCenteredText(ctx, s, 'light', '#ffffff', { opacity: titleOpacity(s.local), shadow: true, scale: 1.1 })
   },
   transition() {
@@ -109,7 +107,7 @@ export const retro: Theme = {
     }
     // constant slight zoom (room for the weave): a drifting zoom made the two pictures in a
     // burn transition differ in size
-    fullFrameMedia(ctx, s, 'cover', { zoom: 1.04, dx, dy })
+    fullFrameMedia(ctx, s, { zoom: 1.04, dx, dy })
     if (sl.titleOverlay) drawCenteredText(ctx, s, 'type', '#f3e9d2', { opacity: titleOpacity(s.local), shadow: true, dx, dy })
   },
   transition() {

@@ -82,6 +82,20 @@ test(`${theme} theme with real photos`, async () => {
   console.log('crop after drag', JSON.stringify(crop))
   expect(crop).toBeTruthy()
   expect(crop.zoom).toBeGreaterThan(1)
+  // switch the second cell to "whole picture" with its toggle button
+  const second = page.locator('.crop-cell').nth(1)
+  await second.hover()
+  await second.locator('.cell-toggle').click()
+  await page.waitForTimeout(300)
+  const whole = await page.evaluate(() => {
+    const d = (window as any).__diashow
+    const tl = d.player.current.tl
+    const multi = tl.slides.find((x: any) => x.entries.length >= 3) ?? tl.slides.find((x: any) => x.kind === 'photos')
+    const id = multi.entries[1]?.id
+    return d.store.getState().project.entries.find((e: any) => e.id === id)?.whole
+  })
+  console.log('whole after toggle', whole)
+  if (await page.locator('.crop-cell').count() > 1) expect(whole).toBe(true)
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
   await page.screenshot({ path: join(out, '_editor.png') })
 

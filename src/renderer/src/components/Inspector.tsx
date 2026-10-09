@@ -1,11 +1,13 @@
 import { useState, type CSSProperties, type ReactNode } from 'react'
-import { Clock, LayoutTemplate, Music, Plus, Minus, SlidersHorizontal, Trash2, GripVertical, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Film, Volume2, VolumeX, LogOut } from 'lucide-react'
+import { Clock, LayoutTemplate, Music, Plus, Minus, SlidersHorizontal, Trash2, GripVertical, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Film, Volume2, VolumeX, LogOut, Crop as CropIcon, Maximize } from 'lucide-react'
 import { mediaUrl } from '@shared/api'
 import { LOOKS, THEMES, TRANSITIONS, themeMeta } from '@shared/themes'
 import type { AspectRatio, Direction, Entry, LookId, MediaItem, PhotoEntry, TextEntry, ThemeId, TransitionId, VideoEntry } from '@shared/types'
 import { MAX_PHOTO_SECONDS, type TimelineSlide } from '@shared/timeline'
 import { templatesFor, type Template } from '@shared/layout'
 import { audibleClips } from '@shared/audioPlan'
+import { mediaAspect } from '@shared/layout'
+import { showsWhole } from '../engine/draw'
 import { useStore, type InspectorTab } from '../store'
 import { timelineOf } from '../timeline'
 import { fmtSeconds, fmtTime, localeTag, pick, t } from '../i18n'
@@ -474,6 +476,25 @@ function CropSection({ slide }: { slide: TimelineSlide }) {
   )
 }
 
+/** Crop to fill or whole picture for one photo/video; undefined follows the show setting. */
+function FramingSelect({ entry }: { entry: PhotoEntry | VideoEntry }) {
+  const project = useStore((s) => s.project)!
+  const setEntry = useStore((s) => s.setEntry)
+  if (!themeMeta(project.settings.theme).scaleOption) return null
+  const value = entry.whole == null ? 'default' : entry.whole ? 'whole' : 'crop'
+  const dflt = entry.type === 'video' ? t('framingAuto') : `${t('framingDefault')} (${project.settings.scaleToFill ? t('cropMode') : t('wholeMode')})`
+  return (
+    <div className="row">
+      <label>{t('framing')}</label>
+      <select value={value} onChange={(e) => setEntry(entry.id, { whole: e.target.value === 'default' ? undefined : e.target.value === 'whole' } as Partial<PhotoEntry>)}>
+        <option value="default">{dflt}</option>
+        <option value="crop">{t('cropMode')}</option>
+        <option value="whole">{t('wholeMode')}</option>
+      </select>
+    </div>
+  )
+}
+
 /** How many items form this slide: take the next item of the show in, or hand the last one on. */
 function GroupControl({ slide }: { slide: TimelineSlide }) {
   const project = useStore((s) => s.project)!
@@ -543,6 +564,14 @@ function SlidePanel() {
                         {audible.has(e.id) ? <Volume2 size={12} /> : <VolumeX size={12} />}
                       </button>
                     )}
+                    {themeMeta(project.settings.theme).scaleOption && e.type !== 'text' && (() => {
+                      const whole = e.whole ?? showsWhole(e, project.settings, mediaAspect(m), mediaAspect(m))
+                      return (
+                        <button title={whole ? t('cropMode') : t('wholeMode')} onClick={() => setEntry(e.id, { whole: !whole } as Partial<PhotoEntry>)}>
+                          {whole ? <CropIcon size={12} /> : <Maximize size={12} />}
+                        </button>
+                      )
+                    })()}
                     <button title={t('release')} onClick={() => useStore.getState().releaseEntry(ids, e.id)}>
                       <LogOut size={12} />
                     </button>
@@ -616,6 +645,9 @@ function SlidePanel() {
         <Section title={t('duration')}>
           <DurationOverride entry={ve} />
         </Section>
+        <div className="section">
+          <FramingSelect entry={ve} />
+        </div>
         {slide && <GroupControl slide={slide} />}
         <CaptionField entry={ve} />
       </>
@@ -629,6 +661,9 @@ function SlidePanel() {
       <Section title={t('duration')}>
         <DurationOverride entry={pe} />
       </Section>
+      <div className="section">
+        <FramingSelect entry={pe} />
+      </div>
       {slide && <GroupControl slide={slide} />}
       {slide && <CropSection slide={slide} />}
       <CaptionField entry={pe} />

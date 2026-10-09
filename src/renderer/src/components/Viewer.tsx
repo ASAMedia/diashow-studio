@@ -6,7 +6,8 @@ import type { TimelineSlide } from '@shared/timeline'
 import { themeMeta } from '@shared/themes'
 import { aspectValue } from '@shared/timeline'
 import { Player } from '../engine/player'
-import { coverRect, defaultKenBurns, photoUv, type Box } from '../engine/draw'
+import { coverRect, defaultKenBurns, photoUv, showsWhole, type Box } from '../engine/draw'
+import { Crop as CropIcon, Maximize } from 'lucide-react'
 import { playerRef, useStore } from '../store'
 import { timelineOf, useTimeline } from '../timeline'
 import { fmtTime, localeTag, t } from '../i18n'
@@ -247,6 +248,7 @@ function KenBurnsEditor(props: { entry: PhotoEntry; display?: string; mediaAspec
 /** Drag a photo inside its cell to move the framing, scroll to zoom, double-click to reset. */
 function CropEditor({ slide, scale }: { slide: TimelineSlide; scale: number }) {
   const setEntry = useStore((s) => s.setEntry)
+  const settings = useStore((s) => s.project!.settings)
   const [active, setActive] = useState<string | null>(null)
   const frame = useRef(0)
   const engine = playerRef.current?.engine
@@ -266,14 +268,15 @@ function CropEditor({ slide, scale }: { slide: TimelineSlide; scale: number }) {
         const e = slide.entries[i]
         const m = slide.media[i]
         if (!e || e.type === 'text' || !m) return null
+        const whole = showsWhole(e, settings, m.width / m.height, b.w / b.h)
         return (
           <div
             key={e.id}
-            className={`crop-cell ${active === e.id ? 'active' : ''}`}
+            className={`crop-cell ${active === e.id ? 'active' : ''} ${whole ? 'whole' : ''}`}
             style={{ left: b.x * scale, top: b.y * scale, width: b.w * scale, height: b.h * scale }}
             title={t('cropHint')}
             onPointerDown={(ev) => {
-              if (ev.button !== 0) return
+              if (ev.button !== 0 || whole) return
               const el = ev.currentTarget
               el.setPointerCapture(ev.pointerId)
               setActive(e.id)
@@ -294,12 +297,23 @@ function CropEditor({ slide, scale }: { slide: TimelineSlide; scale: number }) {
               el.addEventListener('pointerup', up)
             }}
             onWheel={(ev) => {
+              if (whole) return
               const c = center(e, m, b)
               const zoom = Math.min(4, Math.max(1, c.zoom * (ev.deltaY < 0 ? 1.08 : 1 / 1.08)))
               write(e.id, { x: c.x, y: c.y, zoom })
             }}
             onDoubleClick={() => setEntry(e.id, { crop: undefined } as Partial<PhotoEntry>)}
-          />
+          >
+            <button
+              className="cell-toggle"
+              title={whole ? t('cropMode') : t('wholeMode')}
+              onPointerDown={(ev) => ev.stopPropagation()}
+              onDoubleClick={(ev) => ev.stopPropagation()}
+              onClick={() => setEntry(e.id, { whole: !whole } as Partial<PhotoEntry>)}
+            >
+              {whole ? <CropIcon size={13} /> : <Maximize size={13} />}
+            </button>
+          </div>
         )
       })}
     </>

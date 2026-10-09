@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { buildTimeline } from '@shared/timeline'
 import { buildAudioPlan, audibleClips } from '@shared/audioPlan'
 import { DEFAULT_SETTINGS, type Entry, type MediaItem, type Project } from '@shared/types'
+import { showsWhole } from '../src/renderer/src/engine/draw'
 
 // the store saves through window.api; a stub is enough here
 ;(globalThis as unknown as { window: unknown }).window = { api: { saveProject: async () => {} } }
@@ -91,5 +92,20 @@ describe('slide grouping actions', () => {
     expect(sizes(p()).slice(0, 2)).toEqual([3, 1])
     useStore.getState().splitSlide(['a', 'c', 'd'])
     expect(sizes(p()).slice(0, 3)).toEqual([1, 1, 1])
+  })
+})
+
+describe('crop or whole picture', () => {
+  const st = DEFAULT_SETTINGS
+  it('follows the entry, then the show setting; videos decide by shape', () => {
+    const photoE: Entry = { id: 'a', type: 'photo', mediaId: 'a' }
+    expect(showsWhole(photoE, st, 0.75, 1.78)).toBe(false)
+    expect(showsWhole(photoE, { ...st, scaleToFill: false }, 0.75, 1.78)).toBe(true)
+    expect(showsWhole({ ...photoE, whole: true }, st, 0.75, 1.78)).toBe(true)
+    expect(showsWhole({ ...photoE, whole: false }, { ...st, scaleToFill: false }, 0.75, 1.78)).toBe(false)
+    const videoE: Entry = { id: 'v', type: 'video', mediaId: 'v' }
+    expect(showsWhole(videoE, st, 1.78, 1.78)).toBe(false)
+    expect(showsWhole(videoE, st, 0.56, 1.78)).toBe(true)
+    expect(showsWhole({ ...videoE, whole: false }, st, 0.56, 1.78)).toBe(false)
   })
 })

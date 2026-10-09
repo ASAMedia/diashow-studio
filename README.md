@@ -10,6 +10,8 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
     - Text slides become white captions at the bottom right of the next slide, and the title sits on the first slide.
     - Unlike Photos, there are no half-empty slides: a lone portrait photo is paired with the next photo.
   - Cropped layouts (Magazine, Origami, Sliding Panels, Classic in fill mode, Retro Film) let you drag each photo or video inside its cell in the preview, zoom it with the mouse wheel and reset it with a double-click. You can also choose the layout per slide.
+  - Crop or whole picture: "Crop photos to fill" sets the default for the show. Each photo or video can override it with "Crop to fill" or "Whole picture", from the Slide tab or the toggle in its cell in the preview.
+    - In Magazine a whole picture sits on the paper; the darker themes put it on a blurred copy of itself.
   - Magazine puts videos into its grids too: several clips play side by side, and the slide lasts as long as the longest clip. Only the first clip is heard unless you switch others on.
   - You decide which photos and videos form a slide:
     - Drag one slide onto another, or Ctrl+click several slides and choose "Combine into one slide".

@@ -92,6 +92,8 @@ export interface PhotoEntry extends BaseEntry {
   kenBurns?: { start: Rect; end: Rect }
   /** Framing in cropped layouts (Magazine, Origami, Sliding Panels, Classic fill). */
   crop?: Crop
+  /** Show the whole picture (true) or crop it to fill its cell (false); undefined = project setting. */
+  whole?: boolean
   /** Play the motion part of a Live/Motion photo; undefined = project default. */
   playLive?: boolean
 }
@@ -108,6 +110,8 @@ export interface VideoEntry extends BaseEntry {
   duck?: boolean
   /** Framing when the clip is cropped into a grid cell (Magazine). */
   crop?: Crop
+  /** Whole picture or cropped; undefined = automatic (cropped when the shapes are close). */
+  whole?: boolean
 }
 
 export interface TextEntry extends BaseEntry {
