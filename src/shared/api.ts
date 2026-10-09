@@ -1,6 +1,9 @@
 // Contract between renderer and main process. The preload script exposes an object
 // implementing DiashowApi as `window.api`; each method maps to one IPC channel.
 import type {
+  AppSettings,
+  BackupInfo,
+  CacheInfo,
   Rect,
   EncoderInfo,
   ExportOptions,
@@ -76,6 +79,23 @@ export interface DiashowApi {
   presentStart(): Promise<void>
   presentStop(): Promise<void>
   onPresentClosed(cb: () => void): () => void
+
+  /** Encoded video (Annex B) for exports with input 'h264' / 'hevc', in decoding order. */
+  exportChunk(data: Uint8Array): Promise<void>
+  /** `count` small JPEG frames spread over a video (for trimming), as file paths. */
+  videoStrip(path: string, count: number, height: number): Promise<string[]>
+  /** Disk space used by thumbnails, display images, proxies and audio. */
+  cacheInfo(): Promise<CacheInfo>
+  /** 'unused': media no project uses; 'hires': 4K export versions; 'proxies': all video proxies (rebuilt when needed). */
+  cleanCache(what: 'unused' | 'hires' | 'proxies'): Promise<CacheInfo>
+  /** Look for moved files in a folder (same name and size). Old media id -> found item (processing starts). */
+  relinkMedia(missing: MediaItem[], folder: string): Promise<Record<string, MediaItem>>
+  listBackups(projectId: string): Promise<BackupInfo[]>
+  restoreBackup(file: string): Promise<Project>
+  getAppSettings(): Promise<AppSettings>
+  setAppSettings(settings: AppSettings): Promise<void>
+  /** Keep the display awake (fullscreen show, presentation, kiosk). */
+  keepAwake(on: boolean): Promise<void>
 }
 
 /** URL scheme served by the main process with HTTP Range support (needed for video seeking). */

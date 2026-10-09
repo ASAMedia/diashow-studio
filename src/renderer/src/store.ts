@@ -23,8 +23,10 @@ interface State {
   kbEdit: 'start' | 'end' | null
   canUndo: boolean
   canRedo: boolean
-  dialog: 'rejects' | 'pack' | null
+  dialog: 'rejects' | 'pack' | 'settings' | 'backups' | 'help' | null
   presenting: boolean
+  /** Fullscreen started by kiosk mode: loops whatever the project says. */
+  kiosk: boolean
   loadProjects(): Promise<void>
   createProject(paths?: string[], name?: string): Promise<Project>
   openProject(id: string): Promise<void>
@@ -130,6 +132,7 @@ export const useStore = create<State>((set, get) => ({
   canRedo: false,
   dialog: null,
   presenting: false,
+  kiosk: false,
 
   async loadProjects() {
     set({ projects: await window.api.listProjects() })

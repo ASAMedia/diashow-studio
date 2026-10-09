@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Clock, LayoutTemplate, Music, Plus, Minus, SlidersHorizontal, Trash2, GripVertical, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Film, Volume2, VolumeX, LogOut, Crop as CropIcon, Maximize } from 'lucide-react'
 import { mediaUrl } from '@shared/api'
 import { LOOKS, THEMES, TRANSITIONS, themeMeta } from '@shared/themes'
@@ -9,7 +9,7 @@ import { templatesFor, type Template } from '@shared/layout'
 import { audibleClips } from '@shared/audioPlan'
 import { mediaAspect } from '@shared/layout'
 import { showsWhole } from '../engine/draw'
-import { useStore, type InspectorTab } from '../store'
+import { playerRef, useStore, type InspectorTab } from '../store'
 import { timelineOf } from '../timeline'
 import { fmtSeconds, fmtTime, localeTag, pick, t } from '../i18n'
 
@@ -131,6 +131,33 @@ function ThemeThumb({ id, thumbs }: { id: ThemeId; thumbs: string[] }) {
           </div>
         </div>
       )
+    case 'scrapbook':
+      return (
+        <div className="thumb" style={{ background: '#c4a173' }}>
+          <div style={{ position: 'absolute', ...abs(8, 14, 44, 66), background: '#f7f5ee', transform: 'rotate(-4deg)', boxShadow: '0 3px 8px rgba(0,0,0,.35)' }}>{img(0, abs(6, 6, 88, 88))}</div>
+          <div style={{ position: 'absolute', ...abs(52, 20, 40, 60), background: '#f7f5ee', transform: 'rotate(5deg)', boxShadow: '0 3px 8px rgba(0,0,0,.35)' }}>{img(1, abs(6, 6, 88, 88))}</div>
+          <div style={{ position: 'absolute', left: '14%', top: '10%', width: '18%', height: '9%', background: 'rgba(240,230,195,.8)', transform: 'rotate(-20deg)' }} />
+        </div>
+      )
+    case 'snapshots':
+      return (
+        <div className="thumb" style={{ background: 'linear-gradient(135deg,#4a2f1d,#2e1c11)' }}>
+          <div style={{ position: 'absolute', ...abs(10, 30, 26, 48), background: '#f7f5ee', transform: 'rotate(-18deg)', opacity: 0.9 }}>{img(1, abs(7, 6, 86, 64))}</div>
+          <div style={{ position: 'absolute', ...abs(34, 10, 34, 80), background: '#f7f5ee', transform: 'rotate(4deg)', boxShadow: '0 4px 10px rgba(0,0,0,.5)' }}>
+            {img(0, abs(7, 5, 86, 64))}
+            <div style={{ position: 'absolute', left: 0, right: 0, bottom: '6%', textAlign: 'center', fontFamily: 'Caveat', fontSize: 10, color: '#333' }}>Sonntag</div>
+          </div>
+        </div>
+      )
+    case 'shatter':
+      return (
+        <div className="thumb" style={{ background: '#000' }}>
+          {img(1, abs(0, 0, 100, 100))}
+          <div style={{ position: 'absolute', inset: 0, clipPath: 'polygon(0 0, 55% 0, 40% 45%, 0 70%)' }}>{img(0, abs(0, 0, 100, 100))}</div>
+          <div style={{ position: 'absolute', inset: 0, clipPath: 'polygon(62% 8%, 100% 0, 100% 40%, 70% 38%)', transform: 'translate(6px,-4px) rotate(8deg)' }}>{img(0, abs(0, 0, 100, 100))}</div>
+          <div style={{ position: 'absolute', inset: 0, clipPath: 'polygon(30% 75%, 55% 60%, 60% 100%, 25% 100%)', transform: 'translate(-3px,6px) rotate(-10deg)' }}>{img(0, abs(0, 0, 100, 100))}</div>
+        </div>
+      )
     case 'retro':
       return (
         <div className="thumb" style={{ background: '#000' }}>
@@ -191,7 +218,8 @@ const FONTS: { id: TextFont; label: string; family: string }[] = [
   { id: 'display', label: 'Anton', family: 'Anton' },
   { id: 'serif', label: 'Cinzel', family: 'Cinzel' },
   { id: 'editorial', label: 'Playfair Display', family: 'Playfair Display' },
-  { id: 'type', label: 'Special Elite', family: 'Special Elite' }
+  { id: 'type', label: 'Special Elite', family: 'Special Elite' },
+  { id: 'hand', label: 'Caveat', family: 'Caveat' }
 ]
 
 const COLORS: Record<string, string> = { theme: '', white: '#ffffff', black: '#1c1c1c', custom: '#ffd75e' }
@@ -329,6 +357,9 @@ function MusicPanel() {
         <Check checked={a.repeatMusic} onChange={(v) => setAudio({ repeatMusic: v })}>
           {t('repeatMusic')}
         </Check>
+        <Check checked={a.normalize ?? true} onChange={(v) => setAudio({ normalize: v })}>
+          {t('normalize')}
+        </Check>
       </Section>
       <Section title={t('videoSound')}>
         <Check checked={a.videoSound} onChange={(v) => setAudio({ videoSound: v })}>
@@ -430,6 +461,17 @@ function TimingPanel() {
         <Check checked={st.playFullVideos} onChange={(v) => setSettings({ playFullVideos: v })}>
           {t('playFullVideos')}
         </Check>
+        <div className="row">
+          <label>{t('maxVideo')}</label>
+          <select value={st.maxVideoSeconds ?? 0} onChange={(e) => setSettings({ maxVideoSeconds: Number(e.target.value) || undefined })}>
+            <option value={0}>{t('maxVideoOff')}</option>
+            {[5, 10, 15, 20, 30, 60].map((n) => (
+              <option key={n} value={n}>
+                {n} s
+              </option>
+            ))}
+          </select>
+        </div>
         <Check checked={st.playLivePhotos} onChange={(v) => setSettings({ playLivePhotos: v })}>
           {t('playLivePhotos')}
         </Check>
@@ -601,6 +643,78 @@ function GroupControl({ slide }: { slide: TimelineSlide }) {
   )
 }
 
+/** Frames of the clip with two handles for start and end, plus a preview of the trimmed part. */
+function TrimStrip({ entry, media }: { entry: VideoEntry; media: MediaItem }) {
+  const setEntry = useStore((s) => s.setEntry)
+  const project = useStore((s) => s.project)!
+  const [frames, setFrames] = useState<string[]>([])
+  const barRef = useRef<HTMLDivElement>(null)
+  const len = media.duration ?? 0
+  const tin = entry.trimIn ?? 0
+  const tout = entry.trimOut ?? len
+  const max = project.settings.maxVideoSeconds || Infinity
+  const shown = Math.min(tout, tin + max)
+  useEffect(() => {
+    let alive = true
+    const src = media.playback ?? media.path
+    window.api.videoStrip(src, 10, 54).then((f) => alive && setFrames(f)).catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [media.playback, media.path])
+  const drag = (which: 'in' | 'out') => (e: React.PointerEvent) => {
+    const bar = barRef.current!.getBoundingClientRect()
+    const el = e.currentTarget as HTMLElement
+    el.setPointerCapture(e.pointerId)
+    const move = (ev: PointerEvent): void => {
+      const t = Math.round(Math.min(1, Math.max(0, (ev.clientX - bar.left) / bar.width)) * len * 10) / 10
+      if (which === 'in') setEntry(entry.id, { trimIn: Math.min(t, tout - 0.5) } as Partial<VideoEntry>)
+      else setEntry(entry.id, { trimOut: Math.max(t, tin + 0.5) } as Partial<VideoEntry>)
+    }
+    const up = (): void => {
+      el.removeEventListener('pointermove', move)
+      el.removeEventListener('pointerup', up)
+    }
+    el.addEventListener('pointermove', move)
+    el.addEventListener('pointerup', up)
+  }
+  const pct = (v: number): string => `${len ? (v / len) * 100 : 0}%`
+  const play = (): void => {
+    const slide = timelineOf(project).slides.find((sl) => sl.entries.some((x) => x.id === entry.id))
+    const p = playerRef.current
+    if (!slide || !p) return
+    p.seek(slide.start)
+    p.play()
+    window.setTimeout(() => p.pause(), slide.duration * 1000)
+  }
+  return (
+    <div>
+      <div className="trim" ref={barRef}>
+        <div className="trim-frames">
+          {frames.map((f) => (
+            <img key={f} src={mediaUrl(f)} alt="" draggable={false} />
+          ))}
+        </div>
+        <div className="trim-dim" style={{ left: 0, width: pct(tin) }} />
+        <div className="trim-dim" style={{ left: pct(tout), right: 0 }} />
+        {shown < tout && <div className="trim-cut" style={{ left: pct(shown), width: `calc(${pct(tout)} - ${pct(shown)})` }} />}
+        <div className="trim-handle" style={{ left: pct(tin) }} onPointerDown={drag('in')} />
+        <div className="trim-handle end" style={{ left: pct(tout) }} onPointerDown={drag('out')} />
+      </div>
+      <div className="row" style={{ marginTop: 6 }}>
+        <span className="val" style={{ textAlign: 'left' }}>
+          {fmtSeconds(tin)} – {fmtSeconds(Math.min(tout, shown))}
+        </span>
+        <span style={{ flex: 1 }} />
+        <button className="btn small" onClick={play}>
+          {t('trimPreview')}
+        </button>
+      </div>
+      <p className="hint">{t('trimHint')}</p>
+    </div>
+  )
+}
+
 function SlidePanel() {
   const project = useStore((s) => s.project)!
   const selection = useStore((s) => s.selection)
@@ -692,15 +806,11 @@ function SlidePanel() {
   if (!m) return null
   if (e.type === 'video') {
     const ve = e as VideoEntry
-    const len = m.duration ?? 0
-    const tin = ve.trimIn ?? 0
-    const tout = ve.trimOut ?? len
     return (
       <>
         <MediaInfo m={m} />
         <Section title={t('trim')}>
-          <Slider label={t('kbStart')} value={tin} min={0} max={Math.max(0, len - 0.5)} step={0.1} display={fmtSeconds(tin)} onChange={(v) => setEntry(ve.id, { trimIn: Math.min(v, tout - 0.5) })} />
-          <Slider label={t('kbEnd')} value={tout} min={0.5} max={len} step={0.1} display={fmtSeconds(tout)} onChange={(v) => setEntry(ve.id, { trimOut: Math.max(v, tin + 0.5) })} />
+          <TrimStrip entry={ve} media={m} />
         </Section>
         <Section title={t('videoSound')}>
           {m.hasAudio ? (

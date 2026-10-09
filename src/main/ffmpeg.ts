@@ -88,6 +88,8 @@ export interface RunOptions {
   /** Called with the output position in seconds (from -progress out_time_us). */
   onProgress?: (seconds: number) => void
   signal?: AbortSignal
+  /** Working directory (relative paths in filter options resolve against it). */
+  cwd?: string
 }
 
 export class FfmpegError extends Error {
@@ -126,10 +128,11 @@ export class Ffmpeg {
   }
 
   /** Spawns ffmpeg with -hide_banner; the caller owns the process. */
-  spawn(args: string[], stdin: 'pipe' | 'ignore' = 'ignore'): ChildProcess {
+  spawn(args: string[], stdin: 'pipe' | 'ignore' = 'ignore', cwd?: string): ChildProcess {
     return spawn(this.ffmpegPath, ['-hide_banner', ...args], {
       stdio: [stdin, 'pipe', 'pipe'],
-      windowsHide: true
+      windowsHide: true,
+      cwd
     })
   }
 
@@ -146,13 +149,28 @@ export class Ffmpeg {
     return this.exec(['-nostdin', '-loglevel', 'error', '-y', ...args], { ...opts, collect: true })
   }
 
+  /**
+   * Runs ffmpeg at the given log level and resolves with its complete log (stderr), e.g. for
+   * filters that print their results (ebur128) or device listings.
+   */
+  async log(args: string[], opts: { signal?: AbortSignal; level?: string } = {}): Promise<string> {
+    let text = ''
+    await this.exec(['-nostdin', '-loglevel', opts.level ?? 'info', '-nostats', '-y', ...args], {
+      signal: opts.signal,
+      onStderr: (chunk) => {
+        text += chunk
+      }
+    })
+    return text
+  }
+
   private exec(
     args: string[],
-    opts: RunOptions & { collect?: boolean; onData?: (chunk: Buffer) => void }
+    opts: RunOptions & { collect?: boolean; onData?: (chunk: Buffer) => void; onStderr?: (text: string) => void }
   ): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       if (opts.signal?.aborted) return reject(abortError())
-      const child = this.spawn(args)
+      const child = this.spawn(args, 'ignore', opts.cwd)
       const chunks: Buffer[] = []
       let stderr = ''
       let pending = ''
@@ -170,7 +188,9 @@ export class Ffmpeg {
         }
       })
       child.stderr!.on('data', (chunk: Buffer) => {
-        stderr += chunk.toString('utf8')
+        const text = chunk.toString('utf8')
+        opts.onStderr?.(text)
+        stderr += text
         if (stderr.length > 16_000) stderr = stderr.slice(-8_000)
       })
       const onAbort = (): void => {

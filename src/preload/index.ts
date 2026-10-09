@@ -44,7 +44,17 @@ const api: DiashowApi = {
   displays: () => ipcRenderer.invoke('app:displays'),
   presentStart: () => ipcRenderer.invoke('present:start'),
   presentStop: () => ipcRenderer.invoke('present:stop'),
-  onPresentClosed: (cb) => subscribe('present:closed', cb)
+  onPresentClosed: (cb) => subscribe('present:closed', cb),
+  exportChunk: (data) => ipcRenderer.invoke('export:chunk', data),
+  videoStrip: (path, count, height) => ipcRenderer.invoke('media:strip', path, count, height),
+  cacheInfo: () => ipcRenderer.invoke('cache:info'),
+  cleanCache: (what) => ipcRenderer.invoke('cache:clean', what),
+  relinkMedia: (missing, folder) => ipcRenderer.invoke('media:relink', missing, folder),
+  listBackups: (id) => ipcRenderer.invoke('project:backups', id),
+  restoreBackup: (file) => ipcRenderer.invoke('project:restore-backup', file),
+  getAppSettings: () => ipcRenderer.invoke('app:settings-get'),
+  setAppSettings: (s) => ipcRenderer.invoke('app:settings-set', s),
+  keepAwake: (on) => ipcRenderer.invoke('app:keep-awake', on)
 }
 
 contextBridge.exposeInMainWorld('api', api)

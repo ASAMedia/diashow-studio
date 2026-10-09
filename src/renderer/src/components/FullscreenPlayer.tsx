@@ -8,6 +8,7 @@ import { fmtTime, localeTag, t } from '../i18n'
 
 export function FullscreenPlayer() {
   const project = useStore((s) => s.project)
+  const kiosk = useStore((s) => s.kiosk)
   const set = useStore((s) => s.set)
   const rootRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -20,11 +21,12 @@ export function FullscreenPlayer() {
 
   const exit = (): void => {
     void window.api.setFullscreen(false)
-    set({ fullscreen: false })
+    set({ fullscreen: false, kiosk: false })
   }
 
   useEffect(() => {
     void window.api.setFullscreen(true)
+    void window.api.keepAwake(true)
     const p = new Player(canvasRef.current!, localeTag())
     playerRef.current = p
     let last = 0
@@ -68,12 +70,16 @@ export function FullscreenPlayer() {
       ro.disconnect()
       p.dispose()
       playerRef.current = null
+      void window.api.keepAwake(false)
     }
   }, [])
 
   useEffect(() => {
-    if (project) playerRef.current?.setProject(project, timelineOf(project))
-  }, [project])
+    if (!project || !playerRef.current) return
+    playerRef.current.setProject(project, timelineOf(project))
+    // kiosk mode loops whatever the project says
+    if (kiosk) playerRef.current.loop = true
+  }, [project, kiosk])
 
   useEffect(() => {
     const key = (e: KeyboardEvent): void => {

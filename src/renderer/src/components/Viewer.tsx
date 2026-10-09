@@ -11,6 +11,7 @@ import { Crop as CropIcon, Maximize } from 'lucide-react'
 import { playerRef, useStore } from '../store'
 import { timelineOf, useTimeline } from '../timeline'
 import { fmtTime, localeTag, t } from '../i18n'
+import { previewQuality, QUALITY } from './Settings'
 
 function useBox(ref: React.RefObject<HTMLElement | null>): { w: number; h: number } {
   const [box, setBox] = useState({ w: 0, h: 0 })
@@ -66,16 +67,25 @@ export function Viewer() {
     if (fullscreen) playerRef.current?.pause()
   }, [fullscreen])
 
+  const [quality, setQuality] = useState(previewQuality())
+  useEffect(() => {
+    const on = (): void => setQuality(previewQuality())
+    window.addEventListener('previewquality', on)
+    return () => window.removeEventListener('previewquality', on)
+  }, [])
+
   useEffect(() => {
     const p = playerRef.current
     if (!p || !fw) return
-    const dpr = Math.min(window.devicePixelRatio || 1, 2)
-    const scale = Math.min(dpr, 1920 / fw)
+    const q = QUALITY[quality]
+    const dpr = Math.min(window.devicePixelRatio || 1, q.dpr)
+    const scale = Math.min(dpr, q.maxWidth / fw)
     const c = canvasRef.current!
     c.width = Math.round(fw * scale)
     c.height = Math.round(fh * scale)
+    p.engine.setImageSize(q.images)
     p.resize(c.width, c.height)
-  }, [fw, fh])
+  }, [fw, fh, quality])
 
   // Selecting a slide shows it (fully visible, after its incoming transition).
   useEffect(() => {

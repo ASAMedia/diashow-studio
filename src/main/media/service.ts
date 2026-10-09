@@ -5,25 +5,30 @@
 // (photos straight from the original, videos one frame), then photos get their display JPEG and
 // analysis (hash, sharpness), and only when no thumbnail/display work is left do video proxies start.
 // Each item emits few updates: thumbnail ready (status 'processing'), then 'ready' or 'error'.
+// Loudness (videos with sound, music) is measured with the processing; older cache entries get it
+// (and hash / sharpness) lazily with an extra update.
 import { existsSync } from 'node:fs'
-import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
+import { copyFile, link, mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { availableParallelism } from 'node:os'
-import { join } from 'node:path'
+import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import sharp from 'sharp'
 import { extOf, SHARP_IMAGE_EXT } from '@shared/formats'
-import type { ExportProgress, MediaItem, MusicTrack, Rect } from '@shared/types'
+import type { CacheInfo, ExportProgress, MediaItem, MusicTrack, Rect } from '@shared/types'
+import { cacheInfo as scanCacheInfo, cleanCache as cleanCacheDir, ID_FOLDER, type CleanTarget } from '../cache'
 import { Ffmpeg, FfmpegError, type ProbeResult } from '../ffmpeg'
 import { analyzeImage, imageHash } from './analysis'
 import { analyzeMusic, computeWaveform, transcodeMusic } from './audio'
 import { detectBeatsInFile } from './beats'
 import { captureTimeOf, deviceOf, endExiftool, makeOf, orientationOf, readTags, type Tags } from './exif'
+import { detectGpuTonemap, type GpuTonemap } from './hdr'
+import { measureLoudness } from './loudness'
 import { extractMotionVideo, isMotionPhoto } from './motion'
 import { photoFormatLabel, renderPhoto, renderThumb } from './photo'
 import { createLimiter, createPriorityLimiter } from './queue'
 import { quickPhotoMeta } from './quickMeta'
 import { RawDecoderPool, type RawDecoding } from './raw'
 import { mediaId, pairFiles, scanPaths, type ImportGroup, type ScannedFile } from './scan'
-import { extractAudio, PROXY_MAX, transcodeProxy, videoThumb } from './video'
+import { extractAudio, PROXY_MAX, stripFiles, transcodeProxy, videoStrip, videoThumb } from './video'
 import { analyzeVideo, isDirectPlayable, videoFormatLabel, type VideoInfo } from './videoInfo'
 
 export interface MediaServiceConfig {
@@ -36,6 +41,14 @@ export interface MediaServiceConfig {
   videoConcurrency?: number
   /** Injected for tests; defaults to two libraw-wasm worker threads. */
   rawDecoder?: RawDecoding
+  /** Tone-map HDR proxies on the GPU when available (default true). */
+  hdrGpu?: boolean
+}
+
+/** What saved projects use (ProjectStore.references()). */
+export interface CacheUsage {
+  ids: Set<string>
+  paths: string[]
 }
 
 export interface HiresOptions {
@@ -57,6 +70,20 @@ export interface MediaService {
   prepareHires(ids: string[], maxEdge: number, opts?: HiresOptions): Promise<Record<string, string>>
   get(id: string): MediaItem | undefined
   getTrack(id: string): MusicTrack | undefined
+  /**
+   * `count` JPEG frames `height` px high spread evenly over a video (original or proxy), cached in the
+   * media's cache folder per count/height.
+   */
+  videoStrip(path: string, count: number, height: number): Promise<string[]>
+  /** Cache size by kind; media folders neither used by saved projects nor in work count as unused. */
+  cacheInfo(used: CacheUsage): Promise<CacheInfo>
+  /** Deletes unused folders / hi-res proxies / all proxies; affected items are rebuilt on restore. */
+  cleanCache(what: CleanTarget, used: CacheUsage): Promise<CacheInfo>
+  /**
+   * Finds moved originals (same file name; same size and time preferred) in `folder` and imports them
+   * like importPaths. Resolves with old id → new item for the ones found.
+   */
+  relinkMedia(missing: MediaItem[], folder: string): Promise<Record<string, MediaItem>>
   /** Resolves when no import/transcode/analysis job is queued or running. */
   idle(): Promise<void>
   dispose(): Promise<void>
@@ -66,6 +93,10 @@ export interface MediaService {
 const LIVE_MAX_SECONDS = 10
 const META = 'meta.json'
 const MUSIC_META = 'music.json'
+/** Size and modification time of the original a media folder was made from (relink). */
+const SOURCE = 'source.json'
+/** Freshly imported items count as used by the cache cleanup until the renderer saved its project. */
+const RECENT_MS = 5 * 60_000
 const PRI_THUMB = 0
 const PRI_DISPLAY = 1
 const PRI_ANALYSIS = 2
@@ -110,6 +141,55 @@ function cacheFilesPresent(item: MediaItem): boolean {
   if (item.kind === 'video' && (!item.playback || !existsSync(item.playback) || !item.thumb)) return false
   if (item.live && !existsSync(item.live.source)) return false
   return true
+}
+
+const isInside = (file: string, dir: string): boolean => resolve(file).toLowerCase().startsWith(resolve(dir).toLowerCase() + sep)
+
+/**
+ * A ready item whose only missing cache file is its transcoded proxy (e.g. after a cache cleanup):
+ * 'video' (playback proxy) or 'live' (Live Photo motion proxy); null when anything else is missing.
+ */
+function missingProxyOnly(item: MediaItem, cacheDir: string): 'video' | 'live' | null {
+  if (item.status !== 'ready' || (item.live && !existsSync(item.live.source))) return null
+  for (const key of ['thumb', 'display', 'audio'] as const) {
+    const v = item[key]
+    if (typeof v === 'string' && !existsSync(v)) return null
+  }
+  if (item.kind === 'video') {
+    if (!item.thumb || !item.proxied || !item.playback || existsSync(item.playback) || !isInside(item.playback, cacheDir)) return null
+    return 'video'
+  }
+  if (!item.display || !item.live || !item.liveVideo || existsSync(item.liveVideo) || !isInside(item.liveVideo, cacheDir)) return null
+  return 'live'
+}
+
+/**
+ * Best match for a missing item among same-named files: same size and modification time (the media
+ * id proves it) first, then the known size (a known, different size never matches), then the longest
+ * run of matching parent folder names. Ties without a size match return null rather than a guess.
+ */
+export function pickRelinkCandidate(
+  item: MediaItem,
+  candidates: ScannedFile[],
+  knownSize?: number
+): { file: ScannedFile; exact: boolean } | null {
+  if (!candidates.length) return null
+  const folders = (p: string): string[] => dirname(p).split(/[\\/]/).reverse().map((s) => s.toLowerCase())
+  const old = folders(item.path)
+  const ranked = candidates
+    .map((file) => {
+      const f = folders(file.path)
+      let tail = 0
+      while (tail < old.length && tail < f.length && old[tail] === f[tail]) tail++
+      const exact = mediaId(item.path, file.size, file.mtimeMs) === item.id
+      return { file, exact, size: exact || file.size === knownSize, tail }
+    })
+    .sort((a, b) => Number(b.exact) - Number(a.exact) || Number(b.size) - Number(a.size) || b.tail - a.tail)
+  const [best, second] = ranked
+  if (best.exact) return { file: best.file, exact: true }
+  if (knownSize !== undefined && !best.size) return null
+  if (best.size || !second || best.tail > second.tail) return { file: best.file, exact: false }
+  return null
 }
 
 function stripDerived(item: MediaItem): MediaItem {
@@ -191,6 +271,10 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
   const videoLimit = createLimiter(config.videoConcurrency ?? 2)
   const musicLimit = createLimiter(2)
   const beatLimit = createLimiter(1)
+  /** Media / track ids whose loudness was measured this session (silent ones stay undefined). */
+  const loudnessTried = new Set<string>()
+  const strips = new Map<string, Promise<string[]>>()
+  const recent = new Map<string, number>()
   let disposed = false
 
   const folder = (id: string): string => join(config.cacheDir, id)
@@ -250,6 +334,28 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
       return it && it.status === 'ready' ? it : null
     })
 
+  const shaderCache = join(config.cacheDir, 'gpu')
+  const gpuFor = async (vi: VideoInfo): Promise<GpuTonemap | null> => {
+    if (!vi.hdr || config.hdrGpu === false) return null
+    const gpu = await detectGpuTonemap(ff)
+    if (gpu) await mkdir(shaderCache, { recursive: true }).catch(() => {})
+    return gpu
+  }
+
+  /** Loudness or undefined (silent, undecodable); only cancellation is thrown. */
+  async function loudnessOf(path: string): Promise<number | undefined> {
+    try {
+      return await measureLoudness(ff, path, signal)
+    } catch (err) {
+      if (isAbort(err) || signal.aborted) throw abortError()
+      return undefined
+    }
+  }
+
+  const wantsLoudness = (it: MediaItem): boolean =>
+    it.status === 'ready' && it.kind === 'video' && !!it.audio && it.loudness === undefined && !loudnessTried.has(it.id)
+  const wantsAnalysis = (it: MediaItem): boolean => needsAnalysis(it) || wantsLoudness(it)
+
   // ------------------------------------------------------------------ import
 
   async function prepareVideo(file: ScannedFile, id: string): Promise<MediaItem> {
@@ -276,6 +382,8 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
     const probe = probed.probe
     const info = analyzeVideo(probe)
     if (!info) return { ...base, status: 'error', error: 'No video stream' }
+    // GPU tone-mapping detection runs while the photos are processed, before the first HDR proxy
+    if (info.hdr) void gpuFor(info)
     contexts.set(id, { tags, probe })
     return clean({
       ...base,
@@ -378,11 +486,12 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
    * Called once an API call has its complete result: jobs start on the next macrotask, so the IPC
    * reply carrying the 'pending' items reaches the renderer before the first media:update for them.
    */
-  function schedule(ids: string[], analyze: string[] = []): void {
-    if (ids.length || analyze.length) {
+  function schedule(ids: string[], analyze: string[] = [], reproxy: string[] = []): void {
+    if (ids.length || analyze.length || reproxy.length) {
       setImmediate(() => {
         ids.forEach(startJob)
         analyze.forEach(startAnalysis)
+        reproxy.forEach(startReproxy)
       })
     }
   }
@@ -409,12 +518,25 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
       if (disposed) return
       update(id, { status: 'ready', progress: undefined, error: undefined })
       await persist(id)
+      await rememberSource(id)
     } catch (err) {
       if (disposed) return
       const context = item.kind === 'photo' ? 'Photo could not be read' : 'Video could not be converted'
       update(id, { status: 'error', progress: undefined, error: shortError(context, err) })
     } finally {
       contexts.delete(id)
+    }
+  }
+
+  /** Size + time of the original next to the cache, so relinking can recognise a moved file. */
+  async function rememberSource(id: string): Promise<void> {
+    const it = items.get(id)
+    if (!it) return
+    try {
+      const st = await stat(it.path)
+      await writeJson(join(folder(id), SOURCE), { size: st.size, mtimeMs: st.mtimeMs })
+    } catch {
+      // only relinking gets less precise
     }
   }
 
@@ -471,22 +593,52 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
       return
     }
     try {
-      liveProbe ??= await ff.probe(live.source, signal)
-      const info = analyzeVideo(liveProbe)
-      if (!info) throw new Error('no video stream')
-      let liveVideo = live.source
-      if (!isDirectPlayable(live.source, liveProbe, info)) {
-        const target = join(dir, 'live.mp4')
-        const encoders = await ff.encoders()
-        await videoLimit(() => transcodeProxy(ff, live!.source, info, target, { signal, encoders }))
-        liveVideo = target
-      }
-      set(id, { live, liveVideo })
+      set(id, { live, liveVideo: await makeLiveVideo(id, live.source, liveProbe) })
     } catch (err) {
       if (isAbort(err)) throw err
       // The still is fine; only the motion part is unusable
       set(id, { live: undefined, liveVideo: undefined })
     }
+  }
+
+  /** Playable motion part of a Live/Motion photo: the source itself or an H.264 proxy (live.mp4). */
+  async function makeLiveVideo(id: string, source: string, probe?: ProbeResult): Promise<string> {
+    probe ??= await ff.probe(source, signal)
+    const info = analyzeVideo(probe)
+    if (!info) throw new Error('no video stream')
+    if (isDirectPlayable(source, probe, info)) return source
+    const target = join(folder(id), 'live.mp4')
+    const [encoders, gpu] = await Promise.all([ff.encoders(), gpuFor(info)])
+    await videoLimit(() => transcodeProxy(ff, source, info, target, { signal, encoders, gpu, shaderCache }))
+    return target
+  }
+
+  /** Sets playback: the original when Chromium plays it, else an H.264 proxy (progress updates). */
+  async function makeVideoPlayback(id: string, probe: ProbeResult, vi: VideoInfo): Promise<void> {
+    const item = items.get(id)!
+    if (isDirectPlayable(item.path, probe, vi)) {
+      set(id, { playback: item.path, proxied: false })
+      return
+    }
+    const proxy = join(folder(id), 'proxy.mp4')
+    const [encoders, gpu] = await Promise.all([ff.encoders(), gpuFor(vi)])
+    let last = 0
+    let lastAt = 0
+    await transcodeProxy(ff, item.path, vi, proxy, {
+      signal,
+      encoders,
+      gpu,
+      shaderCache,
+      onProgress: (p) => {
+        const now = Date.now()
+        if (p - last >= 0.02 && now - lastAt >= 500) {
+          last = p
+          lastAt = now
+          update(id, { progress: Math.round(p * 1000) / 1000 })
+        }
+      }
+    })
+    set(id, { playback: proxy, proxied: true })
   }
 
   async function processVideo(id: string): Promise<void> {
@@ -508,38 +660,62 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
     await work.drained(PRI_DISPLAY)
     await videoLimit(async () => {
       if (disposed) throw abortError()
+      let loudness: Promise<number | undefined> | null = null
       if (vi.hasAudio) {
         const audio = join(dir, 'audio.m4a')
         try {
           await extractAudio(ff, item.path, vi, audio, signal)
           set(id, { audio, hasAudio: true })
+          // Measured while the proxy is being made
+          loudness = loudnessOf(audio)
+          loudness.catch(() => {})
         } catch (err) {
           if (isAbort(err)) throw err
           set(id, { audio: undefined, hasAudio: false })
         }
       }
-      if (isDirectPlayable(item.path, probe, vi)) {
-        set(id, { playback: item.path, proxied: false })
-        return
-      }
-      const proxy = join(dir, 'proxy.mp4')
-      const encoders = await ff.encoders()
-      let last = 0
-      let lastAt = 0
-      await transcodeProxy(ff, item.path, vi, proxy, {
-        signal,
-        encoders,
-        onProgress: (p) => {
-          const now = Date.now()
-          if (p - last >= 0.02 && now - lastAt >= 500) {
-            last = p
-            lastAt = now
-            update(id, { progress: Math.round(p * 1000) / 1000 })
-          }
-        }
-      })
-      set(id, { playback: proxy, proxied: true })
+      await makeVideoPlayback(id, probe, vi)
+      set(id, { loudness: loudness ? await loudness : undefined })
+      loudnessTried.add(id)
     })
+  }
+
+  /** Restored item whose proxy was deleted: only the proxy is made again. */
+  function startReproxy(id: string): void {
+    if (jobs.has(id) || disposed || !items.has(id)) return
+    trackJob(id, runReproxy(id))
+  }
+
+  async function runReproxy(id: string): Promise<void> {
+    const item = items.get(id)!
+    try {
+      await mkdir(folder(id), { recursive: true })
+      if (item.kind === 'video') {
+        await work.drained(PRI_DISPLAY)
+        await videoLimit(async () => {
+          if (disposed) throw abortError()
+          const probe = await ff.probe(item.path, signal)
+          const vi = analyzeVideo(probe)
+          if (!vi) throw new Error('no video stream')
+          await makeVideoPlayback(id, probe, vi)
+        })
+        if (disposed) return
+        update(id, { status: 'ready', progress: undefined, error: undefined })
+      } else {
+        const liveVideo = await makeLiveVideo(id, item.live!.source)
+        if (disposed) return
+        update(id, { liveVideo })
+      }
+      await persist(id)
+      if (wantsAnalysis(items.get(id)!)) startAnalysis(id)
+    } catch (err) {
+      if (disposed) return
+      if (item.kind === 'video') update(id, { status: 'error', progress: undefined, error: shortError('Video could not be converted', err) })
+      else {
+        update(id, { live: undefined, liveVideo: undefined })
+        await persist(id)
+      }
+    }
   }
 
   function startAnalysis(id: string): void {
@@ -547,9 +723,22 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
     if (jobs.has(key) || disposed) return
     const job = work(async () => {
       const it = items.get(id)
-      if (!it || disposed || !needsAnalysis(it)) return
-      if (it.kind === 'photo') update(id, await analyzeImage(it.display!))
-      else update(id, { hash: await imageHash(it.thumb!) })
+      if (!it || disposed || !wantsAnalysis(it)) return
+      const patch: Partial<MediaItem> = {}
+      if (needsAnalysis(it)) {
+        try {
+          Object.assign(patch, it.kind === 'photo' ? await analyzeImage(it.display!) : { hash: await imageHash(it.thumb!) })
+        } catch {
+          // retried on the next restore
+        }
+      }
+      if (wantsLoudness(it)) {
+        loudnessTried.add(id)
+        const loudness = await loudnessOf(it.audio!)
+        if (loudness !== undefined) patch.loudness = loudness
+      }
+      if (disposed || !Object.keys(patch).length || items.get(id)?.status !== 'ready') return
+      update(id, patch)
       await persist(id)
     }, PRI_ANALYSIS).catch(() => {})
     trackJob(key, job)
@@ -595,6 +784,8 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
         await transcodeProxy(ff, t.src, t.info, t.out, {
           signal: stop,
           encoders,
+          gpu: await gpuFor(t.info),
+          shaderCache,
           maxEdge: edge,
           onProgress: (p) => {
             const now = Date.now()
@@ -634,13 +825,34 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
       return t && t.status === 'ready' ? t : null
     })
 
-  function scheduleMusic(transcode: string[], beats: string[]): void {
-    if (transcode.length || beats.length) {
+  function scheduleMusic(transcode: string[], beats: string[], loudness: string[] = []): void {
+    if (transcode.length || beats.length || loudness.length) {
       setImmediate(() => {
         transcode.forEach(startMusicJob)
         beats.forEach(startBeatJob)
+        loudness.forEach(startTrackLoudness)
       })
     }
+  }
+
+  const trackWantsLoudness = (t: MusicTrack): boolean =>
+    t.status === 'ready' && !!t.playback && t.loudness === undefined && !loudnessTried.has(t.id)
+
+  /** Loudness of the playable file of a ready track; emits music:update when there is a value. */
+  function startTrackLoudness(id: string): void {
+    const key = `loudness:${id}`
+    if (jobs.has(key) || disposed) return
+    const job = musicLimit(async () => {
+      const t = tracks.get(id)
+      if (!t || disposed || !trackWantsLoudness(t)) return
+      loudnessTried.add(id)
+      const loudness = await loudnessOf(t.playback!)
+      if (loudness === undefined || disposed || tracks.get(id)?.playback !== t.playback) return
+      updateTrack(id, { loudness })
+      await mkdir(folder(id), { recursive: true })
+      await persistTrack(id)
+    }).catch(() => {})
+    trackJob(key, job)
   }
 
   function startMusicJob(id: string): void {
@@ -652,8 +864,9 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
         await mkdir(folder(id), { recursive: true })
         const out = join(folder(id), 'music.m4a')
         await transcodeMusic(ff, track.path, out, signal)
-        updateTrack(id, { status: 'ready', playback: out })
+        updateTrack(id, { status: 'ready', playback: out, loudness: undefined })
         await persistTrack(id)
+        startTrackLoudness(id)
       } catch (err) {
         if (!disposed) updateTrack(id, { status: 'error', error: shortError('Audio could not be converted', err) })
       }
@@ -702,32 +915,126 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
     return track
   }
 
+  // ------------------------------------------------------------- video strip
+
+  /** Media cache folder a video path belongs to: its cache folder, the item using it, or by its id. */
+  async function stripFolder(path: string): Promise<string> {
+    const full = resolve(path)
+    if (isInside(full, config.cacheDir)) {
+      const first = relative(resolve(config.cacheDir), full).split(sep)[0]
+      if (ID_FOLDER.test(first)) return folder(first)
+    }
+    for (const it of items.values()) if (it.path === path || it.playback === path) return folder(it.id)
+    const st = await stat(full)
+    return folder(mediaId(full, st.size, st.mtimeMs))
+  }
+
+  // ------------------------------------------------------------------ cache
+
+  function busyIds(): Set<string> {
+    const busy = new Set<string>()
+    const now = Date.now()
+    for (const it of items.values()) if (it.status === 'pending' || it.status === 'processing') busy.add(it.id)
+    for (const t of tracks.values()) if (t.status === 'pending' || t.status === 'processing') busy.add(t.id)
+    for (const key of [...jobs.keys(), ...preparing.keys()]) busy.add(key.split(':').pop()!)
+    for (const path of writes.keys()) busy.add(basename(dirname(path)))
+    for (const dir of strips.keys()) busy.add(basename(dirname(dir)))
+    for (const [id, at] of recent) {
+      if (now - at < RECENT_MS) busy.add(id)
+      else recent.delete(id)
+    }
+    return busy
+  }
+
+  /** Items whose cache files were deleted: the next restore validates them against the disk again. */
+  function forget(ids: string[]): void {
+    for (const id of ids) {
+      if (jobs.has(id)) continue
+      items.delete(id)
+      tracks.delete(id)
+      contexts.delete(id)
+    }
+  }
+
+  // ----------------------------------------------------------------- relink
+
+  /**
+   * Gives a moved original (proven identical: same size and time) the cache of its old id, so it
+   * needs no processing. Hard links where possible: the pipeline replaces cache files by rename,
+   * never in place, so the two folders cannot affect each other.
+   */
+  async function migrateCache(oldId: string, file: ScannedFile, live?: ScannedFile): Promise<void> {
+    const newId = mediaId(file.path, file.size, file.mtimeMs)
+    const from = folder(oldId)
+    const to = folder(newId)
+    if (oldId === newId || existsSync(join(to, META))) return
+    const cached = await readJson<MediaItem>(join(from, META))
+    if (!cached || cached.id !== oldId || cached.status !== 'ready') return
+    await mkdir(to, { recursive: true })
+    for (const e of await readdir(from, { withFileTypes: true })) {
+      if (!e.isFile() || e.name === META || /\.(tmp|part)/i.test(e.name)) continue
+      const src = join(from, e.name)
+      const dst = join(to, e.name)
+      await link(src, dst).catch(() => copyFile(src, dst))
+    }
+    const moved = (p: string | undefined): string | undefined => {
+      if (!p) return p
+      if (isInside(p, from)) return join(to, relative(from, p))
+      if (p === cached.path) return file.path
+      if (live && cached.live && p === cached.live.source) return live.path
+      return p
+    }
+    const next: MediaItem = clean({
+      ...cached,
+      id: newId,
+      path: file.path,
+      name: file.name,
+      thumb: moved(cached.thumb),
+      display: moved(cached.display),
+      playback: moved(cached.playback),
+      audio: moved(cached.audio),
+      liveVideo: moved(cached.liveVideo),
+      live: cached.live ? { ...cached.live, source: moved(cached.live.source)! } : undefined
+    })
+    await writeJson(join(to, META), next)
+  }
+
+  async function knownSize(id: string): Promise<number | undefined> {
+    const src = await readJson<{ size?: unknown }>(join(folder(id), SOURCE))
+    return typeof src?.size === 'number' ? src.size : undefined
+  }
+
   // -------------------------------------------------------------------- API
+
+  async function importPaths(paths: string[]): Promise<MediaItem[]> {
+    const files = await scanPaths(paths)
+    const groups = pairFiles(files)
+    const lists = await Promise.all(groups.map((g) => prepare(g)))
+    const seen = new Set<string>()
+    const result: MediaItem[] = []
+    const now = Date.now()
+    for (const it of lists.flat()) {
+      if (seen.has(it.id)) continue
+      seen.add(it.id)
+      recent.set(it.id, now)
+      result.push({ ...(items.get(it.id) ?? it) })
+    }
+    schedule(
+      result.filter((it) => it.status === 'pending').map((it) => it.id),
+      result.filter(wantsAnalysis).map((it) => it.id)
+    )
+    return result.sort((a, b) => a.captureTime - b.captureTime || a.name.localeCompare(b.name, undefined, { numeric: true }))
+  }
 
   return {
     ffmpeg: ff,
 
-    async importPaths(paths) {
-      const files = await scanPaths(paths)
-      const groups = pairFiles(files)
-      const lists = await Promise.all(groups.map((g) => prepare(g)))
-      const seen = new Set<string>()
-      const result: MediaItem[] = []
-      for (const it of lists.flat()) {
-        if (seen.has(it.id)) continue
-        seen.add(it.id)
-        result.push({ ...(items.get(it.id) ?? it) })
-      }
-      schedule(
-        result.filter((it) => it.status === 'pending').map((it) => it.id),
-        result.filter(needsAnalysis).map((it) => it.id)
-      )
-      return result.sort((a, b) => a.captureTime - b.captureTime || a.name.localeCompare(b.name, undefined, { numeric: true }))
-    },
+    importPaths,
 
     async restoreMedia(list) {
       const requeue: string[] = []
       const analyze: string[] = []
+      const reproxy: string[] = []
       const result = await Promise.all(
         list.map(async (it) => {
           const current = items.get(it.id)
@@ -742,19 +1049,31 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
           }
           if (!changed && it.status === 'ready' && cacheFilesPresent(it)) {
             items.set(it.id, it)
-            if (needsAnalysis(it)) analyze.push(it.id)
+            if (wantsAnalysis(it)) analyze.push(it.id)
             return { ...it }
+          }
+          const proxyGone = changed ? null : missingProxyOnly(it, config.cacheDir)
+          if (proxyGone) {
+            // Thumbnail, display image and audio are still there: only the proxy is rebuilt
+            const fresh: MediaItem =
+              proxyGone === 'video'
+                ? clean({ ...it, playback: undefined, proxied: undefined, status: 'processing' as const, progress: 0, error: undefined })
+                : clean({ ...it, liveVideo: undefined })
+            items.set(it.id, fresh)
+            reproxy.push(it.id)
+            if (wantsAnalysis(fresh)) analyze.push(it.id)
+            return { ...fresh }
           }
           let fresh = stripDerived(it)
           // An edited original invalidates what was derived from its content
-          if (changed) fresh = clean({ ...fresh, faces: undefined, sharpness: undefined, hash: undefined })
+          if (changed) fresh = clean({ ...fresh, faces: undefined, sharpness: undefined, hash: undefined, loudness: undefined })
           if (fresh.live && !existsSync(fresh.live.source)) delete fresh.live
           items.set(it.id, fresh)
           requeue.push(it.id)
           return { ...fresh }
         })
       )
-      schedule(requeue, analyze)
+      schedule(requeue, analyze, reproxy)
       return result
     },
 
@@ -762,9 +1081,12 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
       const files = await scanPaths(paths, ['audio'])
       files.sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }))
       const result = await Promise.all(files.map((f) => metaLimit(() => prepareTrack(f))))
+      const now = Date.now()
+      for (const t of result) recent.set(t.id, now)
       scheduleMusic(
         result.filter((t) => t.status === 'pending').map((t) => t.id),
-        result.filter(wantsBeats).map((t) => t.id)
+        result.filter(wantsBeats).map((t) => t.id),
+        result.filter(trackWantsLoudness).map((t) => t.id)
       )
       return result.map((t) => ({ ...(tracks.get(t.id) ?? t) }))
     },
@@ -772,6 +1094,7 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
     async restoreMusic(list) {
       const requeue: string[] = []
       const beats: string[] = []
+      const loudness: string[] = []
       const result = await Promise.all(
         list.map(async (t) => {
           const current = tracks.get(t.id)
@@ -780,6 +1103,7 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
           if (t.status === 'ready' && t.playback && existsSync(t.playback)) {
             tracks.set(t.id, t)
             if (wantsBeats(t)) beats.push(t.id)
+            if (trackWantsLoudness(t)) loudness.push(t.id)
             return { ...t }
           }
           let fresh: MusicTrack = clean({ ...t, status: 'pending' as const, playback: undefined, error: undefined })
@@ -793,10 +1117,11 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
           tracks.set(t.id, fresh)
           if (fresh.status === 'pending') requeue.push(t.id)
           if (wantsBeats(fresh)) beats.push(t.id)
+          if (trackWantsLoudness(fresh)) loudness.push(t.id)
           return { ...fresh }
         })
       )
-      scheduleMusic(requeue, beats)
+      scheduleMusic(requeue, beats, loudness)
       return result
     },
 
@@ -823,6 +1148,75 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
     },
 
     prepareHires,
+
+    async videoStrip(path, count, height) {
+      if (typeof path !== 'string' || !path) throw new Error('no video')
+      const n = Math.max(1, Math.min(120, Math.round(Number(count)) || 1))
+      const h = Math.max(16, Math.min(720, Math.round(Number(height)) || 16))
+      const dir = join(await stripFolder(path), `strip-${n}x${h}`)
+      const files = stripFiles(dir, n)
+      if (files.every((f) => existsSync(f))) return files
+      let job = strips.get(dir)
+      if (!job) {
+        job = (async () => {
+          const info = analyzeVideo(await ff.probe(path, signal))
+          if (!info) throw new Error('no video stream')
+          return videoStrip(ff, path, info, n, h, dir, signal)
+        })().finally(() => strips.delete(dir))
+        strips.set(dir, job)
+      }
+      return job
+    },
+
+    cacheInfo(used) {
+      return scanCacheInfo(config.cacheDir, { ids: used.ids, paths: used.paths, busy: busyIds() })
+    },
+
+    async cleanCache(what, used) {
+      if (what !== 'unused' && what !== 'hires' && what !== 'proxies') throw new Error(`unknown cache part: ${String(what)}`)
+      forget(await cleanCacheDir(config.cacheDir, what, { ids: used.ids, paths: used.paths, busy: busyIds() }))
+      return scanCacheInfo(config.cacheDir, { ids: used.ids, paths: used.paths, busy: busyIds() })
+    },
+
+    async relinkMedia(missing, dir) {
+      const wanted = (Array.isArray(missing) ? missing : []).filter(
+        (m): m is MediaItem => !!m && typeof m.id === 'string' && typeof m.path === 'string' && !!m.path
+      )
+      if (!wanted.length || typeof dir !== 'string' || !dir) return {}
+      const files = await scanPaths([dir])
+      const byName = new Map<string, ScannedFile[]>()
+      for (const f of files) {
+        const key = f.name.toLowerCase()
+        const list = byName.get(key)
+        if (list) list.push(f)
+        else byName.set(key, [f])
+      }
+      const found = new Map<string, { file: ScannedFile; exact: boolean; live?: ScannedFile }>()
+      for (const m of wanted) {
+        const match = pickRelinkCandidate(m, byName.get(basename(m.path).toLowerCase()) ?? [], await knownSize(m.id))
+        if (!match) continue
+        let live: ScannedFile | undefined
+        // A Live Photo's MOV sits next to the photo with the same base name
+        if (m.live && dirname(m.live.source).toLowerCase() === dirname(m.path).toLowerCase()) {
+          const movName = basename(m.live.source).toLowerCase()
+          live = files.find((f) => f.dir.toLowerCase() === match.file.dir.toLowerCase() && f.name.toLowerCase() === movName)
+        }
+        found.set(m.id, { ...match, live })
+      }
+      for (const [oldId, f] of found) {
+        if (f.exact) await migrateCache(oldId, f.file, f.live).catch(() => {})
+      }
+      const paths = [...new Set([...found.values()].flatMap((f) => (f.live ? [f.file.path, f.live.path] : [f.file.path])))]
+      if (!paths.length) return {}
+      const imported = await importPaths(paths)
+      const byPath = new Map(imported.map((it) => [it.path.toLowerCase(), it]))
+      const result: Record<string, MediaItem> = {}
+      for (const [oldId, f] of found) {
+        const it = byPath.get(f.file.path.toLowerCase())
+        if (it) result[oldId] = it
+      }
+      return result
+    },
 
     get(id) {
       const it = items.get(id)

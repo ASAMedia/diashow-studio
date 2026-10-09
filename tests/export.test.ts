@@ -100,6 +100,36 @@ describe('startExport', () => {
     })
   }
 
+  it('takes I420 frames packed by the GPU as they are (top row first, BT.709 limited range)', async () => {
+    // same picture as frame(), but white at the top, converted like the renderer's YUV shader
+    const yuv = (i: number): Uint8Array => {
+      const [r, g, b] = [[220, 30, 30], [30, 200, 60], [40, 60, 220]][Math.floor(i / 20) % 3].map((v) => v / 255)
+      const l = 0.2126 * r + 0.7152 * g + 0.0722 * b
+      const buf = new Uint8Array((W * H * 3) / 2)
+      for (let y = 0; y < H; y++) buf.fill(y < 20 ? 235 : Math.round(16 + 219 * l), y * W, (y + 1) * W)
+      const cw = W / 2
+      for (let y = 0; y < H / 2; y++) {
+        const white = y < 10
+        buf.fill(white ? 128 : Math.round(128 + (224 * (b - l)) / 1.8556), W * H + y * cw, W * H + (y + 1) * cw)
+        buf.fill(white ? 128 : Math.round(128 + (224 * (r - l)) / 1.5748), W * H * 1.25 + y * cw, W * H * 1.25 + (y + 1) * cw)
+      }
+      return buf
+    }
+    const opts = await options('yuv.mp4', { input: 'yuv', hardware: false })
+    const job = await startExport(opts, FFMPEG_DIR, join(dir, 'tmp'), () => {})
+    await expect(job.writeFrame(frame(0))).rejects.toThrow(/I420/)
+    for (let i = 0; i < job.totalFrames; i++) await job.writeFrame(yuv(i))
+    const out = await job.finish()
+    const vs = videoStream(await ff.probe(out))!
+    expect([vs.width, vs.height, vs.pix_fmt, vs.color_primaries, vs.color_range]).toEqual([W, H, 'yuv420p', 'bt709', 'tv'])
+    const png = await ff.capture(['-i', out, '-frames:v', '1', '-c:v', 'png', '-f', 'image2pipe', '-'])
+    const { data, info } = await sharp(png).raw().toBuffer({ resolveWithObject: true })
+    const px = (y: number): number[] => [...data.subarray((y * info.width + 40) * info.channels, (y * info.width + 40) * info.channels + 3)]
+    expect(px(5).every((v) => v > 230)).toBe(true)
+    // 220/30/30 comes back within a few steps
+    px(H - 5).forEach((v, k) => expect(Math.abs(v - [220, 30, 30][k])).toBeLessThan(8))
+  })
+
   it('rejects wrong frame sizes, allows only one export at a time and cancels cleanly', async () => {
     const progress: ExportProgress[] = []
     const opts = await options('cancel.mp4', { hardware: false })

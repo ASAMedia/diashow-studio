@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildTimeline, slidesAt } from '@shared/timeline'
-import { buildAudioPlan, duckIntervals, gainAt } from '@shared/audioPlan'
+import { buildAudioPlan, duckIntervals, gainAt, loudnessGain } from '@shared/audioPlan'
 import { groupEntries, pickTemplate } from '@shared/layout'
 import { DEFAULT_SETTINGS, type Entry, type MediaItem, type MusicTrack, type Project } from '@shared/types'
 
@@ -186,5 +186,45 @@ describe('beat sync and big shows', () => {
     const ms = performance.now() - t0
     expect(tl.slides.length).toBeGreaterThan(300)
     expect(ms).toBeLessThan(150)
+  })
+})
+
+describe('loudness', () => {
+  it('brings quiet and loud sources to the target, within limits', () => {
+    expect(loudnessGain(-16, true)).toBeCloseTo(1, 6)
+    expect(loudnessGain(-22, true)).toBeCloseTo(Math.pow(10, 6 / 20), 6)
+    expect(loudnessGain(-60, true)).toBe(4)
+    expect(loudnessGain(-2, true)).toBe(0.25)
+    expect(loudnessGain(-30, false)).toBe(1)
+    expect(loudnessGain(undefined, true)).toBe(1)
+  })
+  it('scales music and video sound in the plan', () => {
+    const media = [photo('a'), { ...video('v', 10), loudness: -28 }, photo('b')]
+    const entries: Entry[] = [
+      { id: 'e1', type: 'photo', mediaId: 'a' },
+      { id: 'e2', type: 'video', mediaId: 'v' },
+      { id: 'e3', type: 'photo', mediaId: 'b' }
+    ]
+    const p = project(entries, media, [{ ...track('s1', 60), loudness: -10 }], { timing: { mode: 'custom', customTotal: 30 } })
+    const tl = buildTimeline(p)
+    const plan = buildAudioPlan(p, tl)
+    const music = plan.clips.find((c) => c.kind === 'music')!
+    expect(gainAt(music.gain, 2)).toBeCloseTo(0.8 * Math.pow(10, -6 / 20), 3)
+    const v = plan.clips.find((c) => c.kind === 'video')!
+    expect(gainAt(v.gain, tl.slides[1].start + 3)).toBeCloseTo(Math.pow(10, 12 / 20), 3)
+  })
+})
+
+describe('maximum video length', () => {
+  it('shortens long clips from their start point', () => {
+    const media = [photo('a'), video('v', 600)]
+    const entries: Entry[] = [
+      { id: 'e1', type: 'photo', mediaId: 'a' },
+      { id: 'e2', type: 'video', mediaId: 'v', trimIn: 30 }
+    ]
+    const tl = buildTimeline(project(entries, media, [], { maxVideoSeconds: 15 }))
+    expect(tl.slides[1].video).toEqual({ trimIn: 30, trimOut: 45 })
+    expect(tl.slides[1].duration).toBe(15)
+    expect(buildTimeline(project(entries, media)).slides[1].duration).toBe(570)
   })
 })

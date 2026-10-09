@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, useEffect } from 'react'
 import { Clock, Film, FolderPlus, ImagePlus, Plus, Type, Volume2, VolumeX, Trash2, Split, Merge, Move } from 'lucide-react'
 import { mediaUrl } from '@shared/api'
 import { buildAudioPlan, gainAt } from '@shared/audioPlan'
-import type { Timeline, TimelineSlide } from '@shared/timeline'
+import { musicBeatTimes, type Timeline, type TimelineSlide } from '@shared/timeline'
 import type { VideoEntry } from '@shared/types'
 import { themeMeta } from '@shared/themes'
 import { playerRef, useStore } from '../store'
@@ -407,13 +407,41 @@ function DurationHandle({ slide, onDuration }: { slide: TimelineSlide; onDuratio
   )
 }
 
+/** Peaks of a track at about 10 values per second, cached per file for the session. */
+const waveCache = new Map<string, Promise<number[]>>()
+function useWaveforms(tracks: { path: string; duration: number }[]): Map<string, number[]> {
+  const [waves, setWaves] = useState(new Map<string, number[]>())
+  const key = tracks.map((x) => x.path).join('|')
+  useEffect(() => {
+    let alive = true
+    for (const tr of tracks) {
+      if (waves.has(tr.path)) continue
+      let p = waveCache.get(tr.path)
+      if (!p) waveCache.set(tr.path, (p = window.api.waveform(tr.path, Math.max(50, Math.round(tr.duration * 10))).catch(() => [])))
+      void p.then((peaks) => {
+        if (!alive || !peaks.length) return
+        const max = Math.max(...peaks) || 1
+        setWaves((w) => new Map(w).set(tr.path, peaks.map((v) => v / max)))
+      })
+    }
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key])
+  return waves
+}
+
 function AudioLane({ tl, width }: { tl: Timeline; width: number }) {
   const project = useStore((s) => s.project)!
   const plan = useMemo(() => buildAudioPlan(project, tl), [project, tl])
-  const H = 30
+  const H = 40
   const music = plan.clips.filter((c) => c.kind === 'music')
   const videos = plan.clips.filter((c) => c.kind === 'video')
-  const vol = Math.max(0.01, project.settings.audio.musicVolume)
+  const tracks = project.music.filter((m) => m.playback && m.status === 'ready').map((m) => ({ path: m.playback!, duration: m.duration }))
+  const waves = useWaveforms(tracks)
+  const beats = useMemo(() => musicBeatTimes(project, tl.duration), [project, tl])
+  const maxGain = Math.max(0.01, ...music.map((c) => Math.max(...c.gain.map((g) => g.g))))
   const points = useMemo(() => {
     if (!music.length) return ''
     const pts: string[] = []
@@ -421,10 +449,30 @@ function AudioLane({ tl, width }: { tl: Timeline; width: number }) {
     for (let i = 0; i <= n; i++) {
       const time = (tl.duration * i) / n
       const g = music.reduce((sum, c) => sum + (time >= c.start && time <= c.start + c.duration ? gainAt(c.gain, time) : 0), 0)
-      pts.push(`${timeToX(tl, time).toFixed(1)},${(4 + (1 - Math.min(1, g / vol)) * (H - 10)).toFixed(1)}`)
+      pts.push(`${timeToX(tl, time).toFixed(1)},${(4 + (1 - Math.min(1, g / maxGain)) * (H - 12)).toFixed(1)}`)
     }
     return pts.join(' ')
-  }, [music, tl, width, vol])
+  }, [music, tl, width, maxGain])
+  // waveform of every placed song, following the filmstrip's time-to-x mapping
+  const wavePaths = useMemo(() => {
+    const mid = (H - 6) / 2 + 2
+    return music.map((c) => {
+      const peaks = waves.get(c.src)
+      if (!peaks) return ''
+      const x0 = timeToX(tl, c.start)
+      const x1 = timeToX(tl, c.start + c.duration)
+      const top: string[] = []
+      const bottom: string[] = []
+      for (let x = x0; x <= x1; x += 2) {
+        const time = c.offset + xToTime(tl, x) - c.start
+        const v = peaks[Math.min(peaks.length - 1, Math.max(0, Math.round(time * 10)))] ?? 0
+        const a = v * (H - 14) * 0.5
+        top.push(`${x.toFixed(1)},${(mid - a).toFixed(1)}`)
+        bottom.unshift(`${x.toFixed(1)},${(mid + a).toFixed(1)}`)
+      }
+      return `M${top.join(' L')} L${bottom.join(' L')} Z`
+    })
+  }, [music, waves, tl])
   const titles = new Map(project.music.map((m) => [m.playback, m.title]))
   return (
     <svg
@@ -441,13 +489,17 @@ function AudioLane({ tl, width }: { tl: Timeline; width: number }) {
         const x1 = timeToX(tl, c.start + c.duration)
         return (
           <g key={c.id}>
-            <rect x={x0} y={3} width={Math.max(1, x1 - x0)} height={H - 8} rx={4} fill={i % 2 ? 'rgba(77,159,255,0.13)' : 'rgba(77,159,255,0.2)'} />
-            <text x={x0 + 6} y={H - 9} fontSize={10} fill="#8fb8e8">
+            <rect x={x0} y={2} width={Math.max(1, x1 - x0)} height={H - 6} rx={4} fill={i % 2 ? 'rgba(77,159,255,0.10)' : 'rgba(77,159,255,0.16)'} />
+            {wavePaths[i] && <path d={wavePaths[i]} fill="rgba(143,184,232,0.35)" />}
+            <text x={x0 + 6} y={H - 8} fontSize={10} fill="#8fb8e8">
               {titles.get(c.src) ?? ''}
             </text>
           </g>
         )
       })}
+      {beats.map((b, i) => (
+        <line key={i} x1={timeToX(tl, b)} x2={timeToX(tl, b)} y1={2} y2={6} stroke="rgba(255,255,255,0.35)" strokeWidth={1} />
+      ))}
       {videos.map((c) => {
         const x0 = timeToX(tl, c.start)
         const x1 = timeToX(tl, c.start + c.duration)

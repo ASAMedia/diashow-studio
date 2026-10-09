@@ -18,6 +18,15 @@ export function gainAt(points: GainPoint[], t: number): number {
   return points[points.length - 1].g
 }
 
+/** Loudness every song and video sound is brought to when normalising (LUFS). */
+export const TARGET_LUFS = -16
+
+/** Gain that brings a measured loudness to the target, limited to ±12 dB. */
+export function loudnessGain(lufs: number | undefined, enabled: boolean): number {
+  if (!enabled || lufs == null || !Number.isFinite(lufs)) return 1
+  return Math.min(4, Math.max(0.25, Math.pow(10, (TARGET_LUFS - lufs) / 20)))
+}
+
 export interface DuckInterval {
   start: number
   end: number
@@ -104,7 +113,7 @@ export function buildAudioPlan(project: Project, tl: Timeline): AudioPlan {
       const fadeIn = first ? Math.min(a.fadeIn, dur / 2) : Math.min(xf, dur / 2)
       const endsShow = end >= L - 1e-6
       const fadeOut = endsShow ? Math.min(a.fadeOut, dur / 2) : Math.min(xf, dur / 2)
-      const v = a.musicVolume
+      const v = a.musicVolume * loudnessGain(track.loudness, a.normalize ?? true)
       const base: GainPoint[] = [
         { t, g: fadeIn > 0 ? 0 : v },
         { t: t + fadeIn, g: v },
@@ -121,7 +130,7 @@ export function buildAudioPlan(project: Project, tl: Timeline): AudioPlan {
 
   if (a.videoSound) {
     for (const s of tl.slides) for (const c of audibleClips(s)) {
-      const vol = Math.min(2, Math.max(0, c.entry.volume ?? 1))
+      const vol = Math.min(2, Math.max(0, c.entry.volume ?? 1)) * loudnessGain(c.media.loudness, a.normalize ?? true)
       const dur = Math.min(s.duration, c.trimOut - c.trimIn)
       const fi = Math.max(0.15, Math.min(s.transIn, dur / 2))
       const fo = Math.max(0.15, Math.min(s.transOut, dur / 2))

@@ -1,15 +1,17 @@
 import type { LookId, MediaItem, Project, ThemeId } from '@shared/types'
 import { buildTimeline, slidesAt, type Timeline, type TimelineSlide } from '@shared/timeline'
-import { Compositor, NEUTRAL_POST, type PostParams, type Tex } from './gl'
+import { Compositor, NEUTRAL_LOOK, NEUTRAL_POST, type Look, type PostParams, type Tex } from './gl'
 import { ExportVideoStore, ImageStore, TextStore, VideoPool } from './media'
 import type { Ctx, SlideState, Theme } from './types'
 import { classic, kenburns, retro } from './themes/simple'
 import { magazine, origami, panels, reflections, vintage } from './themes/scene'
+import { drawShatter, scrapbook, shatter, snapshots } from './themes/extra'
 import { applyTextStyle, clamp01, drawTextBlock, smooth, type Box } from './draw'
 
-export const THEME_IMPL: Record<ThemeId, Theme> = { classic, kenburns, retro, magazine, origami, panels, reflections, vintage }
+export const THEME_IMPL: Record<ThemeId, Theme> = { classic, kenburns, retro, magazine, origami, panels, reflections, vintage, scrapbook, snapshots, shatter }
 
-const LOOK_POST: Record<LookId, Partial<PostParams>> = {
+// colour looks act on photos and videos only (not on paper, backgrounds or text)
+const LOOKS: Record<LookId, Partial<Look>> = {
   natural: {},
   vivid: { saturation: 1.3, contrast: 1.08 },
   warm: { warmth: 0.9, saturation: 1.06 },
@@ -153,6 +155,7 @@ export class Engine {
     if (!this.tl || !this.project) return
     const c = this.c
     const theme = THEME_IMPL[this.project.settings.theme] ?? kenburns
+    c.setLook({ ...NEUTRAL_LOOK, ...LOOKS[this.project.settings.look] })
     const ctx = this.ctx(t)
     if (this.mode === 'preview') {
       for (const m of this.neededMedia(t, 6)) if (m.kind === 'photo') ctx.image(m)
@@ -179,7 +182,7 @@ export class Engine {
       theme.drawSlide(ctx, b)
       c.target(0, theme.clear)
       const tr = theme.transition?.(ctx, b) ?? { kind: 'dissolve', dir: [1, 0] as [number, number] }
-      this.composite(tr.kind, c.targetTex(1), c.targetTex(2), b.inP, tr.dir)
+      this.composite(tr.kind, c.targetTex(1), c.targetTex(2), b.inP, tr.dir, b.slide.id)
     } else {
       c.target(0, theme.clear)
       theme.background?.(ctx, states)
@@ -187,7 +190,7 @@ export class Engine {
     }
     if (!theme.ownCaption) for (const s of states) this.caption(ctx, s, theme)
 
-    const post: PostParams = { ...NEUTRAL_POST, ...LOOK_POST[this.project.settings.look], ...(theme.post?.(ctx) ?? {}), time: t }
+    const post: PostParams = { ...NEUTRAL_POST, ...(theme.post?.(ctx) ?? {}), time: t }
     c.post(c.targetTex(0), post)
     this.images.tick()
     this.texts.tick()
@@ -217,9 +220,13 @@ export class Engine {
   }
 
   /** Cube and flip are drawn as 3D quads; everything else is a full-screen shader. */
-  private composite(kind: string, a: Tex, b: Tex, p: number, dir: [number, number]): void {
+  private composite(kind: string, a: Tex, b: Tex, p: number, dir: [number, number], seed = ''): void {
     const c = this.c
     const { W, H } = c
+    if (kind === 'shatter') {
+      drawShatter(c, a, b, p, seed)
+      return
+    }
     if (kind !== 'cube' && kind !== 'flip') {
       c.transition(kind, a, b, p, dir)
       return
@@ -254,8 +261,26 @@ export class Engine {
     return { imageLoads: this.images.loads, imageEvictions: this.images.evictions, videos: this.videos?.stats() ?? [] }
   }
 
+  /** Preview only: size photos are loaded at. */
+  setImageSize(px: number): void {
+    this.images.maxSize = px
+  }
+
   readPixels(out: Uint8Array): void {
     this.c.readPixels(out)
+  }
+
+  /** Export: render into a texture and read frames as I420 with startYuv()/collectYuv(). */
+  set yuvOutput(on: boolean) {
+    this.c.offscreen = on
+  }
+
+  startYuv(): void {
+    this.c.startYuv()
+  }
+
+  collectYuv(out: Uint8Array): Promise<void> {
+    return this.c.collectYuv(out)
   }
 
   dispose(): void {
@@ -269,6 +294,6 @@ export class Engine {
 
 /** Fonts must be loaded before text textures are drawn (export renders immediately). */
 export async function loadFonts(): Promise<void> {
-  const specs = ['300 40px Inter', '400 40px Inter', '600 40px Inter', '700 40px Inter', '400 40px Anton', '400 40px Cinzel', '400 40px "Special Elite"', '400 40px "Playfair Display"', '500 40px "Barlow Semi Condensed"', '600 40px "Barlow Semi Condensed"', '800 40px "Nunito Sans"']
+  const specs = ['300 40px Inter', '400 40px Inter', '600 40px Inter', '700 40px Inter', '400 40px Anton', '400 40px Cinzel', '400 40px "Special Elite"', '400 40px "Playfair Display"', '500 40px "Barlow Semi Condensed"', '600 40px "Barlow Semi Condensed"', '800 40px "Nunito Sans"', '400 40px Caveat', '600 40px Caveat', '700 40px Caveat']
   await Promise.all(specs.map((s) => document.fonts.load(s).catch(() => [])))
 }

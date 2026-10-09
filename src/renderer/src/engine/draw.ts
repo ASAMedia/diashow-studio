@@ -164,7 +164,7 @@ export function drawMedia(ctx: Ctx, tex: Tex | null, aspect: number, box: Box, o
     const h = uv.h / o.zoom
     uv = { x: uv.x + (uv.w - w) / 2, y: uv.y + (uv.h - h) / 2, w, h }
   }
-  ctx.c.quad({ ...o, tex, uv, x: target.x, y: target.y, w: target.w, h: target.h })
+  ctx.c.quad({ look: true, ...o, tex, uv, x: target.x, y: target.y, w: target.w, h: target.h })
   return target
 }
 

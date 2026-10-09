@@ -20,7 +20,8 @@ export class ImageStore {
 
   constructor(
     private c: Compositor,
-    private maxSize: number,
+    /** Longest edge of loaded photos; lower for weak machines (applies to new loads). */
+    public maxSize: number,
     private limit = 28
   ) {}
 
@@ -273,7 +274,7 @@ export class ExportVideoStore {
   }
 }
 
-export type FontRole = 'sans' | 'light' | 'display' | 'serif' | 'type' | 'editorial' | 'caption' | 'rounded'
+export type FontRole = 'sans' | 'light' | 'display' | 'serif' | 'type' | 'editorial' | 'caption' | 'rounded' | 'hand'
 
 const FONT_FAMILY: Record<FontRole, string> = {
   sans: "'Inter', 'Segoe UI', sans-serif",
@@ -283,7 +284,8 @@ const FONT_FAMILY: Record<FontRole, string> = {
   type: "'Special Elite', 'Courier New', monospace",
   editorial: "'Playfair Display', 'Georgia', serif",
   caption: "'Barlow Semi Condensed', 'Bahnschrift', sans-serif",
-  rounded: "'Nunito Sans', 'Segoe UI', sans-serif"
+  rounded: "'Nunito Sans', 'Segoe UI', sans-serif",
+  hand: "'Caveat', 'Segoe Print', cursive"
 }
 
 export interface TextSpec {

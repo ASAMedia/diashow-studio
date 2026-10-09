@@ -1,4 +1,6 @@
-// Export encoder: the renderer renders RGBA frames, FFmpeg encodes them together with the mixed audio.
+// Export encoder: the renderer renders frames (I420 packed on the GPU, or RGBA), FFmpeg encodes them
+// together with the mixed audio. Alternatively the renderer encodes itself (WebCodecs) and FFmpeg only
+// muxes its H.264/HEVC stream.
 import { once } from 'node:events'
 import type { ChildProcess } from 'node:child_process'
 import { mkdir, rm } from 'node:fs/promises'
@@ -6,14 +8,22 @@ import { join } from 'node:path'
 import type { EncoderInfo, ExportOptions, ExportProgress, ExportQuality, VideoCodec } from '@shared/types'
 import { Ffmpeg, summarizeStderr } from '../ffmpeg'
 import { fpsRational } from '../media/video'
+import { AnnexBToTs } from './annexb'
 import { mixAudioPlan } from './audioMix'
 
 export interface ExportJob {
   readonly outPath: string
   readonly totalFrames: number
+  /** FFmpeg encoder, or 'copy' when the renderer sends an encoded stream. */
   readonly encoder: string
-  /** One RGBA frame, rows bottom-to-top, width*height*4 bytes. Resolves when FFmpeg accepted it. */
-  writeFrame(rgba: Uint8Array): Promise<void>
+  readonly input: 'rgba' | 'yuv' | 'h264' | 'hevc'
+  /**
+   * One frame. 'rgba': rows bottom-to-top, width*height*4 bytes. 'yuv': I420 (BT.709 limited range),
+   * rows top-to-bottom, width*height*1.5 bytes. Resolves when FFmpeg accepted it.
+   */
+  writeFrame(frame: Uint8Array): Promise<void>
+  /** Next bytes of the Annex B stream (input 'h264' / 'hevc'), any chunking. Resolves when FFmpeg accepted them. */
+  writeChunk(data: Uint8Array): Promise<void>
   /** Closes the input, waits for FFmpeg, removes temp files. Resolves with the output path. */
   finish(): Promise<string>
   /** Kills FFmpeg and deletes the partial output. */
@@ -67,8 +77,10 @@ export async function cancelActiveExport(): Promise<void> {
 }
 
 /**
- * Mixes the audio plan (phase 'audio'), then spawns FFmpeg reading raw RGBA frames from stdin.
- * Resolves when the encoder is ready for frames. Only one export can run at a time.
+ * Mixes the audio plan (phase 'audio'), then spawns FFmpeg reading raw RGBA frames from stdin, or for
+ * input 'h264' / 'hevc' the renderer's Annex B stream, which gets constant-rate timestamps in display
+ * order (B-frames allowed) and is copied, not re-encoded. Resolves when ready for frames. Only one
+ * export can run at a time.
  */
 export async function startExport(
   options: ExportOptions,
@@ -80,10 +92,14 @@ export async function startExport(
   if (active) throw new Error('An export is already running')
   const { width, height, fps } = options
   if (!(width > 0 && height > 0 && fps > 0)) throw new Error('invalid export size or frame rate')
+  const input = options.input ?? 'rgba'
+  if (input !== 'rgba' && input !== 'yuv' && input !== 'h264' && input !== 'hevc') throw new Error(`unknown export input: ${String(input)}`)
+  if (input === 'yuv' && (width % 2 || height % 2)) throw new Error('yuv input needs an even width and height')
+  const raw = input === 'rgba' || input === 'yuv'
   const ff = new Ffmpeg(ffmpegDir)
   const abort = new AbortController()
   const jobDir = join(tmpDir, `export-${Date.now().toString(36)}`)
-  const frameBytes = width * height * 4
+  const frameBytes = input === 'yuv' ? (width * height * 3) / 2 : width * height * 4
   const totalFrames = Math.max(1, Math.ceil(options.audio.duration * fps - 1e-6))
   let child: ChildProcess | null = null
   let exited: Promise<number | null> | null = null
@@ -119,22 +135,41 @@ export async function startExport(
     })
     if (cancelled()) throw new Error('cancelled')
 
-    const info = encoders ?? (await ff.encoders())
-    const encoder = pickEncoder(options.codec, options.hardware, info)
-    const outW = Math.round(width / 2) * 2
-    const outH = Math.round(height / 2) * 2
-    const args = [
-      '-loglevel', 'error', '-y',
-      '-f', 'rawvideo', '-pix_fmt', 'rgba', '-s', `${width}x${height}`, '-r', fpsRational(fps), '-i', 'pipe:0',
-      '-i', wav,
-      '-map', '0:v:0', '-map', '1:a:0',
+    let encoder: string
+    let args: string[]
+    const audioOut = ['-c:a', 'aac', '-b:a', '256k', '-ar', '48000', '-movflags', '+faststart', options.outPath]
+    if (raw) {
+      const info = encoders ?? (await ff.encoders())
+      encoder = pickEncoder(options.codec, options.hardware, info)
+      const outW = Math.round(width / 2) * 2
+      const outH = Math.round(height / 2) * 2
       // setparams tags the frames; FFmpeg takes colour tags from frames rather than -color_* options
-      '-vf', `vflip,scale=w=${outW}:h=${outH}:out_color_matrix=bt709:out_range=tv,format=yuv420p,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv`,
-      ...encoderArgs(encoder, options.codec, options.quality, fps),
-      '-c:a', 'aac', '-b:a', '256k', '-ar', '48000',
-      '-movflags', '+faststart',
-      options.outPath
-    ]
+      const tags = 'setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv'
+      args = [
+        '-loglevel', 'error', '-y',
+        '-f', 'rawvideo', '-pix_fmt', input === 'yuv' ? 'yuv420p' : 'rgba', '-s', `${width}x${height}`, '-r', fpsRational(fps), '-i', 'pipe:0',
+        '-i', wav,
+        '-map', '0:v:0', '-map', '1:a:0',
+        // the GPU already packed I420 the right way up; RGBA still needs flipping and converting
+        '-vf', input === 'yuv' ? tags : `vflip,scale=w=${outW}:h=${outH}:out_color_matrix=bt709:out_range=tv,format=yuv420p,${tags}`,
+        ...encoderArgs(encoder, options.codec, options.quality, fps),
+        ...audioOut
+      ]
+    } else {
+      encoder = 'copy'
+      args = [
+        '-loglevel', 'error', '-y',
+        // MPEG-TS made by AnnexBToTs: the stream with pts/dts per frame
+        '-f', 'mpegts', '-i', 'pipe:0',
+        '-i', wav,
+        '-map', '0:v:0', '-map', '1:a:0',
+        '-c:v', 'copy',
+        ...(input === 'hevc' ? ['-tag:v', 'hvc1'] : []),
+        // stream copy: these options become the container's colour tags
+        '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709', '-color_range', 'tv',
+        ...audioOut
+      ]
+    }
     const proc = ff.spawn(args, 'pipe')
     child = proc
     let stderr = ''
@@ -178,27 +213,56 @@ export async function startExport(
       throw err
     }
 
+    const write = async (data: Uint8Array): Promise<void> => {
+      const buf = Buffer.isBuffer(data) ? data : Buffer.from(data.buffer, data.byteOffset, data.byteLength)
+      const stdin = proc.stdin!
+      if (proc.exitCode !== null) return fail(failure())
+      if (!stdin.write(buf)) {
+        const result = await Promise.race([once(stdin, 'drain').then(() => 'drain'), exitPromise.then(() => 'exit')])
+        if (result === 'exit' && !cancelled()) return fail(failure())
+      }
+    }
+    const ts: Uint8Array[] = []
+    const muxer = raw ? null : new AnnexBToTs(input, fps, (packet) => ts.push(packet))
+    const flushTs = async (): Promise<void> => {
+      if (ts.length) await write(Buffer.concat(ts.splice(0)))
+    }
+
     const job: ExportJob = {
       outPath: options.outPath,
       totalFrames,
       encoder,
-      async writeFrame(rgba) {
+      input,
+      async writeFrame(data) {
         if (state !== 'video') throw new Error(state === 'cancelled' ? 'cancelled' : 'export is not accepting frames')
-        if (rgba.byteLength !== frameBytes) {
-          throw new Error(`frame has ${rgba.byteLength} bytes, expected ${frameBytes} (${width}x${height} RGBA)`)
+        if (!raw) throw new Error(`this export expects encoded ${input} data (exportChunk)`)
+        if (data.byteLength !== frameBytes) {
+          throw new Error(`frame has ${data.byteLength} bytes, expected ${frameBytes} (${width}x${height} ${input === 'yuv' ? 'I420' : 'RGBA'})`)
         }
-        const buf = Buffer.isBuffer(rgba) ? rgba : Buffer.from(rgba.buffer, rgba.byteOffset, rgba.byteLength)
-        const stdin = proc.stdin!
-        if (proc.exitCode !== null) return fail(failure())
-        if (!stdin.write(buf)) {
-          const result = await Promise.race([once(stdin, 'drain').then(() => 'drain'), exitPromise.then(() => 'exit')])
-          if (result === 'exit' && !cancelled()) return fail(failure())
-        }
+        await write(data)
         frame++
         emitVideo(frame === totalFrames)
       },
+      async writeChunk(data) {
+        if (state !== 'video') throw new Error(state === 'cancelled' ? 'cancelled' : 'export is not accepting data')
+        if (!muxer) throw new Error('this export expects raw frames (exportFrame)')
+        if (!data.byteLength) return
+        // Frames are counted from the stream itself, so any chunking gives the same progress
+        muxer.push(data)
+        await flushTs()
+        const reachedEnd = muxer.frames >= totalFrames && frame < totalFrames
+        frame = muxer.frames
+        emitVideo(reachedEnd)
+      },
       async finish() {
         if (state !== 'video') throw new Error('export is not running')
+        if (muxer) {
+          // The last pictures were waiting for their display order
+          muxer.end()
+          await flushTs()
+          frame = muxer.frames
+          emitVideo(true)
+        }
         state = 'finishing'
         onProgress({ phase: 'finishing', frame, totalFrames })
         proc.stdin!.end()

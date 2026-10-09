@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CalendarDays, ChevronLeft, Download, Eraser, FolderTree, Images, Loader2, MonitorPlay, MoreHorizontal, Package, Play, Redo2, ScanSearch, SortAsc, Undo2 } from 'lucide-react'
+import { CalendarDays, ChevronLeft, Download, Eraser, FolderTree, History, Images, Loader2, MonitorPlay, MoreHorizontal, Package, Play, Redo2, ScanSearch, Settings, SortAsc, Undo2 } from 'lucide-react'
 import { useStore } from '../store'
 import { useTimeline } from '../timeline'
 import { fmtTime, t } from '../i18n'
@@ -27,6 +27,9 @@ export function TitleBar() {
           <Images size={18} /> {t('appName')}
         </div>
         <div className="grow" />
+        <button className="btn ghost icon" title={t('settings')} onClick={() => useStore.getState().set({ dialog: 'settings' })}>
+          <Settings size={17} />
+        </button>
       </div>
     )
   }
@@ -99,8 +102,15 @@ export function TitleBar() {
             <button onClick={() => set({ dialog: 'pack' })}>
               <Package size={14} /> {t('pack')}
             </button>
+            <button onClick={() => set({ dialog: 'backups' })}>
+              <History size={14} /> {t('backups')}
+            </button>
             <button disabled={!slides} onClick={() => set({ presenting: true })}>
               <MonitorPlay size={14} /> {t('present')}
+            </button>
+            <hr />
+            <button onClick={() => set({ dialog: 'settings' })}>
+              <Settings size={14} /> {t('settings')}
             </button>
           </div>
         )}

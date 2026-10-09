@@ -1,9 +1,11 @@
 // Wires every IPC channel of the preload contract (src/preload/index.ts) to the main-process services.
-import { app, BrowserWindow, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, powerSaveBlocker, shell, type IpcMainInvokeEvent } from 'electron'
 import { join } from 'node:path'
 import { AUDIO_EXT, IMAGE_EXT, VIDEO_EXT } from '@shared/formats'
-import type { ExportOptions, ExportProgress, MediaItem, MusicTrack, Project, Rect } from '@shared/types'
+import type { AppSettings, ExportOptions, ExportProgress, MediaItem, MusicTrack, Project, Rect } from '@shared/types'
+import { createAppSettingsStore } from './appSettings'
 import { resolveFfmpegDir } from './ffmpeg'
+import { createKeepAwake } from './keepAwake'
 import { endExiftool } from './media/exif'
 import { createMediaService, type MediaService } from './media/service'
 import { displayCount, isPresentationWindow, startPresentation, stopPresentation } from './presentation'
@@ -51,6 +53,12 @@ export function registerIpc(): void {
   media = service
   // Warm up encoder detection so the export dialog has it ready
   void service.ffmpeg.encoders()
+  const appSettings = createAppSettingsStore(join(app.getPath('userData'), 'settings.json'))
+  const awake = createKeepAwake({
+    start: () => powerSaveBlocker.start('prevent-display-sleep'),
+    stop: (id) => powerSaveBlocker.stop(id)
+  })
+  const awakeWindows = new Set<number>()
 
   let exportJob: ExportJob | null = null
   const sendProgress = (p: ExportProgress): void => broadcast('export:progress', p)
@@ -74,6 +82,10 @@ export function registerIpc(): void {
   ipcMain.handle('music:restore', (_e, tracks: MusicTrack[]) => service.restoreMusic(tracks))
   ipcMain.handle('audio:waveform', (_e, path: string, buckets: number) => service.waveform(path, buckets))
   ipcMain.handle('media:faces', (_e, id: string, faces: Rect[]) => service.setFaces(id, faces))
+  ipcMain.handle('media:strip', (_e, path: string, count: number, height: number) => service.videoStrip(path, count, height))
+  ipcMain.handle('media:relink', (_e, missing: MediaItem[], folder: string) => service.relinkMedia(missing, folder))
+  ipcMain.handle('cache:info', async () => service.cacheInfo(await projects.references()))
+  ipcMain.handle('cache:clean', async (_e, what: 'unused' | 'hires' | 'proxies') => service.cleanCache(what, await projects.references()))
 
   ipcMain.handle('dialog:media', async (e) => {
     const opts: Electron.OpenDialogOptions = {
@@ -155,6 +167,8 @@ export function registerIpc(): void {
   ipcMain.handle('project:load', (_e, id: string) => projects.load(id))
   ipcMain.handle('project:save', (_e, project: Project) => projects.save(project))
   ipcMain.handle('project:delete', (_e, id: string) => projects.delete(id))
+  ipcMain.handle('project:backups', (_e, id: string) => projects.listBackups(id))
+  ipcMain.handle('project:restore-backup', (_e, file: string) => projects.restoreBackup(file))
 
   ipcMain.handle('export:encoders', () => service.ffmpeg.encoders())
 
@@ -171,6 +185,12 @@ export function registerIpc(): void {
   ipcMain.handle('export:frame', async (_e, rgba: Uint8Array) => {
     if (!exportJob) throw new Error('no export running')
     await exportJob.writeFrame(rgba)
+  })
+
+  ipcMain.handle('export:chunk', async (_e, data: Uint8Array) => {
+    if (!exportJob) throw new Error('no export running')
+    if (!(data instanceof Uint8Array)) throw new Error('chunk must be a Uint8Array')
+    await exportJob.writeChunk(data)
   })
 
   ipcMain.handle('export:finish', async () => {
@@ -202,6 +222,24 @@ export function registerIpc(): void {
   })
 
   ipcMain.handle('app:displays', () => displayCount())
+  ipcMain.handle('app:settings-get', () => appSettings.get())
+  ipcMain.handle('app:settings-set', (_e, settings: AppSettings) => appSettings.set(settings))
+  ipcMain.handle('app:keep-awake', (e, on: boolean) => {
+    const contents = e.sender
+    const owner = contents.id
+    if (!awakeWindows.has(owner)) {
+      awakeWindows.add(owner)
+      // A closed window, a reloaded page or a crashed renderer gives up its requests
+      const release = (): void => awake.release(owner)
+      contents.on('did-navigate', release)
+      contents.on('render-process-gone', release)
+      contents.once('destroyed', () => {
+        awakeWindows.delete(owner)
+        release()
+      })
+    }
+    awake.set(owner, !!on)
+  })
   ipcMain.handle('present:start', (e) => {
     const win = windowOf(e)
     startPresentation(isPresentationWindow(win) ? undefined : win)

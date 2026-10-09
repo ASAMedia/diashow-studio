@@ -44,7 +44,25 @@ export interface QuadSpec {
   /** Darken by a 3D-ish shading factor 0..1. */
   shade?: number
   flipY?: boolean
+  /** Apply the show's colour look (photos and videos; not backgrounds or text). */
+  look?: boolean
+  /** Draw only one triangle of the quad: 1 = below the top-left/bottom-right diagonal, 2 = above it. */
+  tri?: 1 | 2
 }
+
+/** Colour look applied to media quads. */
+export interface Look {
+  saturation: number
+  contrast: number
+  brightness: number
+  warmth: number
+  tint: number
+  fade: number
+  mono: number
+  vignette: number
+}
+
+export const NEUTRAL_LOOK: Look = { saturation: 1, contrast: 1, brightness: 1, warmth: 0, tint: 0, fade: 0, mono: 0, vignette: 0 }
 
 export interface ShadowSpec {
   x: number
@@ -98,7 +116,25 @@ uniform float u_mono;
 uniform float u_shade;
 uniform float u_flipY;
 uniform float u_shadowBlur;
+uniform int u_look;
+uniform int u_tri;
+uniform vec4 u_lk1;  // saturation, contrast, brightness, warmth
+uniform vec4 u_lk2;  // tint, fade, mono, vignette
 out vec4 outColor;
+
+vec3 look(vec3 c, vec2 uv) {
+  c *= u_lk1.z;
+  c.r *= 1.0 + u_lk1.w * 0.08 + u_lk2.x * 0.02;
+  c.b *= 1.0 - u_lk1.w * 0.08 + u_lk2.x * 0.02;
+  c.g *= 1.0 - u_lk2.x * 0.03;
+  c = (c - 0.5) * u_lk1.y + 0.5;
+  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  c = mix(vec3(l), c, u_lk1.x);
+  c = mix(c, vec3(l), u_lk2.z);
+  c = mix(c, vec3(0.08, 0.07, 0.06) + c * 0.86, u_lk2.y);
+  c *= 1.0 - u_lk2.w * smoothstep(0.3, 0.75, length(uv - 0.5));
+  return clamp(c, 0.0, 1.0);
+}
 
 float roundedBox(vec2 p, vec2 b, float r) {
   vec2 q = abs(p) - b + vec2(r);
@@ -115,6 +151,8 @@ void main() {
     outColor = vec4(0.0, 0.0, 0.0, a * u_opacity);
     return;
   }
+  if (u_tri == 1 && v_uv.y < v_uv.x) discard;
+  if (u_tri == 2 && v_uv.y >= v_uv.x) discard;
   float alpha = 1.0;
   if (u_radius > 0.0) {
     float d = roundedBox(p, half_, u_radius);
@@ -129,6 +167,7 @@ void main() {
     uv = u_uv.xy + uv * u_uv.zw;
     c = u_blur > 0.0 ? texture(u_tex, uv, u_blur) : texture(u_tex, uv);
     c *= u_color;
+    if (u_look == 1) c.rgb = look(c.rgb, v_uv);
   }
   if (u_mono > 0.0) {
     float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
@@ -146,6 +185,49 @@ out vec2 v_uv;
 void main() {
   v_uv = a_pos;
   gl_Position = vec4(a_pos * 2.0 - 1.0, 0.0, 1.0);
+}`
+
+/**
+ * Packs the finished picture as I420 (BT.709, limited range, top row first) into an RGBA8
+ * target of W/4 x 1.5H texels, so a plain readPixels yields the planes FFmpeg expects:
+ * rows 0..H-1 hold Y (4 samples per texel), the next H/4 rows U, the last H/4 rows V
+ * (two chroma rows per texel row). Chroma is the mean of each 2x2 block.
+ */
+const YUV_FS = `#version 300 es
+precision highp float;
+precision highp int;
+uniform sampler2D u_src;
+uniform ivec2 u_size;
+out vec4 o;
+float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+vec3 px(int x, int top) { return texelFetch(u_src, ivec2(x, u_size.y - 1 - top), 0).rgb; }
+void main() {
+  int c = int(gl_FragCoord.x);
+  int r = int(gl_FragCoord.y);
+  int W = u_size.x;
+  int H = u_size.y;
+  vec4 v;
+  if (r < H) {
+    for (int i = 0; i < 4; i++) v[i] = (16.0 + 219.0 * luma(px(4 * c + i, r))) / 255.0;
+  } else {
+    int k = r - H;
+    int q = H / 4;
+    bool isV = k >= q;
+    if (isV) k -= q;
+    int split = W / 8;
+    bool second = c >= split;
+    int uy = 2 * k + (second ? 1 : 0);
+    int ux = 4 * (second ? c - split : c);
+    for (int i = 0; i < 4; i++) {
+      int x = 2 * (ux + i);
+      int y = 2 * uy;
+      vec3 m = (px(x, y) + px(x + 1, y) + px(x, y + 1) + px(x + 1, y + 1)) * 0.25;
+      float l = luma(m);
+      float ch = isV ? (m.r - l) / 1.5748 : (m.b - l) / 1.8556;
+      v[i] = (128.0 + 224.0 * ch) / 255.0;
+    }
+  }
+  o = v;
 }`
 
 /** Transition shaders: mix u_a (outgoing) and u_b (incoming) at progress u_p. */
@@ -288,6 +370,15 @@ export class Compositor {
   private uniforms = new Map<WebGLProgram, Map<string, WebGLUniformLocation | null>>()
   private fbos: Fbo[] = []
   private white: Tex
+  private lookParams: Look = NEUTRAL_LOOK
+  private yuvProg: WebGLProgram | null = null
+  private outFbo: Fbo | null = null
+  private yuvFbo: Fbo | null = null
+  private pbos: WebGLBuffer[] = []
+  private reads: { pbo: WebGLBuffer; fence: WebGLSync }[] = []
+  private nextPbo = 0
+  /** Export: post() draws into a texture instead of the canvas, for readYuv(). */
+  offscreen = false
 
   constructor(canvas: HTMLCanvasElement | OffscreenCanvas, preserve = false) {
     const gl = canvas.getContext('webgl2', {
@@ -324,10 +415,15 @@ export class Compositor {
     if (W === this.W && H === this.H && this.fbos.length) return
     this.W = W
     this.H = H
-    for (const f of this.fbos) {
+    for (const f of [...this.fbos, this.outFbo, this.yuvFbo]) {
+      if (!f) continue
       this.gl.deleteFramebuffer(f.fb)
       this.gl.deleteTexture(f.tex.tex)
     }
+    this.outFbo = this.yuvFbo = null
+    for (const b of this.pbos) this.gl.deleteBuffer(b)
+    this.pbos = []
+    this.reads = []
     this.fbos = [0, 1, 2].map(() => this.createFbo(W, H))
   }
 
@@ -373,6 +469,10 @@ export class Compositor {
     return { fb, tex }
   }
 
+  setLook(look: Look): void {
+    this.lookParams = look
+  }
+
   /** Render target 0 = scene, 1/2 = transition slides. */
   target(i: number | null, clear: [number, number, number] = [0, 0, 0]): void {
     const gl = this.gl
@@ -416,6 +516,11 @@ export class Compositor {
     gl.uniform1f(this.u(p, 'u_mono'), q.mono ?? 0)
     gl.uniform1f(this.u(p, 'u_shade'), q.shade ?? 0)
     gl.uniform1f(this.u(p, 'u_flipY'), q.flipY ? 1 : 0)
+    const lk = this.lookParams
+    gl.uniform1i(this.u(p, 'u_look'), q.look && tex ? 1 : 0)
+    gl.uniform1i(this.u(p, 'u_tri'), q.tri ?? 0)
+    gl.uniform4f(this.u(p, 'u_lk1'), lk.saturation, lk.contrast, lk.brightness, lk.warmth)
+    gl.uniform4f(this.u(p, 'u_lk2'), lk.tint, lk.fade, lk.mono, lk.vignette)
     gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_2D, (tex ?? this.white).tex)
     gl.uniform1i(this.u(p, 'u_tex'), 0)
@@ -440,6 +545,7 @@ export class Compositor {
     gl.uniform1f(this.u(p, 'u_radius'), s.radius ?? 0)
     gl.uniform1f(this.u(p, 'u_opacity'), s.opacity)
     gl.uniform1f(this.u(p, 'u_shadowBlur'), pad)
+    gl.uniform1i(this.u(p, 'u_tri'), 0)
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
   }
 
@@ -471,7 +577,8 @@ export class Compositor {
   post(src: Tex, pp: PostParams): void {
     const gl = this.gl
     const p = this.postProg
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    if (this.offscreen) this.outFbo ??= this.createFbo(this.W, this.H)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.offscreen ? this.outFbo!.fb : null)
     gl.viewport(0, 0, this.W, this.H)
     gl.disable(gl.BLEND)
     gl.useProgram(p)
@@ -494,6 +601,64 @@ export class Compositor {
     gl.uniform2f(this.u(p, 'u_res'), this.W, this.H)
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
     gl.enable(gl.BLEND)
+  }
+
+  /** Sizes readYuv() can pack: width a multiple of 8, height a multiple of 4. */
+  static yuvSupported(W: number, H: number): boolean {
+    return W % 8 === 0 && H % 4 === 0
+  }
+
+  /**
+   * Packs the last post() output (offscreen) as I420 (see YUV_FS) and starts reading it into a
+   * pixel buffer without waiting for the GPU. collectYuv() picks it up, ideally a frame later.
+   */
+  startYuv(): void {
+    const gl = this.gl
+    const { W, H } = this
+    if (!this.outFbo) throw new Error('startYuv needs offscreen rendering')
+    if (this.reads.length >= 2) throw new Error('collect the pending frames first')
+    const PW = W / 4
+    const PH = (H * 3) / 2
+    this.yuvFbo ??= this.createFbo(PW, PH)
+    this.yuvProg ??= compile(gl, FULL_VS, YUV_FS)
+    const p = this.yuvProg
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.yuvFbo.fb)
+    gl.viewport(0, 0, PW, PH)
+    gl.disable(gl.BLEND)
+    gl.useProgram(p)
+    gl.bindVertexArray(this.vao)
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, this.outFbo.tex.tex)
+    gl.uniform1i(this.u(p, 'u_src'), 0)
+    gl.uniform2i(this.u(p, 'u_size'), W, H)
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+    gl.enable(gl.BLEND)
+    const slot = this.nextPbo++ % 2
+    let pbo = this.pbos[slot]
+    if (!pbo) {
+      pbo = this.pbos[slot] = gl.createBuffer()!
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, pbo)
+      gl.bufferData(gl.PIXEL_PACK_BUFFER, PW * PH * 4, gl.STREAM_READ)
+    }
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, pbo)
+    gl.readPixels(0, 0, PW, PH, gl.RGBA, gl.UNSIGNED_BYTE, 0)
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    this.reads.push({ pbo, fence: gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0)! })
+    gl.flush()
+  }
+
+  /** Copies the oldest frame started with startYuv() into `out` (W*H*1.5 bytes). */
+  async collectYuv(out: Uint8Array): Promise<void> {
+    const gl = this.gl
+    const read = this.reads.shift()
+    if (!read) throw new Error('no frame pending')
+    // usually done already; otherwise let the GPU finish without blocking this thread
+    while (gl.clientWaitSync(read.fence, 0, 0) === gl.TIMEOUT_EXPIRED) await new Promise((r) => setTimeout(r, 0))
+    gl.deleteSync(read.fence)
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, read.pbo)
+    gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, out)
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null)
   }
 
   readPixels(out: Uint8Array): void {

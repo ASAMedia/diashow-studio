@@ -102,10 +102,12 @@ export function PresenterPanel() {
     }
     const off = window.api.onPresentClosed(() => set({ presenting: false }))
     void window.api.presentStart()
+    void window.api.keepAwake(true)
     return () => {
       off()
       ch.close()
       void window.api.presentStop()
+      void window.api.keepAwake(false)
     }
   }, [set])
 

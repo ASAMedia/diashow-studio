@@ -1,9 +1,13 @@
 // Video pipeline: thumbnail, extracted audio, and H.264 proxies Chromium can always play.
-import { rename, rm } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { mkdir, rename, rm, stat } from 'node:fs/promises'
+import { join } from 'node:path'
 import sharp from 'sharp'
 import type { EncoderInfo } from '@shared/types'
 import { FfmpegError, type Ffmpeg } from '../ffmpeg'
+import type { GpuTonemap } from './hdr'
 import { THUMB_MAX } from './photo'
+import { createLimiter } from './queue'
 import type { VideoInfo } from './videoInfo'
 
 export const PROXY_MAX = 1920
@@ -11,6 +15,55 @@ export const PROXY_MAX = 1920
 /** HDR (PQ/HLG) → SDR BT.709, limited range 8-bit 4:2:0. */
 export const TONEMAP_CHAIN =
   'zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p'
+
+/**
+ * libplacebo settings that reproduce TONEMAP_CHAIN on the GPU. Tuned on grey ramps and real phone
+ * clips: HLG within ~4/255 mean difference; for PQ, Reinhard follows the CPU curve up to ~600 nits
+ * and then rolls highlights off where the CPU chain clips them. Dolby Vision RPUs are ignored like
+ * on the CPU (iPhone profile 8.4 is HLG-compatible).
+ */
+const GPU_TONEMAP: Record<'hlg' | 'pq', string> = {
+  hlg: 'tonemapping=hable:peak_detect=0:gamut_mode=clip:gamma=1.25:saturation=1.05',
+  pq: 'tonemapping=reinhard:peak_detect=0:gamut_mode=clip'
+}
+
+/** Input options for the GPU path: Vulkan device (+ hardware decoding into it). */
+export function gpuInputArgs(gpu: GpuTonemap): string[] {
+  const args =
+    gpu.decode === 'cuda'
+      ? ['-init_hw_device', 'cuda=cu', '-init_hw_device', 'vulkan=vk@cu', '-filter_hw_device', 'vk', '-hwaccel', 'cuda', '-hwaccel_device', 'cu', '-hwaccel_output_format', 'cuda']
+      : ['-init_hw_device', `vulkan=vk:${gpu.device}`, '-filter_hw_device', 'vk']
+  if (gpu.decode === 'vulkan') args.push('-hwaccel', 'vulkan', '-hwaccel_device', 'vk', '-hwaccel_output_format', 'vulkan')
+  // libplacebo rotates; the display matrix must neither trigger autorotation nor end up in the proxy
+  args.push('-display_rotation', '0')
+  return args
+}
+
+/**
+ * GPU version of videoFilter for HDR sources: scaling, rotation and tone mapping in one libplacebo
+ * pass, 8-bit 4:2:0 BT.709 limited range out. Frames the decoder could not keep on the GPU
+ * (unsupported profile) arrive in system memory and are uploaded by libplacebo itself.
+ */
+export function gpuVideoFilter(info: VideoInfo, maxEdge: number, gpu: GpuTonemap, opts: { fps?: number; shaderCache?: boolean } = {}): string {
+  if (!info.hdr) throw new Error('gpuVideoFilter is for HDR sources')
+  const [w, h] = fitEven(info.width, info.height, maxEdge)
+  const parts: string[] = []
+  if (opts.fps) parts.push(`fps=${fpsRational(opts.fps)}`)
+  if (gpu.decode === 'cuda') parts.push('hwupload')
+  // shader_cache is a file name prefix relative to FFmpeg's working directory (no path escaping needed)
+  parts.push(
+    `libplacebo=w=${w}:h=${h}:rotate=${info.rotation}:${GPU_TONEMAP[info.hdr]}:apply_dolbyvision=0` +
+      ':colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv:format=yuv420p' +
+      (opts.shaderCache ? ':shader_cache=pl' : '')
+  )
+  parts.push('setsar=1')
+  return parts.join(',')
+}
+
+/** HDR sources the GPU path handles; interlaced ones keep the CPU chain (bwdif). */
+export function gpuEligible(info: VideoInfo): boolean {
+  return !!info.hdr && !info.interlaced
+}
 
 /** Scales (w, h) so the long edge is <= max (never upscales) with even dimensions. */
 export function fitEven(w: number, h: number, max: number): [number, number] {
@@ -65,22 +118,42 @@ export interface ProxyOptions {
   encoders?: EncoderInfo
   /** Long edge limit, default PROXY_MAX (export uses up to 3840). */
   maxEdge?: number
+  /** GPU tone mapping for HDR sources (detectGpuTonemap); null/undefined = CPU chain only. */
+  gpu?: GpuTonemap | null
+  /** Folder for libplacebo's compiled shaders: saves ~0.3 s of start-up per GPU transcode. */
+  shaderCache?: string
+}
+
+export interface ProxyResult {
+  encoder: string
+  /** HDR sources: where the tone mapping ran. */
+  tonemap?: 'gpu' | 'cpu'
 }
 
 /**
  * Transcodes to an H.264 High 8-bit yuv420p MP4 (long edge <= maxEdge (1920), CFR <= 60 fps, ~1 s GOP,
- * rotation baked in, HDR tone-mapped, no audio). A failing hardware encoder is retried with libx264.
+ * rotation baked in, HDR tone-mapped, no audio). HDR sources try the GPU path first; any failure
+ * falls back to the CPU chain, and a failing hardware encoder is retried with libx264.
  */
-export async function transcodeProxy(ff: Ffmpeg, src: string, info: VideoInfo, out: string, opts: ProxyOptions = {}): Promise<string> {
+export async function transcodeProxy(ff: Ffmpeg, src: string, info: VideoInfo, out: string, opts: ProxyOptions = {}): Promise<ProxyResult> {
   const fps = info.proxyFps
-  const vf = videoFilter(info, opts.maxEdge ?? PROXY_MAX, { fps })
+  const maxEdge = opts.maxEdge ?? PROXY_MAX
+  const vf = videoFilter(info, maxEdge, { fps })
   const colorTags = info.hdr ? ['-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709', '-color_range', 'tv'] : []
   const tmp = `${out}.part.mp4`
   const hw = opts.encoders?.hardware.h264
   const order = hw ? [hw, 'libx264'] : ['libx264']
+  const attempts: Array<{ input: string[]; vf: string; encoder: string; gpu: boolean }> = []
+  const shaderCache = opts.shaderCache && existsSync(opts.shaderCache) ? opts.shaderCache : undefined
+  if (opts.gpu && gpuEligible(info)) {
+    const gpuVf = gpuVideoFilter(info, maxEdge, opts.gpu, { fps, shaderCache: !!shaderCache })
+    attempts.push({ input: gpuInputArgs(opts.gpu), vf: gpuVf, encoder: order[0], gpu: true })
+  }
+  for (const encoder of order) attempts.push({ input: [], vf, encoder, gpu: false })
   let lastErr: unknown
-  for (const encoder of order) {
+  for (const { input, vf, encoder, gpu } of attempts) {
     const args = [
+      ...input,
       '-i', src,
       '-map', `0:${info.stream.index}`,
       '-vf', vf,
@@ -98,10 +171,11 @@ export async function transcodeProxy(ff: Ffmpeg, src: string, info: VideoInfo, o
     try {
       await ff.run(args, {
         signal: opts.signal,
+        cwd: gpu ? shaderCache : undefined,
         onProgress: (s) => opts.onProgress?.(info.duration > 0 ? Math.min(1, Math.max(0, s / info.duration)) : 0)
       })
       await rename(tmp, out)
-      return encoder
+      return info.hdr ? { encoder, tonemap: gpu ? 'gpu' : 'cpu' } : { encoder }
     } catch (err) {
       lastErr = err
       await rm(tmp, { force: true })
@@ -142,4 +216,82 @@ export async function extractAudio(ff: Ffmpeg, src: string, info: VideoInfo, out
     await rm(tmp, { force: true })
     throw err
   }
+}
+
+/** Strip frames run as separate FFmpeg processes, a few at a time across all strips. */
+const stripLimit = createLimiter(4)
+
+/** Even width for a frame `height` px high with the display aspect of the video. */
+export function stripWidth(info: VideoInfo, height: number): number {
+  return Math.max(2, Math.round((height * info.width) / Math.max(1, info.height) / 2) * 2)
+}
+
+/** File names of a strip's frames: dir/000.jpg, dir/001.jpg, … */
+export function stripFiles(dir: string, count: number): string[] {
+  return Array.from({ length: count }, (_, i) => join(dir, `${String(i).padStart(3, '0')}.jpg`))
+}
+
+/** Seconds of frame i of a strip with `count` frames: centres of equal slices of the duration. */
+export function stripTimes(duration: number, count: number): number[] {
+  return Array.from({ length: count }, (_, i) => (duration > 0 ? (duration * (i + 0.5)) / count : 0))
+}
+
+/**
+ * `count` JPEG frames `height` px high (even width, rotation applied, HDR tone-mapped), spread evenly
+ * over the video, written as dir/000.jpg… One FFmpeg process per frame seeking with -ss before -i,
+ * so even very long files cost a few hundred ms per frame; when the frames are >= 5 s apart the seek
+ * stops at the nearest keyframe instead of decoding up to the exact time.
+ */
+export async function videoStrip(
+  ff: Ffmpeg,
+  src: string,
+  info: VideoInfo,
+  count: number,
+  height: number,
+  dir: string,
+  signal?: AbortSignal
+): Promise<string[]> {
+  const w = stripWidth(info, height)
+  const parts: string[] = []
+  if (info.interlaced) parts.push('bwdif=mode=send_frame')
+  parts.push(`scale=${w}:${height}:flags=bicubic`)
+  if (info.hdr) parts.push(TONEMAP_CHAIN)
+  // MJPEG wants full-range YUV
+  parts.push('scale=out_range=pc,format=yuvj420p')
+  const vf = parts.join(',')
+  const keyframes = info.duration / Math.max(1, count) >= 5
+  await mkdir(dir, { recursive: true })
+  const files = stripFiles(dir, count)
+  const grab = async (at: number, out: string): Promise<boolean> => {
+    const tmp = `${out}.part`
+    await ff.run([
+      '-threads', '2',
+      ...(keyframes ? ['-noaccurate_seek'] : []),
+      '-ss', at.toFixed(3),
+      '-i', src,
+      '-map', `0:${info.stream.index}`,
+      '-frames:v', '1',
+      '-vf', vf,
+      '-c:v', 'mjpeg', '-q:v', '4',
+      '-f', 'mjpeg', tmp
+    ], { signal })
+    // Past the end FFmpeg succeeds but writes an empty file
+    if (!(await stat(tmp).then((st) => st.size > 0, () => false))) {
+      await rm(tmp, { force: true })
+      return false
+    }
+    await rename(tmp, out)
+    return true
+  }
+  const times = stripTimes(info.duration, count)
+  await Promise.all(
+    files.map((out, i) =>
+      stripLimit(async () => {
+        if (signal?.aborted) throw new Error('cancelled')
+        // Damaged tails or odd durations: nothing decodable at that time, take the first frame
+        if (!(await grab(times[i], out)) && !(await grab(0, out))) throw new Error('no video frame')
+      })
+    )
+  )
+  return files
 }

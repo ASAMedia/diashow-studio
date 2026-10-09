@@ -1,6 +1,7 @@
 import { FileUp, FolderOpen, Plus, Trash2, Play } from 'lucide-react'
 import { mediaUrl } from '@shared/api'
 import { useStore } from '../store'
+import { Tip } from './Settings'
 import { localeTag, t } from '../i18n'
 
 export function Home() {
@@ -40,6 +41,7 @@ export function Home() {
           <Plus size={15} /> {t('newProject')}
         </button>
       </div>
+      <Tip id="home">{t('onboardHome')}</Tip>
       <div className="drop">
         <FolderOpen size={28} style={{ opacity: 0.6 }} />
         <div style={{ marginTop: 8 }}>{projects.length ? t('dropHere') : t('noProjects')}</div>

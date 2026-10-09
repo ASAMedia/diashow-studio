@@ -89,10 +89,13 @@ export function buildTimeline(project: Project, locale = 'de-DE'): Timeline {
   const aspect = aspectValue(settings.aspect)
   const byId = new Map(project.media.map((m) => [m.id, m]))
   const usable = project.entries.filter((e) => e.type === 'text' || byId.get(e.mediaId)?.status !== 'error')
+  const maxClip = settings.maxVideoSeconds && settings.maxVideoSeconds > 0 ? settings.maxVideoSeconds : Infinity
   const span = (e: VideoEntry, m: MediaItem): { trimIn: number; trimOut: number } => {
     const len = m.duration ?? 0
     const trimIn = Math.min(Math.max(0, e.trimIn ?? 0), Math.max(0, len - 0.5))
-    return { trimIn, trimOut: Math.max(trimIn + 0.5, Math.min(len || trimIn + 0.5, e.trimOut ?? len)) }
+    // the show's maximum video length counts from the clip's start point
+    const out = Math.min(len || trimIn + 0.5, e.trimOut ?? len, trimIn + maxClip)
+    return { trimIn, trimOut: Math.max(trimIn + 0.5, out) }
   }
   const playsLive = (e: Entry): boolean =>
     e.type === 'photo' && !!byId.get(e.mediaId)?.live && (e.playLive ?? settings.playLivePhotos)

@@ -159,6 +159,54 @@ export const THEMES: ThemeMeta[] = [
     defaultLook: 'faded',
     cropEdit: true,
     textAsCaption: false
+  },
+  {
+    id: 'scrapbook',
+    name: { de: 'Sammelalbum', en: 'Scrapbook' },
+    description: { de: 'Abzüge mit Klebestreifen auf Packpapier, Texte in Handschrift', en: 'Taped prints on kraft paper with handwritten notes' },
+    maxPerSlide: 3,
+    pattern: [1, 2, 3, 2, 1, 3],
+    photoSeconds: 4,
+    transition: 1.2,
+    kenBurns: false,
+    freeTransition: false,
+    scaleOption: false,
+    titleSlide: true,
+    defaultLook: 'warm',
+    cropEdit: false,
+    textAsCaption: true
+  },
+  {
+    id: 'snapshots',
+    name: { de: 'Schnappschüsse', en: 'Snapshots' },
+    description: { de: 'Sofortbilder, die auf einem Holztisch landen und sich stapeln', en: 'Instant photos landing on a wooden table' },
+    maxPerSlide: 1,
+    pattern: [1],
+    photoSeconds: 3.5,
+    transition: 1.1,
+    kenBurns: false,
+    freeTransition: false,
+    scaleOption: false,
+    titleSlide: true,
+    defaultLook: 'natural',
+    cropEdit: false,
+    textAsCaption: true
+  },
+  {
+    id: 'shatter',
+    name: { de: 'Splitter', en: 'Shatter' },
+    description: { de: 'Das Bild zerspringt in Scherben und gibt das nächste frei', en: 'The picture shatters to reveal the next one' },
+    maxPerSlide: 1,
+    pattern: [1],
+    photoSeconds: 3.5,
+    transition: 1.1,
+    kenBurns: false,
+    freeTransition: false,
+    scaleOption: true,
+    titleSlide: false,
+    defaultLook: 'natural',
+    cropEdit: true,
+    textAsCaption: false
   }
 ]
 

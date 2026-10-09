@@ -12,6 +12,8 @@ if (process.env.DIASHOW_DATA_DIR) {
   app.setPath('userData', join(process.env.DIASHOW_DATA_DIR, 'userData'))
   app.setPath('documents', join(process.env.DIASHOW_DATA_DIR, 'documents'))
 }
+// CI runners have no GPU: WebGL then runs on SwiftShader.
+if (process.env.DIASHOW_SOFTWARE_GL) app.commandLine.appendSwitch('enable-unsafe-swiftshader')
 
 protocol.registerSchemesAsPrivileged([
   { scheme: MEDIA_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true, bypassCSP: true } }

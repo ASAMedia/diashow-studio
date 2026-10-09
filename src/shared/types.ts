@@ -48,6 +48,8 @@ export interface MediaItem {
   sharpness?: number
   /** Photos (and video thumbnails): 64-bit difference hash as 16 hex chars, for duplicate detection. */
   hash?: string
+  /** Videos with sound: integrated loudness of the audio in LUFS (EBU R128). */
+  loudness?: number
 }
 
 export interface MusicTrack {
@@ -63,6 +65,8 @@ export interface MusicTrack {
   /** Beat times in seconds from the start of the track, and the detected tempo. */
   beats?: number[]
   bpm?: number
+  /** Integrated loudness in LUFS (EBU R128). */
+  loudness?: number
 }
 
 /** Normalised rectangle (0..1) inside a source image. */
@@ -142,6 +146,9 @@ export type ThemeId =
   | 'classic'
   | 'magazine'
   | 'retro'
+  | 'scrapbook'
+  | 'snapshots'
+  | 'shatter'
 
 export type LookId = 'natural' | 'vivid' | 'warm' | 'cool' | 'dramatic' | 'mono' | 'noir' | 'faded'
 
@@ -178,9 +185,11 @@ export interface AudioSettings {
   repeatMusic: boolean
   /** Crossfade between consecutive songs, seconds. */
   crossfade: number
+  /** Bring songs and video sound to the same loudness. */
+  normalize?: boolean
 }
 
-export type TextFont = 'theme' | 'sans' | 'rounded' | 'caption' | 'display' | 'serif' | 'editorial' | 'type'
+export type TextFont = 'theme' | 'sans' | 'rounded' | 'caption' | 'display' | 'serif' | 'editorial' | 'type' | 'hand'
 export type TextPosition = 'theme' | 'bottom-left' | 'bottom-center' | 'bottom-right' | 'top-left' | 'center'
 
 /** Overrides for titles and captions; 'theme' keeps the theme's own choice. */
@@ -212,6 +221,8 @@ export interface ProjectSettings {
   titleText?: string
   subtitleText?: string
   text?: TextStyle
+  /** Longest stretch of a video that plays (seconds); 0 or undefined = whole clip. */
+  maxVideoSeconds?: number
 }
 
 export const DEFAULT_TEXT_STYLE: TextStyle = { font: 'theme', scale: 1, color: '', position: 'theme', uppercase: 'theme' }
@@ -276,6 +287,34 @@ export interface ExportOptions {
   /** Use NVENC / QSV / AMF when available. */
   hardware: boolean
   audio: AudioPlan
+  /**
+   * 'rgba': raw frames through exportFrame (FFmpeg encodes). 'h264' / 'hevc': the renderer
+   * encodes with WebCodecs and sends an Annex B elementary stream through exportChunk
+   * (FFmpeg only muxes it with the audio).
+   */
+  input?: 'rgba' | 'yuv' | 'h264' | 'hevc'
+}
+
+export interface CacheInfo {
+  dir: string
+  /** Bytes. */
+  total: number
+  parts: { thumbs: number; display: number; proxies: number; hires: number; audio: number; other: number }
+  /** Cache of media no saved project uses any more. */
+  unused: number
+  unusedItems: number
+}
+
+export interface BackupInfo {
+  file: string
+  savedAt: number
+  slideCount: number
+}
+
+/** App-wide settings (not per project). */
+export interface AppSettings {
+  /** Kiosk: open this project fullscreen in a loop when the app starts. */
+  kioskProjectId?: string | null
 }
 
 export interface EncoderInfo {
@@ -312,6 +351,7 @@ export const DEFAULT_SETTINGS: ProjectSettings = {
     fadeIn: 1,
     fadeOut: 3,
     repeatMusic: true,
-    crossfade: 2
+    crossfade: 2,
+    normalize: true
   }
 }

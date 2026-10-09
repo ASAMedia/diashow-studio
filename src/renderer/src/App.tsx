@@ -11,6 +11,7 @@ import { Filmstrip } from './components/Filmstrip'
 import { ExportDialog } from './components/ExportDialog'
 import { FullscreenPlayer } from './components/FullscreenPlayer'
 import { PackDialog, RejectsDialog } from './components/Dialogs'
+import { BackupsDialog, HelpDialog, MissingBanner, SettingsDialog, Tip } from './components/Settings'
 import { PresenterPanel } from './components/Presentation'
 
 /** Routes dropped files: audio goes to the playlist, everything else into the show. */
@@ -39,6 +40,16 @@ export function App() {
     void useStore.getState().loadProjects()
     const offMedia = wireMediaUpdates()
     const offFaces = startFaceQueue()
+    // kiosk mode: open the chosen show fullscreen in a loop right away
+    void window.api.getAppSettings().catch(() => ({}) as { kioskProjectId?: string }).then(async (s) => {
+      if (!s.kioskProjectId) return
+      try {
+        await useStore.getState().openProject(s.kioskProjectId)
+        useStore.getState().set({ fullscreen: true, kiosk: true })
+      } catch {
+        // the project was deleted; start normally
+      }
+    })
     return () => {
       offMedia()
       offFaces()
@@ -86,6 +97,15 @@ export function App() {
       const target = e.target as HTMLElement
       if (target.closest('input, textarea, select')) return
       const s = useStore.getState()
+      if (e.key === 'F1') {
+        e.preventDefault()
+        s.set({ dialog: s.dialog === 'help' ? null : 'help' })
+        return
+      }
+      if (e.key === 'Escape' && s.dialog) {
+        s.set({ dialog: null })
+        return
+      }
       if (s.view !== 'editor' || s.fullscreen || s.exportOpen || s.presenting || s.dialog) return
       const p = playerRef.current
       if (e.ctrlKey && !e.altKey && (e.key === 'z' || e.key === 'Z' || e.key === 'y' || e.key === 'Y')) {
@@ -113,6 +133,10 @@ export function App() {
         <Home />
       ) : (
         <div className="editor">
+          <div className="notices">
+            <MissingBanner />
+            <Tip id="editor">{t('onboardEditor')}</Tip>
+          </div>
           <div className="workspace">
             <Viewer />
             <Inspector />
@@ -124,6 +148,9 @@ export function App() {
       {fullscreen && <FullscreenPlayer />}
       {dialog === 'rejects' && <RejectsDialog />}
       {dialog === 'pack' && <PackDialog />}
+      {dialog === 'settings' && <SettingsDialog />}
+      {dialog === 'backups' && <BackupsDialog />}
+      {dialog === 'help' && <HelpDialog />}
       {presenting && <PresenterPanel />}
       {dragging && <div className="window-drop">{t('dropHere')}</div>}
     </div>
