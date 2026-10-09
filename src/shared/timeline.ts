@@ -1,0 +1,213 @@
+// Turns a project into a timed sequence of slides. Pure and deterministic: the editor
+// preview, the fullscreen player and the export all use the same result.
+import type { AspectRatio, Entry, MediaItem, Project, TextEntry, VideoEntry } from './types'
+import { classicTransitionSeconds, themeMeta } from './themes'
+import { groupEntries, mediaAspect, pickTemplate, type Template } from './layout'
+
+export type SlideKind = 'photos' | 'video' | 'text' | 'title'
+
+export interface TimelineSlide {
+  /** Id of the first entry ('title' for the generated title slide). */
+  id: string
+  index: number
+  kind: SlideKind
+  entries: Entry[]
+  /** Media of each entry (photos/video), aligned with entries. */
+  media: MediaItem[]
+  template?: Template
+  start: number
+  duration: number
+  /** Overlap with the previous / next slide (transition time). */
+  transIn: number
+  transOut: number
+  customDuration: boolean
+  /** Video slide: source time at slide start, and the playable span. */
+  video?: { trimIn: number; trimOut: number }
+  /** Photo slide playing a Live/Motion photo first. */
+  live?: { duration: number }
+  /** Title drawn over this slide (themes without a separate title slide). */
+  titleOverlay?: boolean
+  title?: { text: string; subtitle?: string }
+}
+
+export interface Timeline {
+  slides: TimelineSlide[]
+  duration: number
+  /** Computed seconds for an automatic single-photo slide. */
+  photoSeconds: number
+  musicDuration: number
+  /** Output aspect ratio as width / height. */
+  aspect: number
+}
+
+export const MIN_PHOTO_SECONDS = 1.5
+export const MAX_PHOTO_SECONDS = 30
+const TEXT_SECONDS = 3.5
+
+export function aspectValue(a: AspectRatio): number {
+  const [w, h] = a.split(':').map(Number)
+  return w / h
+}
+
+/** Playlist length including crossfades between songs. */
+export function musicLength(project: Project): number {
+  const tracks = project.music.filter((t) => t.status !== 'error' && t.duration > 0)
+  if (tracks.length === 0) return 0
+  const total = tracks.reduce((s, t) => s + t.duration, 0)
+  return Math.max(0, total - project.settings.audio.crossfade * (tracks.length - 1))
+}
+
+export function formatDateRange(media: MediaItem[], locale = 'de-DE'): string {
+  const times = media.map((m) => m.captureTime).filter((t) => t > 0)
+  if (times.length === 0) return ''
+  const fmt = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', year: 'numeric' })
+  const a = Math.min(...times)
+  const b = Math.max(...times)
+  const da = fmt.format(a)
+  const db = fmt.format(b)
+  return da === db ? da : `${da} – ${db}`
+}
+
+interface Draft {
+  slide: Omit<TimelineSlide, 'start' | 'duration' | 'transIn' | 'transOut'>
+  fixed?: number
+  weight: number
+  /** Bounds for automatic slides (live photo motion, clip length). */
+  min: number
+  max?: number
+}
+
+export function buildTimeline(project: Project, locale = 'de-DE'): Timeline {
+  const { settings } = project
+  const meta = themeMeta(settings.theme)
+  const aspect = aspectValue(settings.aspect)
+  const byId = new Map(project.media.map((m) => [m.id, m]))
+  const usable = project.entries.filter((e) => e.type === 'text' || byId.get(e.mediaId)?.status !== 'error')
+  const playsLive = (e: Entry): boolean =>
+    e.type === 'photo' && !!byId.get(e.mediaId)?.live && (e.playLive ?? settings.playLivePhotos)
+
+  const drafts: Draft[] = []
+  if (settings.showTitle) {
+    const title = {
+      text: settings.titleText?.trim() || project.name,
+      subtitle: settings.subtitleText ?? formatDateRange(project.media, locale)
+    }
+    if (meta.titleSlide || usable.length === 0) {
+      drafts.push({ slide: { id: 'title', index: 0, kind: 'title', entries: [], media: [], customDuration: false, title }, fixed: TEXT_SECONDS, weight: 0, min: 0 })
+    } else {
+      // remembered and attached to the first content slide below
+      drafts.push({ slide: { id: '__pending_title', index: 0, kind: 'title', entries: [], media: [], customDuration: false, title }, fixed: 0, weight: 0, min: 0 })
+    }
+  }
+
+  const entryAspect = (e: Entry): number => mediaAspect(e.type === 'text' ? undefined : byId.get(e.mediaId))
+  for (const g of groupEntries(usable, settings.theme, playsLive, entryAspect)) {
+    const first = g.entries[0]
+    if (first.type === 'text') {
+      const e = first as TextEntry
+      drafts.push({
+        slide: { id: e.id, index: 0, kind: 'text', entries: [e], media: [], customDuration: e.duration != null, title: { text: e.title, subtitle: e.subtitle } },
+        fixed: e.duration ?? TEXT_SECONDS,
+        weight: 0,
+        min: 0
+      })
+    } else if (first.type === 'video') {
+      const e = first as VideoEntry
+      const m = byId.get(e.mediaId)!
+      const len = m.duration ?? 0
+      const trimIn = Math.min(Math.max(0, e.trimIn ?? 0), Math.max(0, len - 0.5))
+      const trimOut = Math.max(trimIn + 0.5, Math.min(len || trimIn + 0.5, e.trimOut ?? len))
+      const clip = trimOut - trimIn
+      const slide = { id: e.id, index: 0, kind: 'video' as const, entries: [e], media: [m], customDuration: e.duration != null, video: { trimIn, trimOut } }
+      if (e.duration != null) drafts.push({ slide, fixed: Math.min(e.duration, clip), weight: 0, min: 0 })
+      else if (settings.playFullVideos) drafts.push({ slide, fixed: Math.max(1, clip), weight: 0, min: 0 })
+      else drafts.push({ slide, weight: 1, min: Math.min(1, clip), max: clip })
+    } else {
+      const media = g.entries.map((e) => byId.get((e as { mediaId: string }).mediaId)!)
+      const template = g.entries.length > 1 ? pickTemplate(media.map(mediaAspect), aspect) : undefined
+      const live = playsLive(first) ? { duration: media[0].live!.duration } : undefined
+      const custom = g.entries.length === 1 && first.duration != null
+      drafts.push({
+        slide: { id: first.id, index: 0, kind: 'photos', entries: g.entries, media, template, customDuration: custom, live },
+        fixed: custom ? first.duration : undefined,
+        weight: 1 + 0.4 * (g.entries.length - 1),
+        min: live ? live.duration + 0.8 : 0
+      })
+    }
+  }
+
+  // Attach a pending title overlay to the first content slide.
+  const pending = drafts.findIndex((d) => d.slide.id === '__pending_title')
+  if (pending >= 0) {
+    const [p] = drafts.splice(pending, 1)
+    const target = drafts[pending]
+    if (target) {
+      target.slide.titleOverlay = true
+      target.slide.title = p.slide.title
+      target.min = Math.max(target.min, 3)
+    }
+  }
+
+  const musicDuration = musicLength(project)
+  const target =
+    settings.timing.mode === 'custom' ? settings.timing.customTotal : musicDuration > 0 ? musicDuration : undefined
+  const transitionFor = (): number =>
+    meta.freeTransition ? classicTransitionSeconds(settings.transition.speed) : meta.transition
+
+  const durationsFor = (p: number): number[] =>
+    drafts.map((d) => (d.fixed != null ? d.fixed : Math.min(d.max ?? Infinity, Math.max(d.min, p * d.weight))))
+  const overlaps = (dur: number[]): number[] =>
+    dur.slice(0, -1).map((d, i) => Math.min(transitionFor(), 0.45 * d, 0.45 * dur[i + 1]))
+  const lengthFor = (p: number): number => {
+    const dur = durationsFor(p)
+    return dur.reduce((s, d) => s + d, 0) - overlaps(dur).reduce((s, d) => s + d, 0)
+  }
+
+  let p = meta.photoSeconds
+  const autoWeight = drafts.reduce((s, d) => s + (d.fixed == null ? d.weight : 0), 0)
+  if (target != null && autoWeight > 0) {
+    // length is monotonic in p, so bisect
+    let lo = MIN_PHOTO_SECONDS
+    let hi = MAX_PHOTO_SECONDS
+    if (lengthFor(lo) >= target) p = lo
+    else if (lengthFor(hi) <= target) p = hi
+    else {
+      for (let i = 0; i < 40; i++) {
+        const mid = (lo + hi) / 2
+        if (lengthFor(mid) < target) lo = mid
+        else hi = mid
+      }
+      p = (lo + hi) / 2
+    }
+  }
+
+  const dur = durationsFor(p)
+  const ov = overlaps(dur)
+  const slides: TimelineSlide[] = []
+  let t = 0
+  drafts.forEach((d, i) => {
+    slides.push({ ...d.slide, index: i, start: t, duration: dur[i], transIn: i > 0 ? ov[i - 1] : 0, transOut: ov[i] ?? 0 })
+    t += dur[i] - (ov[i] ?? 0)
+  })
+  const duration = slides.length ? slides[slides.length - 1].start + slides[slides.length - 1].duration : 0
+  return { slides, duration, photoSeconds: p, musicDuration, aspect }
+}
+
+/** Slides visible at time t (one, or two during a transition), in drawing order. */
+export function slidesAt(tl: Timeline, t: number): TimelineSlide[] {
+  const out: TimelineSlide[] = []
+  for (const s of tl.slides) {
+    if (s.start > t) break
+    if (t < s.start + s.duration) out.push(s)
+  }
+  return out
+}
+
+export function slideIndexAt(tl: Timeline, t: number): number {
+  let idx = 0
+  for (const s of tl.slides) {
+    if (s.start <= t + 1e-6) idx = s.index
+    else break
+  }
+  return idx
+}

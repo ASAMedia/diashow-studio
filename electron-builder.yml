@@ -1,0 +1,29 @@
+appId: de.asamedia.diashowstudio
+productName: Diashow Studio
+directories:
+  buildResources: resources
+  output: dist
+files:
+  - out/**
+  - package.json
+asarUnpack:
+  - node_modules/sharp/**
+  - node_modules/@img/**
+  - node_modules/exiftool-vendored*/**
+  # loaded by a worker thread via dynamic import(), which cannot read from app.asar
+  - node_modules/libraw-wasm/**
+extraResources:
+  - from: vendor/ffmpeg/bin
+    to: ffmpeg
+    filter: ['*.exe', '*.dll']
+win:
+  target: [nsis, portable]
+  artifactName: ${productName}-${version}-${arch}.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+fileAssociations:
+  - ext: dshow
+    name: Diashow Studio project
+    description: Diashow Studio project

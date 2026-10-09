@@ -1,0 +1,183 @@
+import type { MediaItem, PhotoEntry, Rect } from '@shared/types'
+import type { TimelineSlide } from '@shared/timeline'
+import type { QuadSpec, Tex, UvRect } from './gl'
+import type { Ctx, SlideState } from './types'
+import type { TextSpec } from './media'
+
+export const clamp01 = (v: number): number => Math.min(1, Math.max(0, v))
+export const lerp = (a: number, b: number, t: number): number => a + (b - a) * t
+export const easeInOut = (t: number): number => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
+export const easeOut = (t: number): number => 1 - Math.pow(1 - clamp01(t), 3)
+export const easeIn = (t: number): number => Math.pow(clamp01(t), 3)
+export const smooth = (t: number): number => {
+  const x = clamp01(t)
+  return x * x * (3 - 2 * x)
+}
+
+/** Deterministic pseudo random generator seeded by a string. */
+export function rng(seed: string): () => number {
+  let h = 2166136261
+  for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619)
+  return () => {
+    h += 0x6d2b79f5
+    let x = h
+    x = Math.imul(x ^ (x >>> 15), x | 1)
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61)
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+export interface Box {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/** Largest centred crop of a media item with the given aspect, as a normalised rect. */
+export function coverRect(mediaAspect: number, boxAspect: number): Rect {
+  if (mediaAspect > boxAspect) {
+    const w = boxAspect / mediaAspect
+    return { x: (1 - w) / 2, y: 0, w, h: 1 }
+  }
+  const h = mediaAspect / boxAspect
+  return { x: 0, y: (1 - h) / 2, w: 1, h }
+}
+
+export function containBox(mediaAspect: number, box: Box): Box {
+  const ba = box.w / box.h
+  if (mediaAspect > ba) {
+    const h = box.w / mediaAspect
+    return { x: box.x, y: box.y + (box.h - h) / 2, w: box.w, h }
+  }
+  const w = box.h * mediaAspect
+  return { x: box.x + (box.w - w) / 2, y: box.y, w, h: box.h }
+}
+
+export function aspectOf(m: MediaItem | undefined, tex?: Tex | null): number {
+  if (m && m.width > 0 && m.height > 0) return m.width / m.height
+  return tex ? tex.w / tex.h : 1.5
+}
+
+/** Default Ken Burns motion: zoom in or out and drift in a direction picked from the seed. */
+export function defaultKenBurns(mediaAspect: number, frameAspect: number, seed: string): { start: Rect; end: Rect } {
+  const full = coverRect(mediaAspect, frameAspect)
+  const r = rng(seed)
+  const zoom = 0.82 + r() * 0.06
+  const small = { w: full.w * zoom, h: full.h * zoom }
+  const portraitInWide = mediaAspect < frameAspect * 0.8
+  let sx: number, sy: number
+  if (portraitInWide) {
+    // pan from top to bottom (or the reverse) through a tall photo
+    sx = full.x + (full.w - small.w) / 2
+    sy = r() < 0.5 ? full.y : full.y + full.h - small.h
+  } else {
+    sx = full.x + (full.w - small.w) * r()
+    sy = full.y + (full.h - small.h) * r()
+  }
+  const inner = { x: sx, y: sy, ...small }
+  return r() < 0.5 ? { start: full, end: inner } : { start: inner, end: full }
+}
+
+export function lerpRect(a: Rect, b: Rect, t: number): Rect {
+  return { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t), w: lerp(a.w, b.w, t), h: lerp(a.h, b.h, t) }
+}
+
+export function kenBurnsUv(entry: PhotoEntry, m: MediaItem, frameAspect: number, t: number): UvRect {
+  const kb = entry.kenBurns ?? defaultKenBurns(aspectOf(m), frameAspect, entry.id)
+  return lerpRect(kb.start, kb.end, easeInOut(clamp01(t)))
+}
+
+/** Texture for entry i of a slide: video frame, live photo motion, or still image. */
+export function slideTexture(ctx: Ctx, s: SlideState, i = 0): Tex | null {
+  const sl = s.slide
+  if (sl.kind === 'video') return ctx.video(sl, s.local)
+  if (i === 0 && sl.live && s.local < sl.live.duration) {
+    const v = ctx.video(sl, s.local)
+    if (v) return v
+  }
+  return ctx.image(sl.media[i])
+}
+
+export interface MediaDrawOpts extends Omit<QuadSpec, 'x' | 'y' | 'w' | 'h' | 'tex' | 'uv'> {
+  fit?: 'cover' | 'contain'
+  uv?: UvRect
+  /** Extra zoom factor applied around the centre of the crop (1 = none). */
+  zoom?: number
+}
+
+/** Draws media into a box. Returns the box actually covered (smaller for 'contain'). */
+export function drawMedia(ctx: Ctx, tex: Tex | null, aspect: number, box: Box, o: MediaDrawOpts = {}): Box {
+  const fit = o.fit ?? 'cover'
+  const target = fit === 'contain' ? containBox(aspect, box) : box
+  if (!tex) {
+    ctx.c.quad({ ...o, color: [0.16, 0.16, 0.17, 1], x: target.x, y: target.y, w: target.w, h: target.h })
+    return target
+  }
+  let uv: UvRect = o.uv ?? (fit === 'cover' ? coverRect(aspect, box.w / box.h) : { x: 0, y: 0, w: 1, h: 1 })
+  if (o.zoom && o.zoom !== 1) {
+    const w = uv.w / o.zoom
+    const h = uv.h / o.zoom
+    uv = { x: uv.x + (uv.w - w) / 2, y: uv.y + (uv.h - h) / 2, w, h }
+  }
+  ctx.c.quad({ ...o, tex, uv, x: target.x, y: target.y, w: target.w, h: target.h })
+  return target
+}
+
+/**
+ * Cover when the aspect ratios are close; otherwise contain over a blurred, darkened copy
+ * (portrait phone videos in a 16:9 show). Keeps a rotation pivot consistent across both quads.
+ */
+export function drawFitted(ctx: Ctx, tex: Tex | null, aspect: number, box: Box, o: MediaDrawOpts = {}, tolerance = 0.22): Box {
+  if (!tex || Math.abs(Math.log(aspect / (box.w / box.h))) < tolerance) return drawMedia(ctx, tex, aspect, box, { ...o, fit: 'cover' })
+  drawMedia(ctx, tex, aspect, box, { ...o, fit: 'cover', blur: 5, shade: Math.max(o.shade ?? 0, 0.68), zoom: 1.12 })
+  const inner = containBox(aspect, box)
+  const pv = o.pivot ?? [0.5, 0.5]
+  const pivot: [number, number] = [(box.x + pv[0] * box.w - inner.x) / inner.w, (box.y + pv[1] * box.h - inner.y) / inner.h]
+  return drawMedia(ctx, tex, aspect, inner, { ...o, fit: 'cover', pivot })
+}
+
+/** Draws a text texture with its centre (or left edge) at x,y. */
+export function drawText(
+  ctx: Ctx,
+  spec: TextSpec,
+  x: number,
+  y: number,
+  o: Omit<QuadSpec, 'x' | 'y' | 'w' | 'h' | 'tex'> & { anchor?: 'center' | 'left' | 'right' } = {}
+): Box | null {
+  const tex = ctx.text(spec)
+  if (!tex) return null
+  const ax = o.anchor === 'left' ? 0 : o.anchor === 'right' ? 1 : 0.5
+  const box = { x: x - tex.w * ax, y: y - tex.h / 2, w: tex.w, h: tex.h }
+  ctx.c.quad({ ...o, tex, ...box })
+  return box
+}
+
+export function slotBoxes(slide: TimelineSlide, frame: Box, gutter: number): Box[] {
+  const slots = slide.template?.slots ?? [{ x: 0, y: 0, w: 1, h: 1 }]
+  return slots.map((s) => {
+    const x0 = frame.x + s.x * frame.w + (s.x > 0 ? gutter / 2 : 0)
+    const y0 = frame.y + s.y * frame.h + (s.y > 0 ? gutter / 2 : 0)
+    const x1 = frame.x + (s.x + s.w) * frame.w - (s.x + s.w < 0.999 ? gutter / 2 : 0)
+    const y1 = frame.y + (s.y + s.h) * frame.h - (s.y + s.h < 0.999 ? gutter / 2 : 0)
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }
+  })
+}
+
+/** Opacity of a title overlay on the first slide: fades in, holds, fades out. */
+export function titleOpacity(local: number): number {
+  return smooth(local / 0.8) * (1 - smooth((local - 3.2) / 0.8))
+}
+
+export function dirVector(d: string): [number, number] {
+  switch (d) {
+    case 'right':
+      return [-1, 0]
+    case 'up':
+      return [0, -1]
+    case 'down':
+      return [0, 1]
+    default:
+      return [1, 0]
+  }
+}
