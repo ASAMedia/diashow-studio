@@ -105,9 +105,10 @@ export function titleFromFolder(name: string): { title: string; subtitle?: strin
   return rest.length ? { title: first, subtitle: rest.join(' ') } : { title: first }
 }
 
-const parentFolder = (path: string): string => {
+/** Folder of a file with forward slashes, e.g. "D:/Ski/2_Sonntag". */
+const folderPath = (path: string): string => {
   const parts = path.split(/[\\/]/)
-  return parts.length > 1 ? parts[parts.length - 2] : ''
+  return parts.slice(0, -1).join('/')
 }
 
 function entriesFor(items: MediaItem[]): Entry[] {
@@ -239,17 +240,44 @@ export const useStore = create<State>((set, get) => ({
     const fmtDate = new Intl.DateTimeFormat(localeTag(), { day: 'numeric', month: 'long', year: 'numeric' })
     get().update((p) => {
       const media = new Map(p.media.map((m) => [m.id, m]))
+      const kept = p.entries.filter((e) => !(e.type === 'text' && e.auto === 'day'))
+      let entries = kept
+      let skip = new Set<string>()
+      if (mode === 'folder') {
+        // Chapters follow the folders, not the capture times (those can disagree, e.g. for
+        // files from messengers). Text slides stay with the photo after them.
+        const blocks: Entry[][] = []
+        let pending: Entry[] = []
+        for (const e of kept) {
+          if (e.type === 'text') pending.push(e)
+          else {
+            blocks.push([...pending, e])
+            pending = []
+          }
+        }
+        const folder = (b: Entry[]): string => {
+          const e = b[b.length - 1]
+          return e.type === 'text' ? '' : folderPath(media.get(e.mediaId)?.path ?? '')
+        }
+        const order = new Map(blocks.map((b, i) => [b, i]))
+        blocks.sort((a, b) => folder(a).localeCompare(folder(b), undefined, { numeric: true }) || order.get(a)! - order.get(b)!)
+        entries = [...blocks.flat(), ...pending]
+        // the imported top folder (it holds other folders) gets no chapter of its own
+        const folders = new Set(blocks.map(folder))
+        skip = new Set([...folders].filter((f) => [...folders].some((g) => g !== f && g.startsWith(`${f}/`))))
+      }
       const out: Entry[] = []
       let last = ''
-      for (const e of p.entries) {
-        if (e.type === 'text' && e.auto === 'day') continue
+      for (const e of entries) {
         if (e.type !== 'text') {
           const m = media.get(e.mediaId)
-          const key = m ? (mode === 'date' ? dayKey(m.captureTime) : parentFolder(m.path)) : ''
+          const key = m ? (mode === 'date' ? dayKey(m.captureTime) : folderPath(m.path)) : ''
           if (m && key && key !== last) {
-            const text = mode === 'date' ? { title: fmtDay.format(m.captureTime), subtitle: fmtDate.format(m.captureTime) } : titleFromFolder(key)
-            out.push({ id: uid(), type: 'text', auto: 'day', ...text } as TextEntry)
             last = key
+            if (!skip.has(key)) {
+              const text = mode === 'date' ? { title: fmtDay.format(m.captureTime), subtitle: fmtDate.format(m.captureTime) } : titleFromFolder(key.split('/').pop()!)
+              out.push({ id: uid(), type: 'text', auto: 'day', ...text } as TextEntry)
+            }
           }
         }
         out.push(e)

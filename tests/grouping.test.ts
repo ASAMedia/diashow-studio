@@ -115,7 +115,10 @@ describe('undo, durations and day titles', () => {
   const media = [
     { ...photo('a'), captureTime: day(14), path: 'D:/Ski/1_Samstag Lange Fahrt/a.jpg' },
     { ...photo('b'), captureTime: day(15), path: 'D:/Ski/2_Sonntag Unser erster Tag/b.jpg' },
-    { ...photo('c'), captureTime: day(15, 14), path: 'D:/Ski/2_Sonntag Unser erster Tag/c.jpg' }
+    { ...photo('c'), captureTime: day(15, 14), path: 'D:/Ski/2_Sonntag Unser erster Tag/c.jpg' },
+    // a messenger photo with a wrong date, and a loose file in the top folder
+    { ...photo('d'), captureTime: day(13), path: 'D:/Ski/2_Sonntag Unser erster Tag/d.jpg' },
+    { ...photo('e'), captureTime: day(12), path: 'D:/Ski/film.jpg' }
   ]
   const entries = (): Entry[] => media.map((m) => ({ id: m.id, type: 'photo', mediaId: m.id }))
   const load = (): void => useStore.setState({ project: project(entries(), media, { theme: 'magazine' }) })
@@ -142,8 +145,10 @@ describe('undo, durations and day titles', () => {
     useStore.getState().insertDayTitles('folder')
     const titles = p().entries.filter((e) => e.type === 'text') as { title: string; subtitle?: string }[]
     expect(titles.map((t) => [t.title, t.subtitle])).toEqual([['Samstag', 'Lange Fahrt'], ['Sonntag', 'Unser erster Tag']])
+    // grouped by folder: e (top folder, no chapter), a, then b c d
+    expect(p().entries.filter((e) => e.type !== 'text').map((e) => e.id)).toEqual(['e', 'a', 'b', 'c', 'd'])
     useStore.getState().insertDayTitles('date')
-    expect(p().entries.filter((e) => e.type === 'text')).toHaveLength(2)
+    expect(p().entries.filter((e) => e.type === 'text')).toHaveLength(4)
     useStore.getState().removeAutoTitles()
     expect(p().entries.some((e) => e.type === 'text')).toBe(false)
   })
