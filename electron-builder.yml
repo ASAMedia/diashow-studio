@@ -18,11 +18,13 @@ extraResources:
     filter: ['*.exe', '*.dll']
 win:
   target: [nsis, portable]
-  artifactName: ${productName}-${version}-${arch}.${ext}
 nsis:
+  artifactName: ${productName}-Setup-${version}.${ext}
   oneClick: false
   allowToChangeInstallationDirectory: true
   perMachine: false
+portable:
+  artifactName: ${productName}-${version}-portable.${ext}
 fileAssociations:
   - ext: dshow
     name: Diashow Studio project
