@@ -13,6 +13,9 @@ import { FullscreenPlayer } from './components/FullscreenPlayer'
 import { PackDialog, RejectsDialog } from './components/Dialogs'
 import { BackupsDialog, HelpDialog, MissingBanner, SettingsDialog, Tip } from './components/Settings'
 import { PresenterPanel } from './components/Presentation'
+import { Cull } from './components/Cull'
+import { QueueDialog } from './components/Queue'
+import { timelineOf } from './timeline'
 
 /** Routes dropped files: audio goes to the playlist, everything else into the show. */
 export async function handleDroppedPaths(paths: string[]): Promise<void> {
@@ -40,6 +43,8 @@ export function App() {
     void useStore.getState().loadProjects()
     const offMedia = wireMediaUpdates()
     const offFaces = startFaceQueue()
+    void window.api.queueList().then((exportJobs) => useStore.getState().set({ exportJobs })).catch(() => {})
+    const offQueue = window.api.onQueueUpdate((exportJobs) => useStore.getState().set({ exportJobs }))
     // kiosk mode: open the chosen show fullscreen in a loop right away
     void window.api.getAppSettings().catch(() => ({}) as { kioskProjectId?: string }).then(async (s) => {
       if (!s.kioskProjectId) return
@@ -53,6 +58,7 @@ export function App() {
     return () => {
       offMedia()
       offFaces()
+      offQueue()
     }
   }, [])
 
@@ -107,6 +113,10 @@ export function App() {
         return
       }
       if (s.view !== 'editor' || s.fullscreen || s.exportOpen || s.presenting || s.dialog) return
+      if (e.key === 'Escape' && (s.privacyEdit || s.textSel)) {
+        s.set({ privacyEdit: null, textSel: null })
+        return
+      }
       const p = playerRef.current
       if (e.ctrlKey && !e.altKey && (e.key === 'z' || e.key === 'Z' || e.key === 'y' || e.key === 'Y')) {
         e.preventDefault()
@@ -119,7 +129,15 @@ export function App() {
         p?.toggle()
       } else if (e.key === 'ArrowLeft') p?.step(-1)
       else if (e.key === 'ArrowRight') p?.step(1)
-      else if ((e.key === 'Delete' || e.key === 'Backspace') && s.selection.length) s.removeEntries(s.selection)
+      else if ((e.key === 'Delete' || e.key === 'Backspace') && s.textSel && s.project) {
+        const owner = s.project.entries.find((x) => x.texts?.some((ft) => ft.id === s.textSel))
+        if (owner) s.removeFreeText(owner.id, s.textSel)
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && s.selection.length) s.removeEntries(s.selection)
+      else if (e.ctrlKey && (e.key === 'a' || e.key === 'A') && s.project) {
+        e.preventDefault()
+        s.select(timelineOf(s.project).slides.flatMap((sl) => sl.entries.map((x) => x.id)))
+        s.set({ tab: 'slide' })
+      }
       else if (e.key === 'Enter' && e.altKey) s.set({ fullscreen: true })
     }
     window.addEventListener('keydown', key)
@@ -131,6 +149,8 @@ export function App() {
       <TitleBar />
       {view === 'home' ? (
         <Home />
+      ) : view === 'cull' ? (
+        <Cull />
       ) : (
         <div className="editor">
           <div className="notices">
@@ -151,6 +171,7 @@ export function App() {
       {dialog === 'settings' && <SettingsDialog />}
       {dialog === 'backups' && <BackupsDialog />}
       {dialog === 'help' && <HelpDialog />}
+      {dialog === 'queue' && <QueueDialog />}
       {presenting && <PresenterPanel />}
       {dragging && <div className="window-drop">{t('dropHere')}</div>}
     </div>

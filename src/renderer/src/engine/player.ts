@@ -113,7 +113,7 @@ export class Player {
   }
 
   private key(c: AudioPlanClip): string {
-    return `${c.id}|${c.src}|${c.start.toFixed(3)}|${c.offset.toFixed(3)}`
+    return `${c.id}|${c.src}|${c.start.toFixed(3)}|${c.offset.toFixed(3)}|${c.rate ?? 1}`
   }
 
   private syncAudio(t: number): void {
@@ -130,6 +130,7 @@ export class Player {
         const el = new Audio()
         el.crossOrigin = 'anonymous'
         el.preload = 'auto'
+        el.preservesPitch = true
         el.src = mediaUrl(clip.src)
         const gain = this.actx.createGain()
         gain.gain.value = 0
@@ -139,7 +140,9 @@ export class Player {
         if (soon) el.currentTime = clip.offset
       }
       if (!active) continue
-      const want = clip.offset + (t - clip.start)
+      const rate = clip.rate ?? 1
+      if (n.el.playbackRate !== rate) n.el.playbackRate = rate
+      const want = clip.offset + (t - clip.start) * rate
       if (n.el.paused) {
         n.el.currentTime = want
         void n.el.play().catch(() => {})

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildTimeline, slidesAt } from '@shared/timeline'
+import { buildTimeline, musicBeatTimes, slidesAt } from '@shared/timeline'
 import { buildAudioPlan, duckIntervals, gainAt, loudnessGain } from '@shared/audioPlan'
 import { groupEntries, pickTemplate } from '@shared/layout'
 import { DEFAULT_SETTINGS, type Entry, type MediaItem, type MusicTrack, type Project } from '@shared/types'
@@ -223,8 +223,52 @@ describe('maximum video length', () => {
       { id: 'e2', type: 'video', mediaId: 'v', trimIn: 30 }
     ]
     const tl = buildTimeline(project(entries, media, [], { maxVideoSeconds: 15 }))
-    expect(tl.slides[1].video).toEqual({ trimIn: 30, trimOut: 45 })
+    expect(tl.slides[1].video).toEqual({ trimIn: 30, trimOut: 45, speed: 1 })
     expect(tl.slides[1].duration).toBe(15)
     expect(buildTimeline(project(entries, media)).slides[1].duration).toBe(570)
+  })
+})
+
+describe('video speed, culling and song sections', () => {
+  const media = [photo('a'), photo('b'), video('v', 8)]
+
+  it('slows clips down or speeds them up, with sound only between 0.5x and 2x', () => {
+    const at = (speed: number) => {
+      const p = project([{ id: 'e1', type: 'photo', mediaId: 'a' }, { id: 'e3', type: 'video', mediaId: 'v', speed }], media)
+      const tl = buildTimeline(p)
+      return { slide: tl.slides[1], plan: buildAudioPlan(p, tl) }
+    }
+    const slow = at(0.5)
+    expect(slow.slide.duration).toBeCloseTo(16, 6)
+    expect(slow.slide.video).toEqual({ trimIn: 0, trimOut: 8, speed: 0.5 })
+    const sound = slow.plan.clips.find((c) => c.kind === 'video')!
+    expect(sound.rate).toBe(0.5)
+    expect(sound.duration).toBeCloseTo(16, 6)
+    expect(at(4).slide.duration).toBeCloseTo(2, 6)
+    expect(at(4).plan.clips.some((c) => c.kind === 'video')).toBe(false)
+    expect(at(0.25).plan.clips.some((c) => c.kind === 'video')).toBe(false)
+    expect(at(1).plan.clips.find((c) => c.kind === 'video')!.rate).toBeUndefined()
+  })
+
+  it('counts the maximum video length on screen', () => {
+    const p = project([{ id: 'e3', type: 'video', mediaId: 'v', speed: 0.5 }], media, [], { maxVideoSeconds: 6 })
+    expect(buildTimeline(p).slides[0].video).toEqual({ trimIn: 0, trimOut: 3, speed: 0.5 })
+  })
+
+  it('leaves excluded entries out of the show', () => {
+    const p = project([{ id: 'e1', type: 'photo', mediaId: 'a', excluded: true }, { id: 'e2', type: 'photo', mediaId: 'b' }], media)
+    expect(buildTimeline(p).slides.map((s) => s.id)).toEqual(['e2'])
+  })
+
+  it('plays only the chosen part of a song', () => {
+    const song = { ...track('s1', 200), trimIn: 30, trimOut: 90, beats: [10, 31, 60, 95] }
+    const p = project([{ id: 'e1', type: 'photo', mediaId: 'a' }, { id: 'e2', type: 'photo', mediaId: 'b' }], media, [song], { audio: { ...DEFAULT_SETTINGS.audio, repeatMusic: false } })
+    const tl = buildTimeline(p)
+    expect(tl.musicDuration).toBe(60)
+    const music = buildAudioPlan(p, tl).clips.filter((c) => c.kind === 'music')
+    expect(music).toHaveLength(1)
+    expect(music[0].offset).toBe(30)
+    expect(music[0].duration).toBeCloseTo(tl.duration, 6)
+    expect(musicBeatTimes(p, 100)).toEqual([1, 30])
   })
 })

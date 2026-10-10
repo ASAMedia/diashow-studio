@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { Clock, LayoutTemplate, Music, Plus, Minus, SlidersHorizontal, Trash2, GripVertical, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Film, Volume2, VolumeX, LogOut, Crop as CropIcon, Maximize } from 'lucide-react'
+import { Clock, LayoutTemplate, Music, Plus, Minus, SlidersHorizontal, Trash2, GripVertical, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Film, Volume2, VolumeX, LogOut, Crop as CropIcon, Maximize, ScanFace, Scissors } from 'lucide-react'
 import { mediaUrl } from '@shared/api'
 import { LOOKS, THEMES, TRANSITIONS, themeMeta } from '@shared/themes'
 import type { AspectRatio, Direction, Entry, LookId, MediaItem, PhotoEntry, TextEntry, TextFont, TextPosition, TextStyle, ThemeId, TransitionId, VideoEntry } from '@shared/types'
 import { DEFAULT_TEXT_STYLE } from '@shared/types'
-import { MAX_PHOTO_SECONDS, type TimelineSlide } from '@shared/timeline'
+import { MAX_PHOTO_SECONDS, trackSpan, type TimelineSlide } from '@shared/timeline'
 import { templatesFor, type Template } from '@shared/layout'
 import { audibleClips } from '@shared/audioPlan'
 import { mediaAspect } from '@shared/layout'
@@ -12,6 +12,9 @@ import { showsWhole } from '../engine/draw'
 import { playerRef, useStore, type InspectorTab } from '../store'
 import { timelineOf } from '../timeline'
 import { fmtSeconds, fmtTime, localeTag, pick, t } from '../i18n'
+import { Check, FONTS, Section, Slider } from './ui'
+import { BatchPanel, FreeTextSection, PrivacySection, SpeedSelect } from './SlideTools'
+import { MusicTrim } from './MusicTrim'
 
 export function Inspector() {
   const tab = useStore((s) => s.tab)
@@ -38,36 +41,6 @@ export function Inspector() {
         ))}
       </div>
     </>
-  )
-}
-
-function Section(props: { title: string; children: ReactNode }) {
-  return (
-    <div className="section">
-      <h3>{props.title}</h3>
-      {props.children}
-    </div>
-  )
-}
-
-function Check(props: { checked: boolean; onChange: (v: boolean) => void; children: ReactNode }) {
-  return (
-    <label className="check">
-      <input type="checkbox" checked={props.checked} onChange={(e) => props.onChange(e.target.checked)} />
-      <span>{props.children}</span>
-    </label>
-  )
-}
-
-function Slider(props: { label: string; value: number; min: number; max: number; step: number; display: string; onChange: (v: number) => void }) {
-  return (
-    <div>
-      <div className="row">
-        <label>{props.label}</label>
-        <span className="val">{props.display}</span>
-      </div>
-      <input type="range" min={props.min} max={props.max} step={props.step} value={props.value} onChange={(e) => props.onChange(Number(e.target.value))} />
-    </div>
   )
 }
 
@@ -211,17 +184,6 @@ function ThemesPanel() {
   )
 }
 
-const FONTS: { id: TextFont; label: string; family: string }[] = [
-  { id: 'sans', label: 'Inter', family: 'Inter' },
-  { id: 'rounded', label: 'Nunito Sans', family: 'Nunito Sans' },
-  { id: 'caption', label: 'Barlow Semi Condensed', family: 'Barlow Semi Condensed' },
-  { id: 'display', label: 'Anton', family: 'Anton' },
-  { id: 'serif', label: 'Cinzel', family: 'Cinzel' },
-  { id: 'editorial', label: 'Playfair Display', family: 'Playfair Display' },
-  { id: 'type', label: 'Special Elite', family: 'Special Elite' },
-  { id: 'hand', label: 'Caveat', family: 'Caveat' }
-]
-
 const COLORS: Record<string, string> = { theme: '', white: '#ffffff', black: '#1c1c1c', custom: '#ffd75e' }
 
 function TextStyleSection() {
@@ -293,6 +255,7 @@ function MusicPanel() {
   const setAudio = (patch: Partial<typeof a>): void => setSettings({ audio: { ...a, ...patch } })
   const [dragIdx, setDragIdx] = useState<number | null>(null)
   const [overIdx, setOverIdx] = useState<number | null>(null)
+  const [trimming, setTrimming] = useState<string | null>(null)
   const total = timelineOf(project).musicDuration
   const db = (g: number): string => (g <= 0 ? '−∞ dB' : `${(20 * Math.log10(g)).toFixed(0)} dB`)
 
@@ -302,43 +265,50 @@ function MusicPanel() {
         {project.music.length === 0 && <p className="hint">{t('noMusic')}</p>}
         <div className="tracks">
           {project.music.map((tr, i) => (
-            <div
-              key={tr.id}
-              className={`track ${overIdx === i ? 'drag-over' : ''}`}
-              draggable
-              onDragStart={() => setDragIdx(i)}
-              onDragOver={(e) => {
-                e.preventDefault()
-                setOverIdx(i)
-              }}
-              onDragEnd={() => {
-                setDragIdx(null)
-                setOverIdx(null)
-              }}
-              onDrop={(e) => {
-                e.preventDefault()
-                if (dragIdx == null || dragIdx === i) return
-                update((p) => {
-                  const [m] = p.music.splice(dragIdx, 1)
-                  p.music.splice(i, 0, m)
-                })
-                setDragIdx(null)
-                setOverIdx(null)
-              }}
-            >
-              <span className="n">{tr.status === 'ready' ? i + 1 : <GripVertical size={12} />}</span>
-              <span className="tt" title={tr.path}>
-                {tr.title}
-                {tr.artist && <span className="ar">{tr.artist}</span>}
-                {tr.status === 'error' && <span className="ar" style={{ color: 'var(--danger)' }}>{tr.error}</span>}
-              </span>
-              <span className="d">
-                {tr.status === 'ready' ? fmtTime(tr.duration) : '…'}
-                {tr.bpm ? <span className="ar">{Math.round(tr.bpm)} BPM</span> : null}
-              </span>
-              <button title={t('delete')} onClick={() => update((p) => (p.music = p.music.filter((m) => m.id !== tr.id)))}>
-                <Trash2 size={13} />
-              </button>
+            <div key={tr.id}>
+              <div
+                className={`track ${overIdx === i ? 'drag-over' : ''}`}
+                draggable
+                onDragStart={() => setDragIdx(i)}
+                onDragOver={(e) => {
+                  e.preventDefault()
+                  setOverIdx(i)
+                }}
+                onDragEnd={() => {
+                  setDragIdx(null)
+                  setOverIdx(null)
+                }}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  if (dragIdx == null || dragIdx === i) return
+                  update((p) => {
+                    const [m] = p.music.splice(dragIdx, 1)
+                    p.music.splice(i, 0, m)
+                  })
+                  setDragIdx(null)
+                  setOverIdx(null)
+                }}
+              >
+                <span className="n">{tr.status === 'ready' ? i + 1 : <GripVertical size={12} />}</span>
+                <span className="tt" title={tr.path}>
+                  {tr.title}
+                  {tr.artist && <span className="ar">{tr.artist}</span>}
+                  {tr.status === 'error' && <span className="ar" style={{ color: 'var(--danger)' }}>{tr.error}</span>}
+                </span>
+                <span className="d">
+                  {tr.status === 'ready' ? fmtTime(trackSpan(tr).length) : '…'}
+                  {tr.bpm ? <span className="ar">{Math.round(tr.bpm)} BPM</span> : null}
+                </span>
+                {tr.status === 'ready' && (
+                  <button title={t('musicTrim')} className={trimming === tr.id || tr.trimIn != null || tr.trimOut != null ? 'on' : ''} onClick={() => setTrimming(trimming === tr.id ? null : tr.id)}>
+                    <Scissors size={13} />
+                  </button>
+                )}
+                <button title={t('delete')} onClick={() => update((p) => (p.music = p.music.filter((m) => m.id !== tr.id)))}>
+                  <Trash2 size={13} />
+                </button>
+              </div>
+              {trimming === tr.id && <MusicTrim track={tr} />}
             </div>
           ))}
         </div>
@@ -726,7 +696,11 @@ function SlidePanel() {
   const media = (e: Entry): MediaItem | undefined => (e.type === 'text' ? undefined : project.media.find((m) => m.id === e.mediaId))
   const meta = themeMeta(project.settings.theme)
 
-  const slide = timelineOf(project).slides.find((sl) => sl.entries.some((x) => x.id === entries[0].id))
+  const tl = timelineOf(project)
+  const slide = tl.slides.find((sl) => sl.entries.some((x) => x.id === entries[0].id))
+  const want = new Set(selection)
+  const slides = tl.slides.filter((sl) => sl.entries.some((x) => want.has(x.id)))
+  if (slides.length > 1) return <BatchPanel entries={entries} slides={slides} />
 
   if (entries.length > 1) {
     const order = new Map(project.entries.map((x, i) => [x.id, i]))
@@ -766,6 +740,11 @@ function SlidePanel() {
                         </button>
                       )
                     })()}
+                    {e.type !== 'text' && (
+                      <button title={t('privacyEdit')} className={e.privacy?.length ? 'on' : ''} onClick={() => set({ privacyEdit: e.id, kbEdit: null })}>
+                        <ScanFace size={12} />
+                      </button>
+                    )}
                     <button title={t('release')} onClick={() => useStore.getState().releaseEntry(ids, e.id)}>
                       <LogOut size={12} />
                     </button>
@@ -783,6 +762,7 @@ function SlidePanel() {
         {slide && <LayoutPicker slide={slide} />}
         {slide && <CropSection slide={slide} />}
         <CaptionField entry={first} />
+        {slide && <FreeTextSection slide={slide} />}
       </>
     )
   }
@@ -798,6 +778,7 @@ function SlidePanel() {
           <DurationOverride entry={te} />
           {themeMeta(project.settings.theme).textAsCaption && <p className="hint">{t('captionOnNext')}</p>}
         </div>
+        {slide && slide.kind === 'text' && <FreeTextSection slide={slide} />}
       </Section>
     )
   }
@@ -811,6 +792,7 @@ function SlidePanel() {
         <MediaInfo m={m} />
         <Section title={t('trim')}>
           <TrimStrip entry={ve} media={m} />
+          <SpeedSelect entry={ve} hasAudio={!!m.hasAudio} />
         </Section>
         <Section title={t('videoSound')}>
           {m.hasAudio ? (
@@ -840,6 +822,8 @@ function SlidePanel() {
         </div>
         {slide && <GroupControl slide={slide} />}
         <CaptionField entry={ve} />
+        {slide && <FreeTextSection slide={slide} />}
+        <PrivacySection entry={ve} media={m} />
       </>
     )
   }
@@ -857,6 +841,8 @@ function SlidePanel() {
       {slide && <GroupControl slide={slide} />}
       {slide && <CropSection slide={slide} />}
       <CaptionField entry={pe} />
+      {slide && <FreeTextSection slide={slide} />}
+      <PrivacySection entry={pe} media={m} />
       {m.live && (
         <Section title="Live">
           <div className="row">

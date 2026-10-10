@@ -16,7 +16,11 @@ export interface QuickMeta {
    * exiftool-vendored does it (GPS position, other dates), so callers fall back to exiftool.
    */
   captureTime?: number
+  /** The XMP packet mentions an embedded video (Google MotionPhoto / MicroVideo, Samsung). */
+  motionXmp?: boolean
 }
+
+const MOTION_XMP = /MotionPhoto|MicroVideo|EmbeddedVideo/i
 
 const TAG = {
   make: 0x010f,
@@ -101,7 +105,8 @@ export async function quickPhotoMeta(path: string): Promise<QuickMeta | null> {
       // Same precedence as captureTimeOf: DateTimeOriginal decides when present
       captureTime: tags.has(TAG.dateTimeOriginal)
         ? exifInstant(tags.get(TAG.dateTimeOriginal), tags.get(TAG.offsetTimeOriginal), tags.get(TAG.subSecOriginal))
-        : exifInstant(tags.get(TAG.createDate), tags.get(TAG.offsetTimeDigitized), tags.get(TAG.subSecDigitized))
+        : exifInstant(tags.get(TAG.createDate), tags.get(TAG.offsetTimeDigitized), tags.get(TAG.subSecDigitized)),
+      motionXmp: !!meta.xmp && MOTION_XMP.test(meta.xmp.toString('latin1'))
     }
   } catch {
     return null

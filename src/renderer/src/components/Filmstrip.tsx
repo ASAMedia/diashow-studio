@@ -1,8 +1,9 @@
 import { useMemo, useRef, useState, useEffect } from 'react'
-import { Clock, Film, FolderPlus, ImagePlus, Plus, Type, Volume2, VolumeX, Trash2, Split, Merge, Move } from 'lucide-react'
+import { Clock, Film, FolderPlus, ImagePlus, Plus, Type, Volume2, VolumeX, Trash2, Split, Merge, Move, EyeOff } from 'lucide-react'
 import { mediaUrl } from '@shared/api'
 import { buildAudioPlan, gainAt } from '@shared/audioPlan'
 import { musicBeatTimes, type Timeline, type TimelineSlide } from '@shared/timeline'
+import { prioritize } from '../priority'
 import type { VideoEntry } from '@shared/types'
 import { themeMeta } from '@shared/themes'
 import { playerRef, useStore } from '../store'
@@ -80,6 +81,8 @@ export function Filmstrip() {
     })
   }
 
+  // Shift+click selects the range from the last clicked slide, Ctrl+click adds or removes one
+  const anchor = useRef<number | null>(null)
   const clickSlide = (s: TimelineSlide, e: React.MouseEvent): void => {
     if (s.kind === 'title') {
       select([])
@@ -88,10 +91,20 @@ export function Filmstrip() {
       return
     }
     const ids = s.entries.map((x) => x.id)
-    if (e.ctrlKey || e.shiftKey) select([...new Set([...selection, ...ids])])
-    else select(ids)
+    if (e.shiftKey && anchor.current != null) {
+      const [a, b] = [Math.min(anchor.current, s.index), Math.max(anchor.current, s.index)]
+      select(tl.slides.slice(a, b + 1).flatMap((x) => x.entries.map((y) => y.id)))
+    } else if (e.ctrlKey || e.shiftKey) {
+      const on = s.entries.some((x) => sel.has(x.id))
+      select(on ? selection.filter((id) => !ids.includes(id)) : [...new Set([...selection, ...ids])])
+      anchor.current = s.index
+    } else {
+      select(ids)
+      anchor.current = s.index
+    }
     useStore.getState().set({ tab: 'slide' })
   }
+  const excluded = project.entries.filter((x) => x.excluded).length
 
   // Dropping on the middle of another slide combines both; near the edges it reorders.
   const onDragOver = (e: React.DragEvent): void => {
@@ -147,9 +160,17 @@ export function Filmstrip() {
   const n = tl.slides.length
   const first = Math.max(0, Math.floor((view.left - 16) / STEP) - 8)
   const last = Math.min(n - 1, Math.ceil((view.left + view.width) / STEP) + 8)
+  // the cards in view are processed first during an import
+  const visibleIds = tl.slides.slice(first, last + 1).flatMap((s) => s.media.map((m) => m.id)).join(',')
+  useEffect(() => prioritize('filmstrip', visibleIds ? visibleIds.split(',') : []), [visibleIds])
 
   return (
     <div className="strip">
+      {excluded > 0 && (
+        <button className="excluded-chip" title={t('cull')} onClick={() => useStore.getState().set({ view: 'cull' })}>
+          <EyeOff size={11} /> {t('excludedCount').replace('{n}', String(excluded))}
+        </button>
+      )}
       <div
         className="strip-scroll"
         ref={scrollRef}
@@ -265,6 +286,14 @@ export function Filmstrip() {
                   <Merge size={14} /> {t('joinPrev')}
                 </button>
               )}
+              <button onClick={() => {
+                const ids = (selectedSlides.length ? selectedSlides : [menu.slide!]).flatMap((x) => x.entries.map((y) => y.id))
+                useStore.getState().updateEntries(ids, (x) => (x.excluded = true))
+                select([])
+                setMenu(null)
+              }}>
+                <EyeOff size={14} /> {t('excludeSel')}
+              </button>
               {menu.slide.kind === 'photos' && themeMeta(project.settings.theme).kenBurns && (
                 <button onClick={() => { setMenu(null); useStore.getState().set({ tab: 'slide', kbEdit: 'start' }) }}>
                   <Move size={14} /> {t('kbEdit')}

@@ -12,6 +12,8 @@ import { playerRef, useStore } from '../store'
 import { timelineOf, useTimeline } from '../timeline'
 import { fmtTime, localeTag, t } from '../i18n'
 import { previewQuality, QUALITY } from './Settings'
+import { FreeTextLayer, PrivacyEditor } from './Overlays'
+import { prioritize } from '../priority'
 
 function useBox(ref: React.RefObject<HTMLElement | null>): { w: number; h: number } {
   const [box, setBox] = useState({ w: 0, h: 0 })
@@ -30,6 +32,7 @@ export function Viewer() {
   const selection = useStore((s) => s.selection)
   const playing = useStore((s) => s.playing)
   const kbEdit = useStore((s) => s.kbEdit)
+  const privacyEdit = useStore((s) => s.privacyEdit)
   const fullscreen = useStore((s) => s.fullscreen)
   const set = useStore((s) => s.set)
   const tl = useTimeline()
@@ -46,7 +49,8 @@ export function Viewer() {
     let last = 0
     player.onTime = (time) => {
       const now = performance.now()
-      if (now - last > 66) {
+      // throttled while playing; a seek always lands (the editing layers follow the playhead)
+      if (!player.playing || now - last > 66) {
         last = now
         useStore.setState({ playhead: time })
       }
@@ -105,6 +109,13 @@ export function Viewer() {
       ? timelineOf(project).slides.find((s) => s.kind === 'photos' && s.entries.some((e) => e.id === selection[0]))
       : undefined
 
+  // the slide at the playhead (the later one during a transition) carries the free texts shown
+  const atPlayhead = tl ? tl.slides.filter((s) => s.start <= playhead + 1e-3 && playhead < s.start + s.duration).pop() : undefined
+  // the slide on screen and the next one are processed first during an import
+  const nextSlide = atPlayhead && tl ? tl.slides[atPlayhead.index + 1] : undefined
+  const viewIds = [...(atPlayhead?.media ?? []), ...(nextSlide?.media ?? [])].map((m) => m.id).join(',')
+  useEffect(() => prioritize('viewer', viewIds ? viewIds.split(',') : []), [viewIds])
+
   const selectedPhoto = (() => {
     if (selection.length !== 1) return null
     const e = project.entries.find((x) => x.id === selection[0])
@@ -118,7 +129,9 @@ export function Viewer() {
       <div className="stage" ref={stageRef}>
         <div className="frame" style={{ width: fw, height: fh, visibility: empty ? 'hidden' : 'visible' }}>
           <canvas ref={canvasRef} />
-          {!playing && !kbEdit && editSlide && <CropEditor slide={editSlide} scale={fw / (canvasRef.current?.width || fw)} />}
+          {!playing && !kbEdit && !privacyEdit && editSlide && <CropEditor slide={editSlide} scale={fw / (canvasRef.current?.width || fw)} />}
+          {!playing && !kbEdit && !privacyEdit && atPlayhead && <FreeTextLayer slide={atPlayhead} w={fw} h={fh} />}
+          {privacyEdit && !playing && <PrivacyEditor entryId={privacyEdit} w={fw} h={fh} />}
           {kbEdit && selectedPhoto && <KenBurnsEditor entry={selectedPhoto.e} display={selectedPhoto.m.display} mediaAspect={selectedPhoto.m.width / selectedPhoto.m.height} frameAspect={aspect} w={fw} h={fh} />}
         </div>
         {empty && (

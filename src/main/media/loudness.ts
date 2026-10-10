@@ -21,6 +21,11 @@ export function parseIntegratedLoudness(log: string): number | undefined {
  */
 export async function measureLoudness(ff: Ffmpeg, path: string, signal?: AbortSignal): Promise<number | undefined> {
   const log = await ff.log(['-i', path, '-map', '0:a:0', '-vn', '-sn', '-dn', '-af', 'ebur128=framelog=quiet', '-f', 'null', '-'], { signal })
+  return loudnessFromLog(log)
+}
+
+/** Integrated loudness from an FFmpeg log with an ebur128 summary, rounded to 0.1; undefined for silence. */
+export function loudnessFromLog(log: string): number | undefined {
   const lufs = parseIntegratedLoudness(log)
   if (lufs === undefined || lufs < SILENCE_LUFS) return undefined
   return Math.round(lufs * 10) / 10

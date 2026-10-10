@@ -120,7 +120,29 @@ uniform int u_look;
 uniform int u_tri;
 uniform vec4 u_lk1;  // saturation, contrast, brightness, warmth
 uniform vec4 u_lk2;  // tint, fade, mono, vignette
+uniform int u_privN;       // areas to pixelate (texture uv, x/y/w/h)
+uniform vec4 u_priv[8];
+uniform vec2 u_texSize;
 out vec4 outColor;
+
+// Coarse blocks inside an ellipse: about 8 across, square in pixels, averaged from a mip level.
+bool privacy(inout vec2 uv, out float lod) {
+  lod = 0.0;
+  for (int i = 0; i < 8; i++) {
+    if (i >= u_privN) break;
+    vec4 r = u_priv[i];
+    float bw = max(r.z, r.w * u_texSize.y / u_texSize.x) / 8.0;
+    vec2 bs = vec2(bw, bw * u_texSize.x / u_texSize.y);
+    vec2 q = (floor((uv - r.xy) / bs) + 0.5) * bs + r.xy;
+    vec2 d = (q - (r.xy + r.zw * 0.5)) / (r.zw * 0.5);
+    if (dot(d, d) <= 1.0) {
+      uv = q;
+      lod = log2(max(1.0, bw * u_texSize.x));
+      return true;
+    }
+  }
+  return false;
+}
 
 vec3 look(vec3 c, vec2 uv) {
   c *= u_lk1.z;
@@ -165,7 +187,9 @@ void main() {
     vec2 uv = v_uv;
     if (u_flipY > 0.5) uv.y = 1.0 - uv.y;
     uv = u_uv.xy + uv * u_uv.zw;
-    c = u_blur > 0.0 ? texture(u_tex, uv, u_blur) : texture(u_tex, uv);
+    float lod;
+    if (u_privN > 0 && privacy(uv, lod)) c = textureLod(u_tex, uv, lod + u_blur);
+    else c = u_blur > 0.0 ? texture(u_tex, uv, u_blur) : texture(u_tex, uv);
     c *= u_color;
     if (u_look == 1) c.rgb = look(c.rgb, v_uv);
   }
@@ -371,6 +395,7 @@ export class Compositor {
   private fbos: Fbo[] = []
   private white: Tex
   private lookParams: Look = NEUTRAL_LOOK
+  private privacy = new Map<WebGLTexture, { n: number; a: Float32Array }>()
   private yuvProg: WebGLProgram | null = null
   private outFbo: Fbo | null = null
   private yuvFbo: Fbo | null = null
@@ -473,6 +498,17 @@ export class Compositor {
     this.lookParams = look
   }
 
+  /** Areas of a texture (normalised, top-left origin) drawn pixelated wherever it is used. */
+  markPrivate(tex: Tex, rects: { x: number; y: number; w: number; h: number }[]): void {
+    const a = new Float32Array(32)
+    rects.slice(0, 8).forEach((r, i) => a.set([r.x, r.y, r.w, r.h], i * 4))
+    this.privacy.set(tex.tex, { n: Math.min(8, rects.length), a })
+  }
+
+  clearPrivate(): void {
+    this.privacy.clear()
+  }
+
   /** Render target 0 = scene, 1/2 = transition slides. */
   target(i: number | null, clear: [number, number, number] = [0, 0, 0]): void {
     const gl = this.gl
@@ -519,6 +555,12 @@ export class Compositor {
     const lk = this.lookParams
     gl.uniform1i(this.u(p, 'u_look'), q.look && tex ? 1 : 0)
     gl.uniform1i(this.u(p, 'u_tri'), q.tri ?? 0)
+    const priv = tex ? this.privacy.get(tex.tex) : undefined
+    gl.uniform1i(this.u(p, 'u_privN'), priv?.n ?? 0)
+    if (priv && tex) {
+      gl.uniform4fv(this.u(p, 'u_priv'), priv.a)
+      gl.uniform2f(this.u(p, 'u_texSize'), tex.w, tex.h)
+    }
     gl.uniform4f(this.u(p, 'u_lk1'), lk.saturation, lk.contrast, lk.brightness, lk.warmth)
     gl.uniform4f(this.u(p, 'u_lk2'), lk.tint, lk.fade, lk.mono, lk.vignette)
     gl.activeTexture(gl.TEXTURE0)
@@ -546,6 +588,7 @@ export class Compositor {
     gl.uniform1f(this.u(p, 'u_opacity'), s.opacity)
     gl.uniform1f(this.u(p, 'u_shadowBlur'), pad)
     gl.uniform1i(this.u(p, 'u_tri'), 0)
+    gl.uniform1i(this.u(p, 'u_privN'), 0)
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
   }
 

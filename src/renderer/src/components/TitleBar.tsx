@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { CalendarDays, ChevronLeft, Download, Eraser, FolderTree, History, Images, Loader2, MonitorPlay, MoreHorizontal, Package, Play, Redo2, ScanSearch, Settings, SortAsc, Undo2 } from 'lucide-react'
+import { CalendarDays, ChevronLeft, Download, Eraser, FolderTree, History, Images, LayoutGrid, Loader2, MonitorPlay, MoreHorizontal, Package, Play, Redo2, ScanSearch, Settings, SortAsc, Undo2 } from 'lucide-react'
 import { useStore } from '../store'
 import { useTimeline } from '../timeline'
 import { fmtTime, t } from '../i18n'
+import { QueueChip } from './Queue'
 
 export function TitleBar() {
   const project = useStore((s) => s.project)
@@ -13,6 +14,7 @@ export function TitleBar() {
   const [menu, setMenu] = useState(false)
   const canUndo = useStore((s) => s.canUndo)
   const canRedo = useStore((s) => s.canRedo)
+  const view = useStore((s) => s.view)
   useEffect(() => {
     if (!menu) return
     const close = (): void => setMenu(false)
@@ -27,6 +29,7 @@ export function TitleBar() {
           <Images size={18} /> {t('appName')}
         </div>
         <div className="grow" />
+        <QueueChip />
         <button className="btn ghost icon" title={t('settings')} onClick={() => useStore.getState().set({ dialog: 'settings' })}>
           <Settings size={17} />
         </button>
@@ -72,6 +75,7 @@ export function TitleBar() {
         <Redo2 size={16} />
       </button>
       <div className="grow" />
+      <QueueChip />
       {busy > 0 && (
         <span className="chip">
           <Loader2 size={13} className="spin" /> {busy} {t('processing')}
@@ -115,6 +119,9 @@ export function TitleBar() {
           </div>
         )}
       </div>
+      <button className={`btn ${view === 'cull' ? 'on' : ''}`} onClick={() => set({ view: view === 'cull' ? 'editor' : 'cull' })} disabled={!project.entries.length}>
+        <LayoutGrid size={15} /> {t('cull')}
+      </button>
       <button className="btn" onClick={() => set({ fullscreen: true })} disabled={!slides}>
         <Play size={15} /> {t('play')}
       </button>

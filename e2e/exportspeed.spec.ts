@@ -6,6 +6,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { appArgs } from './launch'
 
 const root = resolve(__dirname, '..')
 const dir = process.env.DIASHOW_ORIGINALS_DIR
@@ -17,7 +18,7 @@ test.setTimeout(2 * 60 * 60 * 1000)
 test('export speed and quality per path', async () => {
   test.skip(!dir, 'DIASHOW_ORIGINALS_DIR not set')
   const dataDir = mkdtempSync(join(tmpdir(), 'diashow-speed-'))
-  const app = await electron.launch({ args: ['.'], cwd: root, env: { ...process.env, DIASHOW_DATA_DIR: dataDir } })
+  const app = await electron.launch({ args: appArgs(), cwd: root, env: { ...process.env, DIASHOW_DATA_DIR: dataDir } })
   const page = await app.firstWindow()
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
@@ -56,15 +57,30 @@ test('export speed and quality per path', async () => {
     return d.player.current.tl.duration
   }, limit)
   console.log(`exporting ${dur.toFixed(0)} s of show`)
+  // DIASHOW_SPEED_SIZE, e.g. 3840x2160; 4K first builds full-resolution sources like the export dialog
+  const [width, height] = (process.env.DIASHOW_SPEED_SIZE ?? '1920x1080').split('x').map(Number)
+  if (Math.max(width, height) > 1920) {
+    const t = Date.now()
+    const n = await page.evaluate(async (edge) => {
+      const s = (window as any).__diashow.store
+      const p = s.getState().project
+      const used = new Set(p.entries.map((e: any) => e.mediaId))
+      const proxied = p.media.filter((m: any) => used.has(m.id) && m.kind === 'video' && m.proxied && Math.max(m.width, m.height) > 1920)
+      const paths = await (window as any).api.prepareHires(proxied.map((m: any) => m.id), edge)
+      s.setState({ project: { ...p, media: p.media.map((m: any) => (paths[m.id] ? { ...m, playback: paths[m.id] } : m)) } })
+      return proxied.length
+    }, Math.max(width, height))
+    console.log(`hires sources for ${n} videos: ${((Date.now() - t) / 1000).toFixed(0)} s`)
+  }
   const run = async (name: string, opts: { path?: string; hardware: boolean; quality?: string; encoder?: object }, file?: string): Promise<string> => {
     const out = file ?? join(dataDir, `${name}.mp4`)
     const t = Date.now()
-    const last = await page.evaluate(async ({ outPath, opts }) => {
+    const last = await page.evaluate(async ({ outPath, opts, width, height }) => {
       const d = (window as any).__diashow
       let tick: any = null
-      await d.exportShow(d.store.getState().project, { outPath, width: 1920, height: 1080, fps: 30, codec: 'h264', quality: 'high', ...opts }, 'de-DE', (p: any) => (tick = p), new AbortController().signal)
+      await d.exportShow(d.store.getState().project, { outPath, width, height, fps: 30, codec: 'h264', quality: 'high', ...opts }, 'de-DE', (p: any) => (tick = p), new AbortController().signal)
       return tick
-    }, { outPath: out, opts })
+    }, { outPath: out, opts, width, height })
     const secs = (Date.now() - t) / 1000
     const probe = execFileSync(ffprobe, ['-v', 'error', '-show_entries', 'stream=codec_name,nb_frames:format=duration,size', '-of', 'compact', out]).toString().trim().replace(/\s*\n/g, ' ')
     const ph = Object.entries(last.phases).map(([k, v]) => `${k} ${(v as number).toFixed(1)}`).join(', ')

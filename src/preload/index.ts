@@ -50,11 +50,22 @@ const api: DiashowApi = {
   cacheInfo: () => ipcRenderer.invoke('cache:info'),
   cleanCache: (what) => ipcRenderer.invoke('cache:clean', what),
   relinkMedia: (missing, folder) => ipcRenderer.invoke('media:relink', missing, folder),
+  mediaPrioritize: (ids) => ipcRenderer.invoke('media:prioritize', ids),
   listBackups: (id) => ipcRenderer.invoke('project:backups', id),
   restoreBackup: (file) => ipcRenderer.invoke('project:restore-backup', file),
   getAppSettings: () => ipcRenderer.invoke('app:settings-get'),
   setAppSettings: (s) => ipcRenderer.invoke('app:settings-set', s),
-  keepAwake: (on) => ipcRenderer.invoke('app:keep-awake', on)
+  keepAwake: (on) => ipcRenderer.invoke('app:keep-awake', on),
+  queueAdd: (job) => ipcRenderer.invoke('queue:add', job),
+  queueList: () => ipcRenderer.invoke('queue:list'),
+  queueCancel: (id) => ipcRenderer.invoke('queue:cancel', id),
+  queueRemove: (id) => ipcRenderer.invoke('queue:remove', id),
+  queueResume: (id) => ipcRenderer.invoke('queue:resume', id),
+  onQueueUpdate: (cb) => subscribe('queue:update', cb),
+  workerNext: () => ipcRenderer.invoke('worker:next'),
+  segmentStart: (jobId, k, input) => ipcRenderer.invoke('worker:segment-start', jobId, k, input),
+  segmentFinish: (jobId, k) => ipcRenderer.invoke('worker:segment-finish', jobId, k),
+  workerFail: (jobId, message) => ipcRenderer.invoke('worker:fail', jobId, message)
 }
 
 contextBridge.exposeInMainWorld('api', api)

@@ -37,16 +37,24 @@ const iou = (a: Rect, b: Rect): number => {
   return inter / (a.w * a.h + b.w * b.h - inter)
 }
 
+/** Overlap relative to the smaller box (a face found again in a neighbouring tile). */
+const overlap = (a: Rect, b: Rect): number => {
+  const x = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x))
+  const y = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y))
+  return (x * y) / Math.min(a.w * a.h, b.w * b.h)
+}
+
 /**
- * Faces as rects normalised to the image. BlazeFace (short range) finds faces that fill a fair
- * part of its input, so besides the whole picture it also looks at 3x3 overlapping tiles to
- * catch the small faces of group photos.
+ * Faces as rects normalised to the image. BlazeFace (short range) only finds faces that fill a
+ * fair part of its 128 px input, so besides the whole picture it looks at overlapping tiles of
+ * shrinking size. `thorough` adds a fine grid for the small faces at the back of group photos
+ * (used when pixelating faces, where a missed face matters).
  */
-export async function detectFaces(path: string): Promise<Rect[]> {
+export async function detectFaces(path: string, thorough = false): Promise<Rect[]> {
   const det = await getDetector()
   const blob = await (await fetch(mediaUrl(path))).blob()
   let bmp = await createImageBitmap(blob)
-  const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height))
+  const scale = Math.min(1, (thorough ? 2400 : 1600) / Math.max(bmp.width, bmp.height))
   if (scale < 1) {
     const small = await createImageBitmap(bmp, { resizeWidth: Math.round(bmp.width * scale), resizeHeight: Math.round(bmp.height * scale), resizeQuality: 'medium' })
     bmp.close()
@@ -55,28 +63,37 @@ export async function detectFaces(path: string): Promise<Rect[]> {
   const W = bmp.width
   const H = bmp.height
   const found: Rect[] = []
-  const collect = (src: TexImageSource & { width: number; height: number }, ox: number, oy: number, sw: number, sh: number): void => {
+  const collect = (src: TexImageSource & { width: number; height: number }, ox: number, oy: number, sw: number, sh: number, minScore: number): void => {
     for (const d of det.detect(src).detections) {
       const b = d.boundingBox
-      if (!b) continue
+      if (!b || (d.categories[0]?.score ?? 0) < minScore) continue
       const r = {
         x: (ox + (b.originX / src.width) * sw) / W,
         y: (oy + (b.originY / src.height) * sh) / H,
         w: ((b.width / src.width) * sw) / W,
         h: ((b.height / src.height) * sh) / H
       }
-      if (r.w > 0.004 && r.h > 0.004 && !found.some((f) => iou(f, r) > 0.3)) found.push(r)
+      if (r.w > 0.004 && r.h > 0.004 && !found.some((f) => iou(f, r) > 0.3 || overlap(f, r) > 0.5)) found.push(r)
     }
   }
-  collect(bmp, 0, 0, W, H)
-  const tw = W * 0.45
-  const th = H * 0.45
-  const canvas = new OffscreenCanvas(Math.round(tw), Math.round(th))
-  const g = canvas.getContext('2d')!
-  for (const fy of [0, 0.275, 0.55]) {
-    for (const fx of [0, 0.275, 0.55]) {
-      g.drawImage(bmp, fx * W, fy * H, tw, th, 0, 0, canvas.width, canvas.height)
-      collect(canvas, fx * W, fy * H, tw, th)
+  collect(bmp, 0, 0, W, H, 0.6)
+  // smaller tiles need more confidence: there is more background that might look like a face
+  const levels = [
+    { n: 3, size: 0.45, minScore: 0.6 },
+    { n: 5, size: 0.24, minScore: 0.7 },
+    ...(thorough ? [{ n: 9, size: 0.13, minScore: 0.75 }] : [])
+  ]
+  for (const { n, size, minScore } of levels) {
+    const tw = W * size
+    const th = H * size
+    const canvas = new OffscreenCanvas(Math.round(tw), Math.round(th))
+    const g = canvas.getContext('2d')!
+    const step = (1 - size) / (n - 1)
+    for (let iy = 0; iy < n; iy++) {
+      for (let ix = 0; ix < n; ix++) {
+        g.drawImage(bmp, ix * step * W, iy * step * H, tw, th, 0, 0, canvas.width, canvas.height)
+        collect(canvas, ix * step * W, iy * step * H, tw, th, minScore)
+      }
     }
   }
   bmp.close()

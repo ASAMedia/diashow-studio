@@ -27,6 +27,12 @@ export interface VideoInfo {
 
 /** Audio codecs Chromium decodes inside MP4/MOV/WebM. */
 const CHROMIUM_AUDIO = ['aac', 'mp3', 'opus', 'vorbis', 'flac']
+/**
+ * Audio tracks Chromium can't decode but that don't stop the (muted) preview <video> nor WebCodecs
+ * in an MP4/MOV, verified in Electron 44 (e2e/codecs.spec.ts): iPhone 16 spatial audio next to its
+ * AAC track, little-endian LPCM. The sound itself always comes from the extracted audio file.
+ */
+const TOLERATED_AUDIO = ['apple_apac', 'pcm_s16le']
 const DIRECT_H264_PROFILES = ['baseline', 'constrained baseline', 'main', 'high', 'progressive high', 'constrained high']
 const MAX_DIRECT = { long: 3840, short: 2160 }
 
@@ -112,31 +118,101 @@ export function analyzeVideo(probe: ProbeResult): VideoInfo | null {
   }
 }
 
+/** Decoders of this machine the renderer can use for originals (see src/main/codecSupport.ts). */
+export interface DirectDecode {
+  /**
+   * 8-bit HEVC (Main profile) plays in the preview's <video> and decodes through WebCodecs. Chromium
+   * has no software HEVC decoder, so this depends on the graphics hardware.
+   */
+  hevc?: boolean
+}
+
 /**
- * True when Chromium can play the original file as is: MP4/MOV/WebM, no rotation, SDR,
- * progressive 8-bit 4:2:0 H.264 (<= High), VP9 or AV1, at most UHD, and only Chromium audio codecs.
+ * How a video becomes playable in the renderer: the original as is; a copy of its video stream in an
+ * MP4 (container or extra audio tracks Chromium can't read, e.g. MKV or iPhone spatial audio); or a
+ * transcoded H.264 proxy (rotation, HDR, 10-bit, codecs Chromium can't decode, …).
  */
-export function isDirectPlayable(path: string, probe: ProbeResult, info: VideoInfo): boolean {
-  const ext = extOf(path)
-  const fmt = probe.format.format_name ?? ''
-  const mp4 = ['mp4', 'mov', 'm4v'].includes(ext) && fmt.includes('mp4')
-  const webm = ext === 'webm' && fmt.includes('webm')
-  if (!mp4 && !webm) return false
-  if (info.rotation !== 0 || info.hdr || info.dolbyVision || info.interlaced) return false
+export type PlaybackPlan = { kind: 'direct' } | { kind: 'remux'; reason: string } | { kind: 'proxy'; reason: string }
+
+/** Why the video stream itself can't be decoded by both the preview and the export, or null. */
+export function streamProxyReason(info: VideoInfo, decode: DirectDecode = {}): string | null {
+  if (info.hdr || info.dolbyVision) return 'hdr'
+  // The export draws WebCodecs frames without their rotation; proxies bake it in
+  if (info.rotation !== 0) return 'rotation'
+  if (info.interlaced) return 'interlaced'
   const s = info.stream
   const pix = s.pix_fmt ?? ''
-  if (pix !== 'yuv420p' && pix !== 'yuvj420p') return false
+  if (pix !== 'yuv420p' && pix !== 'yuvj420p') return `pixel format ${pix || '?'}`
   const codec = s.codec_name ?? ''
+  const profile = (s.profile ?? '').toLowerCase()
   if (codec === 'h264') {
-    if (!mp4 || !DIRECT_H264_PROFILES.includes((s.profile ?? '').toLowerCase())) return false
+    if (!DIRECT_H264_PROFILES.includes(profile)) return `h264 profile ${s.profile ?? '?'}`
+  } else if (codec === 'hevc') {
+    if (!decode.hevc) return 'codec hevc'
+    if (profile !== 'main') return `hevc profile ${s.profile ?? '?'}`
   } else if (codec !== 'vp9' && codec !== 'av1') {
-    return false
+    return `codec ${codec || '?'}`
   }
   const cw = s.width ?? 0
   const ch = s.height ?? 0
-  if (Math.max(cw, ch) > MAX_DIRECT.long || Math.min(cw, ch) > MAX_DIRECT.short) return false
-  if (Math.abs(parseRational(s.sample_aspect_ratio || '1') - 1) > 0.01 && s.sample_aspect_ratio !== '0:1') return false
-  return info.audioCodecs.every((c) => CHROMIUM_AUDIO.includes(c))
+  if (Math.max(cw, ch) > MAX_DIRECT.long || Math.min(cw, ch) > MAX_DIRECT.short) return 'size'
+  if (Math.abs(parseRational(s.sample_aspect_ratio || '1') - 1) > 0.01 && s.sample_aspect_ratio !== '0:1') return 'pixel aspect'
+  return null
+}
+
+/**
+ * Direct when the preview's <video> and the export's WebCodecs decoding both handle the original, as
+ * verified in Electron 44 (e2e/codecs.spec.ts): no rotation, SDR, progressive 8-bit 4:2:0, at most UHD,
+ *  - H.264 (<= High) or, when `decode.hevc`, HEVC Main in MP4/MOV (audio: Chromium codecs or
+ *    TOLERATED_AUDIO) or in Matroska (Chromium audio codecs),
+ *  - VP9 / AV1 in MP4 or WebM with Chromium audio codecs.
+ * An H.264/HEVC stream that qualifies next to other audio is remuxed (video stream copied into an
+ * MP4). Everything else gets a proxy.
+ */
+export function playbackPlan(path: string, probe: ProbeResult, info: VideoInfo, decode: DirectDecode = {}): PlaybackPlan {
+  const reason = streamProxyReason(info, decode)
+  if (reason) return { kind: 'proxy', reason }
+  const ext = extOf(path)
+  const fmt = probe.format.format_name ?? ''
+  const codec = info.stream.codec_name ?? ''
+  const copyable = codec === 'h264' || codec === 'hevc'
+  const mp4 = ['mp4', 'mov', 'm4v'].includes(ext) && fmt.includes('mp4')
+  const matroska = ['mkv', 'webm'].includes(ext) && fmt.includes('matroska')
+  const webm = ext === 'webm' && fmt.includes('webm') && !copyable
+  const odd = info.audioCodecs.find((c) => !CHROMIUM_AUDIO.includes(c))
+  if (mp4) {
+    const unplayable = info.audioCodecs.find((c) => !CHROMIUM_AUDIO.includes(c) && !(copyable && TOLERATED_AUDIO.includes(c)))
+    if (!unplayable) return { kind: 'direct' }
+    return copyable ? { kind: 'remux', reason: `audio ${unplayable}` } : { kind: 'proxy', reason: `audio ${unplayable}` }
+  }
+  if (copyable && matroska) return odd ? { kind: 'remux', reason: `audio ${odd}` } : { kind: 'direct' }
+  if (webm) return odd ? { kind: 'proxy', reason: `audio ${odd}` } : { kind: 'direct' }
+  return { kind: 'proxy', reason: 'container' }
+}
+
+/**
+ * The first decodable audio stream (VideoInfo.audioIndex) can be copied into the extracted .m4a
+ * instead of being re-encoded: AAC-LC, mono or stereo, from an MP4/MOV/Matroska file. Browsers and
+ * the export mixer (which resamples to 48 kHz stereo) play any such stream.
+ */
+export function canCopyAudio(probe: ProbeResult, info: VideoInfo): boolean {
+  if (info.audioIndex === null) return false
+  const s = probe.streams.filter((x) => x.codec_type === 'audio')[info.audioIndex]
+  const fmt = probe.format.format_name ?? ''
+  if (!s || !(fmt.includes('mp4') || fmt.includes('matroska'))) return false
+  const rate = Number(s.sample_rate)
+  return s.codec_name === 'aac' && /^lc$/i.test(s.profile ?? '') && (s.channels ?? 0) >= 1 && (s.channels ?? 0) <= 2 && rate >= 8000 && rate <= 96000
+}
+
+/** Why the original can't be played as is ('container', 'rotation', 'hdr', …), or null (playbackPlan 'direct'). */
+export function proxyReason(path: string, probe: ProbeResult, info: VideoInfo, decode: DirectDecode = {}): string | null {
+  const plan = playbackPlan(path, probe, info, decode)
+  return plan.kind === 'direct' ? null : plan.reason
+}
+
+/** True when Chromium can play the original file as is (playbackPlan 'direct'). */
+export function isDirectPlayable(path: string, probe: ProbeResult, info: VideoInfo, decode: DirectDecode = {}): boolean {
+  return playbackPlan(path, probe, info, decode).kind === 'direct'
 }
 
 const CODEC_LABEL: Record<string, string> = {

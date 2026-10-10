@@ -1,6 +1,7 @@
 // FFmpeg / ffprobe process helpers. No Electron imports: the binary directory is injected.
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { setPriority } from 'node:os'
 import { join } from 'node:path'
 import type { EncoderInfo } from '@shared/types'
 
@@ -90,6 +91,8 @@ export interface RunOptions {
   signal?: AbortSignal
   /** Working directory (relative paths in filter options resolve against it). */
   cwd?: string
+  /** OS scheduling priority of the process (os.constants.priority); default normal. */
+  priority?: number
 }
 
 export class FfmpegError extends Error {
@@ -171,6 +174,13 @@ export class Ffmpeg {
     return new Promise((resolve, reject) => {
       if (opts.signal?.aborted) return reject(abortError())
       const child = this.spawn(args, 'ignore', opts.cwd)
+      if (opts.priority !== undefined && child.pid) {
+        try {
+          setPriority(child.pid, opts.priority)
+        } catch {
+          // only scheduling changes
+        }
+      }
       const chunks: Buffer[] = []
       let stderr = ''
       let pending = ''

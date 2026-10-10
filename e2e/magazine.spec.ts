@@ -6,6 +6,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { appArgs } from './launch'
 
 const root = resolve(__dirname, '..')
 const dir = process.env.DIASHOW_VISUAL_DIR
@@ -19,7 +20,7 @@ test(`${theme} theme with real photos`, async () => {
   mkdirSync(out, { recursive: true })
   const files = readdirSync(dir!).filter((f) => /\.(jpe?g|heic|png|mp4|mov|webm)$/i.test(f)).sort().map((f) => join(dir!, f))
   const dataDir = mkdtempSync(join(tmpdir(), 'diashow-mag-'))
-  const app = await electron.launch({ args: ['.'], cwd: root, env: { ...process.env, DIASHOW_DATA_DIR: dataDir } })
+  const app = await electron.launch({ args: appArgs(), cwd: root, env: { ...process.env, DIASHOW_DATA_DIR: dataDir } })
   const page = await app.firstWindow()
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))

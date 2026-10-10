@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
-import type { AspectRatio, EncoderInfo, ExportProgress, ExportQuality, Project, VideoCodec } from '@shared/types'
+import { useEffect, useState } from 'react'
+import type { AspectRatio, EncoderInfo, ExportQuality, Project, VideoCodec } from '@shared/types'
 import { aspectValue } from '@shared/timeline'
+import { queueExport } from '../engine/exporter'
 import { useStore } from '../store'
-import { exportShow } from '../engine/exporter'
-import { fmtTime, localeTag, pick, t } from '../i18n'
+import { localeTag, pick, t } from '../i18n'
+import { JobRow } from './Queue'
 
 const HEIGHTS = [720, 1080, 1440, 2160]
 
@@ -12,7 +13,7 @@ function dims(aspect: number, short: number): { w: number; h: number } {
   return aspect >= 1 ? { w: even(short * aspect), h: short } : { w: short, h: even(short / aspect) }
 }
 
-type Phase = 'setup' | 'running' | 'done' | 'error'
+type Phase = 'setup' | 'queued' | 'error'
 
 interface Preset {
   id: string
@@ -47,20 +48,16 @@ export function ExportDialog() {
   const [enc, setEnc] = useState<EncoderInfo | null>(null)
   const [path, setPath] = useState<string | null>(null)
   const [phase, setPhase] = useState<Phase>('setup')
-  const [progress, setProgress] = useState({ frame: 0, total: 1, speed: 0 })
-  const [mainPhase, setMainPhase] = useState<ExportProgress['phase'] | null>(null)
-  const [prepare, setPrepare] = useState('')
   const [error, setError] = useState('')
-  const [result, setResult] = useState('')
-  const abort = useRef<AbortController | null>(null)
-  const busy = project.media.some((m) => m.status === 'pending' || m.status === 'processing') || project.music.some((m) => m.status === 'pending' || m.status === 'processing')
+  const [jobId, setJobId] = useState<string | null>(null)
+  const job = useStore((s) => s.exportJobs.find((j) => j.id === jobId))
+  // beat sync also needs the beats of every song (they are found after the photos are ready)
+  const busy =
+    project.media.some((m) => m.status === 'pending' || m.status === 'processing') ||
+    project.music.some((m) => m.status === 'pending' || m.status === 'processing' || (project.settings.timing.beatSync && m.status === 'ready' && !m.beats))
 
   useEffect(() => {
     void window.api.encoders().then(setEnc)
-    return window.api.onExportProgress((p) => {
-      setMainPhase(p.phase)
-      if (p.phase === 'prepare') setPrepare(p.message ?? '')
-    })
   }, [])
 
   const hwName = enc?.hardware[codec]
@@ -72,36 +69,29 @@ export function ExportDialog() {
     return p
   }
 
+  // The export runs in the queue's background window from a snapshot of the project, so the
+  // editor stays free and later edits don't change it.
   const start = async (): Promise<void> => {
     const out = path ?? (await choose())
     if (!out) return
-    setPhase('running')
     setError('')
-    abort.current = new AbortController()
     try {
       // another shape than the project: layouts are rebuilt for it
-      let job: Project = aspectId === project.settings.aspect ? project : { ...project, settings: { ...project.settings, aspect: aspectId } }
-      // sharp 4K: videos that only have a 1080p proxy get a high-resolution version first
-      const proxied = job.media.filter((m) => m.kind === 'video' && m.proxied && Math.max(m.width, m.height) > 1920)
-      if (Math.max(w, h) > 1920 && proxied.length) {
-        setMainPhase('prepare')
-        const paths = await window.api.prepareHires(proxied.map((m) => m.id), Math.max(w, h))
-        job = { ...job, media: job.media.map((m) => (paths[m.id] ? { ...m, playback: paths[m.id] } : m)) }
-      }
-      const file = await exportShow(job, { outPath: out, width: w, height: h, fps, codec, quality, hardware: hardware && !!hwName }, localeTag(), setProgress, abort.current.signal)
-      setResult(file)
-      setPhase('done')
+      const snapshot: Project = aspectId === project.settings.aspect ? project : { ...project, settings: { ...project.settings, aspect: aspectId } }
+      const label = PRESETS.find((x) => x.id === preset)?.name
+      const info = await queueExport(
+        snapshot,
+        // sharp 4K: videos that only have a 1080p proxy get a full-resolution source first
+        { outPath: out, width: w, height: h, fps, codec, quality, hardware: hardware && !!hwName, locale: localeTag(), hires: Math.max(w, h) > 1920 },
+        `${project.name} · ${label ? pick(label) : `${w}×${h}`}`
+      )
+      setJobId(info.id)
+      setPhase('queued')
     } catch (e) {
-      if ((e as Error).name === 'AbortError') setPhase('setup')
-      else {
-        setError((e as Error).message)
-        setPhase('error')
-      }
+      setError((e as Error).message)
+      setPhase('error')
     }
   }
-
-  const remaining = progress.speed * (progress.total - progress.frame)
-  const pct = Math.round((progress.frame / progress.total) * 100)
 
   return (
     <div className="overlay">
@@ -199,44 +189,19 @@ export function ExportDialog() {
             </div>
           </>
         )}
-        {phase === 'running' && (
+        {phase === 'queued' && (
           <>
-            <p>
-              {mainPhase === 'prepare' && progress.frame === 0
-                ? `${t('preparingHires')} ${prepare}`
-                : mainPhase === 'audio' && progress.frame === 0
-                  ? t('mixingAudio')
-                  : t('exporting')}
-            </p>
-            <div className="bar">
-              <div style={{ width: `${pct}%` }} />
-            </div>
-            <div className="row" style={{ color: 'var(--text-2)', fontSize: 12, marginTop: 6 }}>
-              <span style={{ flex: 1 }}>
-                {progress.frame} / {progress.total} · {pct} %
-              </span>
-              {progress.frame > 10 && (
-                <span>
-                  {fmtTime(remaining)} {t('remaining')}
-                </span>
-              )}
-            </div>
+            <p>{t('queueAdded')}</p>
+            {job && <JobRow job={job} />}
             <div className="actions">
-              <button className="btn" onClick={() => abort.current?.abort()}>
-                {t('cancel')}
-              </button>
-            </div>
-          </>
-        )}
-        {phase === 'done' && (
-          <>
-            <p>{t('exportDone')}</p>
-            <p className="hint" style={{ wordBreak: 'break-all' }}>
-              {result}
-            </p>
-            <div className="actions">
-              <button className="btn" onClick={() => void window.api.revealInFolder(result)}>
-                {t('showInFolder')}
+              <button
+                className="btn"
+                onClick={() => {
+                  setPath(null)
+                  setPhase('setup')
+                }}
+              >
+                {t('queueMore')}
               </button>
               <button className="btn primary" onClick={() => set({ exportOpen: false })}>
                 {t('close')}

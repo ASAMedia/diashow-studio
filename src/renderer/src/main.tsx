@@ -19,23 +19,34 @@ import { setLocale } from './i18n'
 import { App } from './App'
 import { PresentView } from './components/Presentation'
 import { playerRef, useStore } from './store'
-import { exportShow } from './engine/exporter'
+import { exportShow, queueExport, runExportWorker } from './engine/exporter'
+import { detectFaces } from './faces'
 
 // Test hook used by the Playwright end-to-end tests.
-;(window as unknown as { __diashow: unknown }).__diashow = { store: useStore, player: playerRef, exportShow }
+;(window as unknown as { __diashow: unknown }).__diashow = { store: useStore, player: playerRef, exportShow, queueExport, detectFaces }
 
 // A .dshow file opened with the app (double click, or while it is running). Subscribed before
 // the first render so a file passed at launch isn't missed.
-if (location.hash !== '#present') {
+const route = location.hash
+
+if (route === '#export-worker') {
+  // hidden window of the export queue: no UI, it renders until the queue is empty
+  void window.api.locale().then((l) => {
+    setLocale(l)
+    void runExportWorker()
+  })
+} else if (route !== '#present') {
   window.api.onOpenFile(async (path) => {
     const p = await window.api.importProjectFile(path)
     await useStore.getState().openProjectData(p)
   })
 }
 
-void window.api.locale().then((l) => {
-  setLocale(l)
-  document.documentElement.lang = l.slice(0, 2)
-  // the presentation window loads the same page with #present
-  createRoot(document.getElementById('root')!).render(location.hash === '#present' ? <PresentView /> : <App />)
-})
+if (route !== '#export-worker') {
+  void window.api.locale().then((l) => {
+    setLocale(l)
+    document.documentElement.lang = l.slice(0, 2)
+    // the presentation window loads the same page with #present
+    createRoot(document.getElementById('root')!).render(route === '#present' ? <PresentView /> : <App />)
+  })
+}

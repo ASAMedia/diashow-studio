@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import type { AudioPlan, AudioPlanClip } from '@shared/types'
-import { gainAt, MIX_RATE, mixAudioPlan, mixDecodedClips, softClip } from '../src/main/export/audioMix'
+import { atempoChain, gainAt, MIX_RATE, mixAudioPlan, mixDecodedClips, softClip } from '../src/main/export/audioMix'
 import { ff } from './helpers/media'
 
 const dir = mkdtempSync(join(tmpdir(), 'diashow-mix-'))
@@ -138,5 +138,57 @@ describe('mixAudioPlan', () => {
     // lavfi sine is 1/8 full scale; FFmpeg upmixes mono to stereo at -3 dB
     expect(peak).toBeGreaterThan(0.08)
     expect(at(wav.samples, 2.2)).toBe(0)
+  })
+
+  it('builds atempo chains within 0.5..2 per stage', () => {
+    expect(atempoChain(1)).toEqual([])
+    expect(atempoChain(2)).toEqual(['atempo=2'])
+    expect(atempoChain(0.5)).toEqual(['atempo=0.5'])
+    expect(atempoChain(1.25)).toEqual(['atempo=1.25'])
+    expect(atempoChain(4)).toEqual(['atempo=2', 'atempo=2'])
+    expect(atempoChain(6)).toEqual(['atempo=2', 'atempo=2', 'atempo=1.5'])
+    expect(atempoChain(0.2)).toEqual(['atempo=0.5', 'atempo=0.5', 'atempo=0.8'])
+    expect(atempoChain(NaN)).toEqual([])
+  })
+
+  it('plays video clips at their rate with the pitch kept (slow motion / time lapse)', async () => {
+    // 2 s source: 1 s of 1 kHz tone, then 1 s of silence
+    const src = join(dir, 'tone-then-silence.wav')
+    await ff.run(['-f', 'lavfi', '-i', 'sine=frequency=1000:sample_rate=48000:duration=1', '-af', 'apad=whole_dur=2', '-ac', '2', src])
+    const rms = (s: Int16Array, from: number, to: number): number => {
+      let sum = 0
+      let n = 0
+      for (let i = Math.round(from * MIX_RATE); i < Math.round(to * MIX_RATE); i++, n++) sum += (s[i * 2] / 32767) ** 2
+      return Math.sqrt(sum / Math.max(1, n))
+    }
+    /** Zero crossings per second of the left channel (2 × frequency). */
+    const crossings = (s: Int16Array, from: number, to: number): number => {
+      let c = 0
+      const a = Math.round(from * MIX_RATE)
+      const b = Math.round(to * MIX_RATE)
+      for (let i = a + 1; i < b; i++) if (Math.sign(s[i * 2]) !== Math.sign(s[(i - 1) * 2]) && s[i * 2] !== 0) c++
+      return c / (to - from)
+    }
+    const mixed = async (name: string, duration: number, rate: number): Promise<Int16Array> => {
+      const out = join(dir, name)
+      const c = { id: name, kind: 'video' as const, src, start: 0, offset: 0, duration, gain: [], rate }
+      await mixAudioPlan(ff, { duration: 5, clips: [c] }, out, join(dir, 'tmp'))
+      return readWav(out).samples
+    }
+
+    // rate 2: the whole 2 s source in 1 s of timeline, tone in the first half
+    const fast = await mixed('rate2.wav', 1, 2)
+    expect(rms(fast, 0.05, 0.42)).toBeGreaterThan(0.05)
+    expect(rms(fast, 0.58, 0.95)).toBeLessThan(0.005)
+    expect(rms(fast, 1.05, 5)).toBe(0)
+    // pitch kept: still 1 kHz (2000 crossings per second), not 2 kHz
+    expect(Math.abs(crossings(fast, 0.05, 0.42) - 2000)).toBeLessThan(60)
+
+    // rate 0.5: 2 s of source stretched over 4 s, tone in the first 2 s
+    const slow = await mixed('rate05.wav', 4, 0.5)
+    expect(rms(slow, 0.1, 1.85)).toBeGreaterThan(0.05)
+    expect(rms(slow, 2.15, 3.9)).toBeLessThan(0.005)
+    expect(rms(slow, 4.05, 5)).toBe(0)
+    expect(Math.abs(crossings(slow, 0.1, 1.85) - 2000)).toBeLessThan(60)
   })
 })

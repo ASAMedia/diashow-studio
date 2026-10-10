@@ -6,6 +6,7 @@ import sharp from 'sharp'
 import type { EncoderInfo } from '@shared/types'
 import { FfmpegError, type Ffmpeg } from '../ffmpeg'
 import type { GpuTonemap } from './hdr'
+import { loudnessFromLog } from './loudness'
 import { THUMB_MAX } from './photo'
 import { createLimiter } from './queue'
 import type { VideoInfo } from './videoInfo'
@@ -40,29 +41,41 @@ export function gpuInputArgs(gpu: GpuTonemap): string[] {
 }
 
 /**
- * GPU version of videoFilter for HDR sources: scaling, rotation and tone mapping in one libplacebo
- * pass, 8-bit 4:2:0 BT.709 limited range out. Frames the decoder could not keep on the GPU
- * (unsupported profile) arrive in system memory and are uploaded by libplacebo itself.
+ * GPU version of videoFilter: scaling, rotation and (HDR) tone mapping in one libplacebo pass, 8-bit
+ * 4:2:0 limited range out (HDR: BT.709; SDR keeps its colour space, like the CPU chain). Frames the
+ * decoder could not keep on the GPU (unsupported profile) arrive in system memory and are uploaded
+ * by libplacebo itself.
  */
 export function gpuVideoFilter(info: VideoInfo, maxEdge: number, gpu: GpuTonemap, opts: { fps?: number; shaderCache?: boolean } = {}): string {
-  if (!info.hdr) throw new Error('gpuVideoFilter is for HDR sources')
   const [w, h] = fitEven(info.width, info.height, maxEdge)
   const parts: string[] = []
   if (opts.fps) parts.push(`fps=${fpsRational(opts.fps)}`)
   if (gpu.decode === 'cuda') parts.push('hwupload')
+  const tone = info.hdr ? `${GPU_TONEMAP[info.hdr]}:apply_dolbyvision=0:colorspace=bt709:color_primaries=bt709:color_trc=bt709:` : ''
   // shader_cache is a file name prefix relative to FFmpeg's working directory (no path escaping needed)
-  parts.push(
-    `libplacebo=w=${w}:h=${h}:rotate=${info.rotation}:${GPU_TONEMAP[info.hdr]}:apply_dolbyvision=0` +
-      ':colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv:format=yuv420p' +
-      (opts.shaderCache ? ':shader_cache=pl' : '')
-  )
+  parts.push(`libplacebo=w=${w}:h=${h}:rotate=${info.rotation}:${tone}range=tv:format=yuv420p` + (opts.shaderCache ? ':shader_cache=pl' : ''))
   parts.push('setsar=1')
   return parts.join(',')
 }
 
-/** HDR sources the GPU path handles; interlaced ones keep the CPU chain (bwdif). */
-export function gpuEligible(info: VideoInfo): boolean {
-  return !!info.hdr && !info.interlaced
+/** Streams the GPU video decoders (Vulkan video, NVDEC) take: 4:2:0, H.264 8-bit, HEVC / AV1 / VP9 up to 10-bit. */
+function gpuDecodable(info: VideoInfo): boolean {
+  const codec = info.stream.codec_name ?? ''
+  if (info.chroma !== '4:2:0') return false
+  if (codec === 'h264') return info.bitDepth === 8
+  return ['hevc', 'av1', 'vp9'].includes(codec) && info.bitDepth <= 10
+}
+
+/**
+ * Sources the GPU path handles: every HDR source (tone mapping), and SDR sources the GPU also decodes
+ * (`gpu` given, decode not 'upload'), so their proxy (scaling, rotation) leaves the CPU free for the
+ * photos: measured 1.2 s instead of 2.7 s for 8 s of rotated 1080p H.264, same picture. Interlaced
+ * sources keep the CPU chain (bwdif).
+ */
+export function gpuEligible(info: VideoInfo, gpu?: GpuTonemap | null): boolean {
+  if (info.interlaced) return false
+  if (info.hdr) return true
+  return !!gpu && gpu.decode !== 'upload' && gpuDecodable(info)
 }
 
 /** Scales (w, h) so the long edge is <= max (never upscales) with even dimensions. */
@@ -122,6 +135,11 @@ export interface ProxyOptions {
   gpu?: GpuTonemap | null
   /** Folder for libplacebo's compiled shaders: saves ~0.3 s of start-up per GPU transcode. */
   shaderCache?: string
+  /**
+   * OS priority of the GPU attempt's FFmpeg process. It needs little CPU, but needs it at once to keep
+   * decoder, shaders and encoder busy while photos saturate the CPU.
+   */
+  gpuPriority?: number
 }
 
 export interface ProxyResult {
@@ -139,13 +157,17 @@ export async function transcodeProxy(ff: Ffmpeg, src: string, info: VideoInfo, o
   const fps = info.proxyFps
   const maxEdge = opts.maxEdge ?? PROXY_MAX
   const vf = videoFilter(info, maxEdge, { fps })
-  const colorTags = info.hdr ? ['-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709', '-color_range', 'tv'] : []
+  // Both chains write limited range. Hardware encoders only flag it with a known colour space, which
+  // SDR sources often lack, so the flag is set in the bitstream
+  const colorTags = info.hdr
+    ? ['-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709', '-color_range', 'tv']
+    : ['-bsf:v', 'h264_metadata=video_full_range_flag=0']
   const tmp = `${out}.part.mp4`
   const hw = opts.encoders?.hardware.h264
   const order = hw ? [hw, 'libx264'] : ['libx264']
   const attempts: Array<{ input: string[]; vf: string; encoder: string; gpu: boolean }> = []
   const shaderCache = opts.shaderCache && existsSync(opts.shaderCache) ? opts.shaderCache : undefined
-  if (opts.gpu && gpuEligible(info)) {
+  if (opts.gpu && gpuEligible(info, opts.gpu)) {
     const gpuVf = gpuVideoFilter(info, maxEdge, opts.gpu, { fps, shaderCache: !!shaderCache })
     attempts.push({ input: gpuInputArgs(opts.gpu), vf: gpuVf, encoder: order[0], gpu: true })
   }
@@ -172,6 +194,7 @@ export async function transcodeProxy(ff: Ffmpeg, src: string, info: VideoInfo, o
       await ff.run(args, {
         signal: opts.signal,
         cwd: gpu ? shaderCache : undefined,
+        priority: gpu ? opts.gpuPriority : undefined,
         onProgress: (s) => opts.onProgress?.(info.duration > 0 ? Math.min(1, Math.max(0, s / info.duration)) : 0)
       })
       await rename(tmp, out)
@@ -183,6 +206,26 @@ export async function transcodeProxy(ff: Ffmpeg, src: string, info: VideoInfo, o
     }
   }
   throw lastErr
+}
+
+/**
+ * Copies the video stream as is into an MP4 (no re-encoding, no audio): for streams Chromium plays
+ * whose container (MKV, AVI, …) or extra tracks (iPhone spatial audio) it doesn't. The moov box stays
+ * at the end: the media protocol serves byte ranges, so moving it would only cost a second write.
+ */
+export async function remuxVideo(ff: Ffmpeg, src: string, info: VideoInfo, out: string, opts: { signal?: AbortSignal; onProgress?: (fraction: number) => void } = {}): Promise<void> {
+  const tmp = `${out}.part.mp4`
+  const tag = info.stream.codec_name === 'hevc' ? ['-tag:v', 'hvc1'] : []
+  try {
+    await ff.run(['-i', src, '-map', `0:${info.stream.index}`, '-c:v', 'copy', ...tag, '-an', '-sn', '-dn', '-map_metadata', '-1', '-map_chapters', '-1', '-f', 'mp4', tmp], {
+      signal: opts.signal,
+      onProgress: (s) => opts.onProgress?.(info.duration > 0 ? Math.min(1, Math.max(0, s / info.duration)) : 0)
+    })
+    await rename(tmp, out)
+  } catch (err) {
+    await rm(tmp, { force: true })
+    throw err
+  }
 }
 
 /** Frame at ~10 % of the duration → JPEG, long edge 360. */
@@ -212,6 +255,39 @@ export async function extractAudio(ff: Ffmpeg, src: string, info: VideoInfo, out
       { signal }
     )
     await rename(tmp, out)
+  } catch (err) {
+    await rm(tmp, { force: true })
+    throw err
+  }
+}
+
+/**
+ * The video's sound for the preview and the export mixer (first decodable audio stream → .m4a), and
+ * its integrated loudness (EBU R128) from the same FFmpeg run, so the file is read and decoded once.
+ * `copy` (canCopyAudio) keeps an AAC-LC stream as it is instead of re-encoding it (AAC 192k 48 kHz
+ * stereo); loudness is always measured on the 48 kHz stereo signal, like measureLoudness on the
+ * re-encoded file. Resolves with the loudness in LUFS (0.1 steps), undefined for silence.
+ */
+export async function extractAudioWithLoudness(
+  ff: Ffmpeg,
+  src: string,
+  info: VideoInfo,
+  out: string,
+  opts: { signal?: AbortSignal; copy?: boolean } = {}
+): Promise<number | undefined> {
+  if (info.audioIndex === null) throw new Error('no audio')
+  const tmp = `${out}.part.m4a`
+  const a = `0:a:${info.audioIndex}`
+  const container = ['-map_metadata', '-1', '-movflags', '+faststart', '-f', 'mp4', tmp]
+  // ebur128 logs its summary when the run ends; its pass-through output goes to a null muxer
+  const measure = `aresample=48000,aformat=channel_layouts=stereo`
+  const args = opts.copy
+    ? ['-i', src, '-filter_complex', `[${a}]${measure},ebur128=framelog=quiet[m]`, '-map', a, '-c:a', 'copy', ...container]
+    : ['-i', src, '-filter_complex', `[${a}]${measure},asplit=2[enc][l];[l]ebur128=framelog=quiet[m]`, '-map', '[enc]', '-c:a', 'aac', '-b:a', '192k', ...container]
+  try {
+    const log = await ff.log([...args, '-map', '[m]', '-f', 'null', '-'], { signal: opts.signal })
+    await rename(tmp, out)
+    return loudnessFromLog(log)
   } catch (err) {
     await rm(tmp, { force: true })
     throw err

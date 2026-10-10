@@ -67,6 +67,9 @@ export interface MusicTrack {
   bpm?: number
   /** Integrated loudness in LUFS (EBU R128). */
   loudness?: number
+  /** The part of the song that plays, seconds; the whole song when undefined. */
+  trimIn?: number
+  trimOut?: number
 }
 
 /** Normalised rectangle (0..1) inside a source image. */
@@ -89,6 +92,31 @@ interface BaseEntry {
   caption?: string
   /** Layout template chosen by the user for the slide that starts with this entry. */
   layout?: string
+  /** Text boxes placed freely on the slide. */
+  texts?: FreeText[]
+  /** Left out of the show (culling); the entry stays in the project and can come back. */
+  excluded?: boolean
+  /** Culling: 0..5 stars. */
+  rating?: number
+}
+
+/** A text box placed on a slide by the user. */
+export interface FreeText {
+  id: string
+  text: string
+  /** Centre of the box in slide coordinates, 0..1. */
+  x: number
+  y: number
+  /** Font size as a fraction of the slide height. */
+  size: number
+  font: TextFont
+  /** CSS colour. */
+  color: string
+  bold: boolean
+  /** Behind the text: nothing, a soft shadow, a dark band, a white card or a speech bubble. */
+  box: 'none' | 'shadow' | 'band' | 'card' | 'bubble'
+  /** Degrees, clockwise. */
+  rotation: number
 }
 
 /** Framing of a photo cropped into a cell: focus point (0..1 of the image) and zoom (>= 1). */
@@ -109,6 +137,8 @@ export interface PhotoEntry extends BaseEntry {
   whole?: boolean
   /** Play the motion part of a Live/Motion photo; undefined = project default. */
   playLive?: boolean
+  /** Areas made unrecognisable (pixelated), normalised to the picture. */
+  privacy?: Rect[]
 }
 
 export interface VideoEntry extends BaseEntry {
@@ -125,6 +155,10 @@ export interface VideoEntry extends BaseEntry {
   crop?: Crop
   /** Whole picture or cropped; undefined = automatic (cropped when the shapes are close). */
   whole?: boolean
+  /** Playback speed (0.25 = slow motion, 4 = time lapse); default 1. Sound plays (pitch kept) between 0.5 and 2. */
+  speed?: number
+  /** Areas made unrecognisable (pixelated), normalised to the picture; fixed for the whole clip. */
+  privacy?: Rect[]
 }
 
 export interface TextEntry extends BaseEntry {
@@ -265,8 +299,11 @@ export interface AudioPlanClip {
   start: number
   /** Offset into the source file, seconds. */
   offset: number
+  /** Timeline seconds; the source span read is duration * rate. */
   duration: number
   gain: GainPoint[]
+  /** Playback rate of the source with the pitch kept (video speed); default 1. */
+  rate?: number
 }
 
 export interface AudioPlan {

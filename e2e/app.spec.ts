@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { appArgs } from './launch'
 
 const root = resolve(__dirname, '..')
 const mediaDir = join(root, 'test-media')
@@ -24,7 +25,7 @@ test('import, preview every theme, export', async () => {
   const dataDir = mkdtempSync(join(tmpdir(), 'diashow-e2e-'))
   const exe = process.env.DIASHOW_EXE
   const app = await electron.launch(
-    exe ? { executablePath: exe, env: { ...process.env, DIASHOW_DATA_DIR: dataDir } } : { args: ['.'], cwd: root, env: { ...process.env, DIASHOW_DATA_DIR: dataDir } }
+    exe ? { executablePath: exe, env: { ...process.env, DIASHOW_DATA_DIR: dataDir } } : { args: appArgs(), cwd: root, env: { ...process.env, DIASHOW_DATA_DIR: dataDir } }
   )
   const page = await app.firstWindow()
   const errors: string[] = []
@@ -148,7 +149,7 @@ test('import, preview every theme, export', async () => {
   await cards.nth(x).click()
   await cards.nth(y).click({ modifiers: ['Control'] })
   await cards.nth(y).click({ button: 'right' })
-  await page.getByText('Zu einer Folie zusammenfassen').click()
+  await page.locator('.menu').getByText(/Zu einer Folie zusammenfassen|Combine into one slide/).click()
   await page.waitForTimeout(300)
   after = await slideIds()
   const wanted2 = [...before[x], ...before[y]]
@@ -190,8 +191,8 @@ test('import, preview every theme, export', async () => {
   expect(packed.media).toBeGreaterThan(10)
 
   // day titles from the project menu
-  await page.locator('.titlebar button[title="Weitere Aktionen"]').click()
-  await page.getByText('Tagestitel aus Aufnahmedatum').click()
+  await page.locator('.titlebar button[title="Weitere Aktionen"], .titlebar button[title="More actions"]').click()
+  await page.getByText(/Tagestitel aus Aufnahmedatum|Day titles from capture date/).click()
   await page.waitForTimeout(300)
   const autoTitles = await page.evaluate(() => (window as any).__diashow.store.getState().project.entries.filter((e: any) => e.auto === 'day').length)
   console.log('day titles', autoTitles)

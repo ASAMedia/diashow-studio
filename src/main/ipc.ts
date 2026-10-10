@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { AUDIO_EXT, IMAGE_EXT, VIDEO_EXT } from '@shared/formats'
 import type { AppSettings, ExportOptions, ExportProgress, MediaItem, MusicTrack, Project, Rect } from '@shared/types'
 import { createAppSettingsStore } from './appSettings'
+import { directDecodeSupport } from './codecSupport'
 import { resolveFfmpegDir } from './ffmpeg'
 import { createKeepAwake } from './keepAwake'
 import { endExiftool } from './media/exif'
@@ -12,6 +13,7 @@ import { displayCount, isPresentationWindow, startPresentation, stopPresentation
 import { importProjectFile, packProject } from './projectFile'
 import { createProjectStore, PROJECT_EXT } from './projects'
 import { cancelActiveExport, startExport, type ExportJob } from './export/encoder'
+import { registerExportQueue } from './export/queueMain'
 
 function broadcast(channel: string, payload: unknown): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -48,7 +50,8 @@ export function registerIpc(): void {
     ffmpegDir,
     cacheDir,
     onUpdate: (item: MediaItem) => broadcast('media:update', item),
-    onMusicUpdate: (track: MusicTrack) => broadcast('music:update', track)
+    onMusicUpdate: (track: MusicTrack) => broadcast('music:update', track),
+    directDecode: directDecodeSupport
   })
   media = service
   // Warm up encoder detection so the export dialog has it ready
@@ -73,8 +76,16 @@ export function registerIpc(): void {
       preparing.delete(ctrl)
     }
   }
+  // Export queue: jobs in <userData>/exports, rendered one after another by a hidden worker window
+  // whose export:frame / export:chunk / export:hires calls go to the queue (export/queueMain.ts)
+  const exportQueue = registerExportQueue({
+    dir: join(app.getPath('userData'), 'exports'),
+    ffmpegDir,
+    encoders: () => service.ffmpeg.encoders()
+  })
 
-  ipcMain.handle('app:locale', () => app.getLocale())
+  // DIASHOW_LOCALE (e.g. en-US) overrides the Windows language, for tests in either language
+  ipcMain.handle('app:locale', () => process.env.DIASHOW_LOCALE || app.getLocale())
 
   ipcMain.handle('media:import', (_e, paths: string[]) => service.importPaths(stringList(paths)))
   ipcMain.handle('media:restore', (_e, items: MediaItem[]) => service.restoreMedia(items))
@@ -84,6 +95,7 @@ export function registerIpc(): void {
   ipcMain.handle('media:faces', (_e, id: string, faces: Rect[]) => service.setFaces(id, faces))
   ipcMain.handle('media:strip', (_e, path: string, count: number, height: number) => service.videoStrip(path, count, height))
   ipcMain.handle('media:relink', (_e, missing: MediaItem[], folder: string) => service.relinkMedia(missing, folder))
+  ipcMain.handle('media:prioritize', (_e, ids: string[]) => service.prioritize(stringList(ids)))
   ipcMain.handle('cache:info', async () => service.cacheInfo(await projects.references()))
   ipcMain.handle('cache:clean', async (_e, what: 'unused' | 'hires' | 'proxies') => service.cleanCache(what, await projects.references()))
 
@@ -172,28 +184,36 @@ export function registerIpc(): void {
 
   ipcMain.handle('export:encoders', () => service.ffmpeg.encoders())
 
-  ipcMain.handle('export:hires', (_e, ids: string[], maxEdge: number) =>
-    prepareRun((signal) => service.prepareHires(stringList(ids), Number(maxEdge) || 0, { signal, onProgress: sendProgress }))
-  )
+  ipcMain.handle('export:hires', (e, ids: string[], maxEdge: number) => {
+    // the worker's preparation stops with its job and is not shown in the editor's export dialog
+    if (exportQueue.isWorker(e.sender)) {
+      return exportQueue.prepare((signal, onProgress) => service.prepareHires(stringList(ids), Number(maxEdge) || 0, { signal, onProgress }))
+    }
+    return prepareRun((signal) => service.prepareHires(stringList(ids), Number(maxEdge) || 0, { signal, onProgress: sendProgress }))
+  })
 
-  ipcMain.handle('export:start', async (_e, options: ExportOptions) => {
+  ipcMain.handle('export:start', async (e, options: ExportOptions) => {
+    if (exportQueue.isWorker(e.sender)) throw new Error('the export worker uses segmentStart')
     exportJob = null
     const encoders = await service.ffmpeg.encoders()
     exportJob = await startExport(options, ffmpegDir, join(cacheDir, 'export'), sendProgress, encoders)
   })
 
-  ipcMain.handle('export:frame', async (_e, rgba: Uint8Array) => {
+  ipcMain.handle('export:frame', async (e, rgba: Uint8Array) => {
+    if (exportQueue.routes(e.sender, !!exportJob)) return exportQueue.writeFrame(rgba)
     if (!exportJob) throw new Error('no export running')
     await exportJob.writeFrame(rgba)
   })
 
-  ipcMain.handle('export:chunk', async (_e, data: Uint8Array) => {
+  ipcMain.handle('export:chunk', async (e, data: Uint8Array) => {
+    if (exportQueue.routes(e.sender, !!exportJob)) return exportQueue.writeChunk(data)
     if (!exportJob) throw new Error('no export running')
     if (!(data instanceof Uint8Array)) throw new Error('chunk must be a Uint8Array')
     await exportJob.writeChunk(data)
   })
 
-  ipcMain.handle('export:finish', async () => {
+  ipcMain.handle('export:finish', async (e) => {
+    if (exportQueue.isWorker(e.sender)) throw new Error('the export worker uses segmentFinish')
     if (!exportJob) throw new Error('no export running')
     const job = exportJob
     try {
@@ -203,7 +223,9 @@ export function registerIpc(): void {
     }
   })
 
-  ipcMain.handle('export:cancel', async () => {
+  ipcMain.handle('export:cancel', async (e) => {
+    // from the worker: drop its active segment only, never the editor's export
+    if (exportQueue.isWorker(e.sender)) return exportQueue.discardSegment()
     const job = exportJob
     exportJob = null
     const stopped = [...preparing]
@@ -254,7 +276,7 @@ export function registerIpc(): void {
     const job = exportJob
     exportJob = null
     for (const ctrl of preparing) ctrl.abort()
-    const cleanup = Promise.allSettled([job ? job.cancel() : cancelActiveExport(), media?.dispose(), endExiftool()])
+    const cleanup = Promise.allSettled([job ? job.cancel() : cancelActiveExport(), exportQueue.shutdown(), media?.dispose(), endExiftool()])
     // Never let a stuck child process block quitting
     const timeout = new Promise((resolve) => setTimeout(resolve, 4000))
     void Promise.race([cleanup, timeout]).finally(() => app.quit())

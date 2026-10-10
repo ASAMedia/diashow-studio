@@ -1,8 +1,9 @@
 import { create } from 'zustand'
 import type {
-  Entry, MediaItem, MusicTrack, Project, ProjectSettings, ProjectSummary, TextEntry, ThemeId
+  Entry, FreeText, MediaItem, MusicTrack, Project, ProjectSettings, ProjectSummary, TextEntry, ThemeId
 } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
+import type { ExportJobInfo } from '@shared/exportQueue'
 import { themeMeta } from '@shared/themes'
 import { localeTag, t } from './i18n'
 import type { Player } from './engine/player'
@@ -10,7 +11,8 @@ import type { Player } from './engine/player'
 export type InspectorTab = 'themes' | 'music' | 'timing' | 'slide'
 
 interface State {
-  view: 'home' | 'editor'
+  /** 'cull': the review grid for sorting photos in and out of the show. */
+  view: 'home' | 'editor' | 'cull'
   projects: ProjectSummary[]
   project: Project | null
   /** Selected entry ids. */
@@ -21,9 +23,15 @@ interface State {
   fullscreen: boolean
   exportOpen: boolean
   kbEdit: 'start' | 'end' | null
+  /** Entry whose pixelated areas are being edited in the viewer. */
+  privacyEdit: string | null
+  /** Selected free text box (its id). */
+  textSel: string | null
   canUndo: boolean
   canRedo: boolean
-  dialog: 'rejects' | 'pack' | 'settings' | 'backups' | 'help' | null
+  dialog: 'rejects' | 'pack' | 'settings' | 'backups' | 'help' | 'queue' | null
+  /** Export queue, oldest first (kept by the main process). */
+  exportJobs: ExportJobInfo[]
   presenting: boolean
   /** Fullscreen started by kiosk mode: loops whatever the project says. */
   kiosk: boolean
@@ -54,6 +62,11 @@ interface State {
   addText(): void
   removeEntries(ids: string[]): void
   setEntry(id: string, patch: Partial<Entry>): void
+  /** Changes several entries in one undo step. */
+  updateEntries(ids: string[], fn: (e: Entry) => void, key?: string): void
+  addFreeText(entryId: string): void
+  setFreeText(entryId: string, textId: string, patch: Partial<FreeText>): void
+  removeFreeText(entryId: string, textId: string): void
   /** Grouping: the given entries become one slide at the position of the first of them. */
   mergeEntries(ids: string[]): void
   /** Every entry of a slide becomes a slide of its own. */
@@ -95,6 +108,11 @@ function withCurrentMedia(snapshot: Project, current: Project): Project {
   }
 }
 
+/** Fields of a song the user sets in the editor; processing updates from the main process keep them. */
+function keepTrim(update: MusicTrack, cur: MusicTrack | undefined): MusicTrack {
+  return cur && (cur.trimIn != null || cur.trimOut != null) ? { ...update, trimIn: cur.trimIn, trimOut: cur.trimOut } : update
+}
+
 const dayKey = (time: number): string => {
   const d = new Date(time)
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
@@ -128,9 +146,12 @@ export const useStore = create<State>((set, get) => ({
   fullscreen: false,
   exportOpen: false,
   kbEdit: null,
+  privacyEdit: null,
+  textSel: null,
   canUndo: false,
   canRedo: false,
   dialog: null,
+  exportJobs: [],
   presenting: false,
   kiosk: false,
 
@@ -168,7 +189,8 @@ export const useStore = create<State>((set, get) => ({
     const [media, music] = await Promise.all([window.api.restoreMedia(p.media), window.api.restoreMusic(p.music)])
     const cur = get().project
     if (!cur || cur.id !== p.id) return
-    const next = { ...cur, media, music }
+    const old = new Map(cur.music.map((m) => [m.id, m]))
+    const next = { ...cur, media, music: music.map((m) => keepTrim(m, old.get(m.id))) }
     set({ project: next })
     scheduleSave(next)
   },
@@ -177,7 +199,7 @@ export const useStore = create<State>((set, get) => ({
     const p = get().project
     if (p) void window.api.saveProject(p)
     resetHistory()
-    set({ project: null, view: 'home', selection: [], fullscreen: false, canUndo: false, canRedo: false })
+    set({ project: null, view: 'home', selection: [], fullscreen: false, canUndo: false, canRedo: false, privacyEdit: null, textSel: null })
     void get().loadProjects()
   },
 
@@ -368,6 +390,36 @@ export const useStore = create<State>((set, get) => ({
     }, `entry:${id}:${Object.keys(patch).join(',')}`)
   },
 
+  updateEntries(ids, fn, key) {
+    const want = new Set(ids)
+    get().update((p) => p.entries.forEach((e) => want.has(e.id) && fn(e)), key)
+  },
+
+  addFreeText(entryId) {
+    const ft: FreeText = { id: uid(), text: t('freeTextDefault'), x: 0.5, y: 0.5, size: 0.08, font: 'theme', color: '#ffffff', bold: true, box: 'shadow', rotation: 0 }
+    get().update((p) => {
+      const e = p.entries.find((x) => x.id === entryId)
+      if (e) e.texts = [...(e.texts ?? []), ft]
+    })
+    set({ textSel: ft.id, tab: 'slide' })
+  },
+
+  setFreeText(entryId, textId, patch) {
+    get().update((p) => {
+      const ft = p.entries.find((x) => x.id === entryId)?.texts?.find((x) => x.id === textId)
+      if (ft) Object.assign(ft, patch)
+    }, `text:${textId}:${Object.keys(patch).join(',')}`)
+  },
+
+  removeFreeText(entryId, textId) {
+    get().update((p) => {
+      const e = p.entries.find((x) => x.id === entryId)
+      if (e?.texts) e.texts = e.texts.filter((x) => x.id !== textId)
+      if (e && !e.texts?.length) delete e.texts
+    })
+    if (get().textSel === textId) set({ textSel: null })
+  },
+
   mergeEntries(ids) {
     const want = new Set(ids)
     get().update((p) => {
@@ -426,7 +478,7 @@ export const useStore = create<State>((set, get) => ({
   },
 
   select(ids) {
-    set({ selection: ids, kbEdit: null })
+    set({ selection: ids, kbEdit: null, privacyEdit: null, textSel: null })
   },
 
   set(patch) {
@@ -449,7 +501,7 @@ export function wireMediaUpdates(): () => void {
     const next = {
       ...p,
       media: media.size ? p.media.map((m) => media.get(m.id) ?? m) : p.media,
-      music: music.size ? p.music.map((m) => music.get(m.id) ?? m) : p.music
+      music: music.size ? p.music.map((m) => (music.has(m.id) ? keepTrim(music.get(m.id)!, m) : m)) : p.music
     }
     media.clear()
     music.clear()

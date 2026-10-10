@@ -5,6 +5,7 @@ import { _electron as electron, test } from '@playwright/test'
 import { mkdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import sharp from 'sharp'
+import { appArgs } from './launch'
 
 const root = resolve(__dirname, '..')
 const dir = process.env.DIASHOW_ORIGINALS_DIR
@@ -17,7 +18,7 @@ test('flicker diagnostics', async () => {
   test.skip(!dir, 'DIASHOW_ORIGINALS_DIR not set')
   const dataDir = process.env.DIASHOW_FLICKER_DATA ?? join(root, 'test-results', 'flicker-data')
   mkdirSync(dataDir, { recursive: true })
-  const app = await electron.launch({ args: ['.'], cwd: root, env: { ...process.env, DIASHOW_DATA_DIR: dataDir } })
+  const app = await electron.launch({ args: appArgs(), cwd: root, env: { ...process.env, DIASHOW_DATA_DIR: dataDir } })
   const page = await app.firstWindow()
   await page.waitForFunction(() => !!(window as any).__diashow)
   await page.evaluate(async (d) => (window as any).__diashow.store.getState().createProject([d], 'Flicker'), dir!)

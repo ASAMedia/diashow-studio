@@ -2,7 +2,7 @@
 // crossfades and fades) and the sound of video clips, with the music ducked while a
 // clip with sound plays. Preview (Web Audio) and export (FFmpeg mixer) both consume it.
 import type { AudioPlan, AudioPlanClip, GainPoint, MediaItem, Project, VideoEntry } from './types'
-import type { Timeline, TimelineSlide } from './timeline'
+import { speedHasSound, trackSpan, type Timeline, type TimelineSlide } from './timeline'
 
 /** Linear interpolation of gain points; clamps before the first and after the last point. */
 export function gainAt(points: GainPoint[], t: number): number {
@@ -37,6 +37,7 @@ export interface AudibleClip {
   media: MediaItem
   trimIn: number
   trimOut: number
+  speed: number
 }
 
 /**
@@ -50,10 +51,11 @@ export function audibleClips(s: TimelineSlide): AudibleClip[] {
     if (e.type !== 'video') return
     const m = s.media[i]
     const span = s.kind === 'video' ? s.video : s.clips?.[i]
-    if (!m?.hasAudio || !m.audio || !span || (e.volume ?? 1) <= 0) return
+    // very slow or fast clips play silently
+    if (!m?.hasAudio || !m.audio || !span || (e.volume ?? 1) <= 0 || !speedHasSound(span.speed)) return
     const on = e.muted === false || (first && !e.muted)
     if (m.hasAudio && !e.muted) first = false
-    if (on) out.push({ entry: e, media: m, trimIn: span.trimIn, trimOut: span.trimOut })
+    if (on) out.push({ entry: e, media: m, trimIn: span.trimIn, trimOut: span.trimOut, speed: span.speed })
   })
   return out
 }
@@ -107,8 +109,9 @@ export function buildAudioPlan(project: Project, tl: Timeline): AudioPlan {
     const xf = a.crossfade
     while (t < L - 0.05 && n < 500) {
       const track = tracks[i % tracks.length]
+      const span = trackSpan(track)
       const first = n === 0
-      const dur = Math.min(track.duration, L - t)
+      const dur = Math.min(span.length, L - t)
       const end = t + dur
       const fadeIn = first ? Math.min(a.fadeIn, dur / 2) : Math.min(xf, dur / 2)
       const endsShow = end >= L - 1e-6
@@ -120,7 +123,7 @@ export function buildAudioPlan(project: Project, tl: Timeline): AudioPlan {
         { t: end - fadeOut, g: v },
         { t: end, g: fadeOut > 0 ? 0 : v }
       ]
-      clips.push({ id: `music-${n}`, kind: 'music', src: track.playback!, start: t, offset: 0, duration: dur, gain: product(base, duck, t, end) })
+      clips.push({ id: `music-${n}`, kind: 'music', src: track.playback!, start: t, offset: span.from, duration: dur, gain: product(base, duck, t, end) })
       if (endsShow || (!a.repeatMusic && i === tracks.length - 1)) break
       t = end - Math.min(xf, dur / 2)
       i++
@@ -131,7 +134,7 @@ export function buildAudioPlan(project: Project, tl: Timeline): AudioPlan {
   if (a.videoSound) {
     for (const s of tl.slides) for (const c of audibleClips(s)) {
       const vol = Math.min(2, Math.max(0, c.entry.volume ?? 1)) * loudnessGain(c.media.loudness, a.normalize ?? true)
-      const dur = Math.min(s.duration, c.trimOut - c.trimIn)
+      const dur = Math.min(s.duration, (c.trimOut - c.trimIn) / c.speed)
       const fi = Math.max(0.15, Math.min(s.transIn, dur / 2))
       const fo = Math.max(0.15, Math.min(s.transOut, dur / 2))
       clips.push({
@@ -141,6 +144,7 @@ export function buildAudioPlan(project: Project, tl: Timeline): AudioPlan {
         start: s.start,
         offset: c.trimIn,
         duration: dur,
+        ...(c.speed !== 1 ? { rate: c.speed } : {}),
         gain: [
           { t: s.start, g: 0 },
           { t: s.start + fi, g: vol },

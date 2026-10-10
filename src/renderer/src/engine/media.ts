@@ -117,19 +117,20 @@ export class VideoPool {
     if (!v.el.seeking && v.el.paused && Math.abs(v.el.currentTime - time) > 0.03) v.el.currentTime = time
   }
 
-  /** `playing` false also covers a clip that holds its last frame. */
-  frame(path: string, time: number, playing: boolean): Tex | null {
+  /** `playing` false also covers a clip that holds its last frame. `rate` is the clip's speed. */
+  frame(path: string, time: number, playing: boolean, rate = 1): Tex | null {
     const v = this.get(path)
     v.touched = true
     v.idle = 0
     const el = v.el
+    if (el.playbackRate !== rate) el.playbackRate = rate
     const target = Math.max(0, Math.min(time, (el.duration || Infinity) - 0.03))
     if (playing) {
       if (el.paused) {
         el.currentTime = target
         v.seeks++
         void el.play().catch(() => {})
-      } else if (Math.abs(el.currentTime - target) > 0.25) {
+      } else if (Math.abs(el.currentTime - target) > 0.25 * rate) {
         el.currentTime = target
         v.seeks++
       }
@@ -276,7 +277,7 @@ export class ExportVideoStore {
 
 export type FontRole = 'sans' | 'light' | 'display' | 'serif' | 'type' | 'editorial' | 'caption' | 'rounded' | 'hand'
 
-const FONT_FAMILY: Record<FontRole, string> = {
+export const FONT_FAMILY: Record<FontRole, string> = {
   sans: "'Inter', 'Segoe UI', sans-serif",
   light: "'Inter', 'Segoe UI', sans-serif",
   display: "'Anton', 'Impact', sans-serif",

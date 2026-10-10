@@ -16,6 +16,28 @@ export function isMotionPhoto(tags: Tags): boolean {
   )
 }
 
+/**
+ * True when nothing follows the image data of a JPEG (the file ends with the EOI marker FF D9).
+ * Motion Photos append their video (Google) or a trailer (Samsung SEFT) after it, so a JPEG that
+ * ends here and whose XMP doesn't announce a video needs no full exiftool read to rule one out.
+ */
+export async function endsAtJpegEoi(path: string): Promise<boolean> {
+  try {
+    const fh = await open(path, 'r')
+    try {
+      const { size } = await fh.stat()
+      if (size < 4) return false
+      const buf = Buffer.alloc(2)
+      await fh.read(buf, 0, 2, size - 2)
+      return buf[0] === 0xff && buf[1] === 0xd9
+    } finally {
+      await fh.close()
+    }
+  } catch {
+    return false
+  }
+}
+
 async function looksLikeMp4(path: string): Promise<boolean> {
   const fh = await open(path, 'r')
   try {

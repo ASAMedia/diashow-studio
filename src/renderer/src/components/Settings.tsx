@@ -221,6 +221,8 @@ const SHORTCUTS: [string, string][] = [
   ['Strg+Z / Strg+Y', 'scUndo'],
   ['Entf', 'scDelete'],
   ['Strg+Klick', 'scMulti'],
+  ['Umschalt+Klick', 'scRange'],
+  ['Strg+A', 'scAll'],
   ['Alt+Enter', 'scFullscreen'],
   ['Esc', 'scEsc'],
   ['F1', 'scHelp']
@@ -249,6 +251,8 @@ export function HelpDialog() {
           <li>{t('tipCrop')}</li>
           <li>{t('tipDuration')}</li>
         </ul>
+        <h3 style={{ fontSize: 13, marginTop: 14 }}>{t('cull')}</h3>
+        <p className="hint">{t('cullHint')}</p>
         <div className="actions">
           <button className="btn primary" onClick={() => set({ dialog: null })}>
             {t('close')}

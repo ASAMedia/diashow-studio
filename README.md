@@ -29,17 +29,38 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
   - Sort by capture date.
   - Text style for titles and captions: font, size, colour, position and capitals.
   - Video trimming: drag the in and out handles over a strip of frames from the clip, then preview the cut. "Videos at most" (Timing tab) cuts long clips down automatically.
+  - Slow motion and time lapse per clip (0.25× to 8×). Between 0.5× and 2× the sound plays along with its pitch kept; outside that range the clip is silent.
+  - Text boxes anywhere on a slide: drag them in the preview and double-click to type. Each box has its own font, size, colour, rotation, and a shadow, dark band, white card or speech bubble behind it.
+  - Several slides at once: Shift+click selects a range, Ctrl+click adds single slides, Ctrl+A selects all. The Slide tab then sets their duration, framing, clip speed, video sound and Live Photo motion together, pixelates their faces, or leaves them out of the show.
   - Shortcuts: press F1 for the list. Short tips introduce the main steps on first use.
+- **Review ("Sichten"):** a grid of every photo and video for going through a big import with the keyboard.
+  - X leaves an item out of the show and brings it back; it stays in the project.
+  - 1–5 give stars, and the Space bar shows the item large.
+  - Filters: in the show, left out, star rating, or "blurry & duplicates".
+  - "Only n+ stars in the show" keeps just the best.
+- **Privacy:** faces can be pixelated, e.g. for pupils without photo consent.
+  - In "Pixelate faces…" you click detected faces or drag out any area.
+  - When the editor opens, it searches the photo again with a fine tile grid, so small faces at the back of group photos are found too. For a video, it searches a frame from the middle of the clip, and an area applies to the whole clip.
+  - The pixelation sits on the picture itself, so it follows crops and Ken Burns moves and appears in the preview and the export.
 - **Automatic help:**
   - Offline face detection (MediaPipe BlazeFace, run on the whole picture and on tiles) keeps faces inside crops and gives Ken Burns a target.
   - "Change slides on the beat" puts every slide change on a beat of the music.
   - "Find rejects" lists blurry photos and near-duplicates (difference hash); of each duplicate group the sharpest photo stays.
 - **Export presets:** YouTube 1080p/4K, Instagram Reel 9:16, Instagram 1:1, WhatsApp, TV/projector. Another aspect ratio relays the show.
   - 4K exports first prepare full-resolution versions of videos that only have a 1080p proxy.
+- **Export queue:** exports run in the background, one after another, while you keep editing. The title bar shows the progress.
+  - Each export is a snapshot of the show, so later edits don't change it.
+  - A hidden window renders exports in 30-second parts. After a crash or a restart the export continues from the last finished part ("Continue" in the queue).
+  - The PC doesn't go to sleep while an export runs.
 - **Large shows:** the filmstrip renders only what is visible, layout results are cached, and processing updates are batched.
 - **Speed:**
   - Exports run about 3x faster than before: the graphics card converts each frame to YUV, and the next frame renders while the last one is read back. A 220-second show exports in 55 s at 1080p with NVENC, at the same quality.
-  - HDR phone videos are tone-mapped on the graphics card (libplacebo on Vulkan), falling back to the CPU automatically.
+  - 4K: the same show took 429 s before and 175 s now. Besides the YUV frames, NVENC now uses its p4 preset: the same quality as p5, but 2.5× faster for H.264 at 4K, where the encoder had become the limit.
+  - HDR phone videos are tone-mapped on the graphics card (libplacebo on Vulkan), falling back to the CPU automatically. Rotated SDR videos that the graphics card decodes get their proxies there too.
+  - Importing is about 4× faster. A folder of 625 phone photos and videos (17 GB) went from "everything ready" after 558 s to 130 s. Every thumbnail now appears within about 20 s, and every photo is ready after about 66 s.
+    - Thumbnails come first, then the rest in show order. What the viewer, the filmstrip and the review grid show goes ahead of everything else.
+    - Display images, video sound and proxies run side by side, each on its own resource (CPU, disk, graphics card).
+    - Duplicate and sharpness analysis waits until every item is usable.
   - Preview quality (High, Medium, Low) is set in Settings, for slower laptops; exports are not affected.
 - **Projects:**
   - Automatic backups: before a save, the previous version is kept (at most every 10 minutes, the last 20). Restore them with "Restore an older version…" in the "⋯" menu.
@@ -54,6 +75,7 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
   - Classic has a free choice of transition with speed and direction: Dissolve, Fade through black or white, Push, Wipe, Move in, Reveal, Cube, Flip, Zoom or Droplet.
 - **Ken Burns:** set the start and end framing per photo by dragging and zooming a frame.
 - **Music:** your own files (MP3, M4A/AAC, WAV, FLAC, OGG, Opus, ALAC, WMA, AIFF) in a playlist you can reorder. It supports crossfades, fades and repeat.
+  - Song sections: drag the start and end of each song over its waveform (scissors button), e.g. to skip a long intro, and listen to the result.
   - "Even out loudness" brings songs and video sound to the same level (−16 LUFS).
   - The audio lane shows the songs' waveforms and beat markers.
 - **Video sound and ducking:** video clips play with their sound, and the music is lowered automatically while a clip with sound plays.
@@ -74,7 +96,16 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
 | Sony Alpha / ZV / FX | JPEG, HIF (10-bit 4:2:2), ARW | XAVC S / HS / S-I (H.264 / HEVC, 4:2:2 10-bit, LPCM), AVCHD (MTS / M2TS) |
 | Other | PNG, WebP, AVIF, GIF, TIFF, BMP, JPEG XL | MKV, WebM, AVI, 3GP, M4V, MPG, WMV, MXF |
 
-Videos Chromium can't play directly are converted in the background into an H.264 proxy (max. 1080p). That covers HEVC 4:2:2, H.264 10-bit, HDR (tone-mapped to SDR), rotated phone videos and AVCHD. Sidecar files (XML, THM, AAE, …) are ignored, and RAW+JPEG pairs use the JPEG.
+Videos Chromium can't play directly are converted in the background into an H.264 proxy (max. 1080p). That covers HEVC 4:2:2, H.264 10-bit, HDR (tone-mapped to SDR), rotated phone videos and AVCHD.
+
+Some videos play as they are, both in the preview and in the export. This was checked in Electron 44 by `e2e/codecs.spec.ts`. They are:
+- 8-bit HEVC, where the graphics card decodes it.
+- H.264 or HEVC in MKV.
+- iPhone videos with spatial audio.
+
+Sony XAVC S (8-bit 4:2:0 with LPCM sound) gets its video stream copied instead of converted. A video's sound is copied as it is when it is AAC.
+
+Sidecar files (XML, THM, AAE, …) are ignored, and RAW+JPEG pairs use the JPEG.
 
 ## How it works
 
@@ -98,7 +129,7 @@ npm run e2e          # build + Playwright end-to-end test with screenshots of ev
 npm run dist         # Windows installer and portable exe in dist/
 ```
 
-GitHub Actions (`.github/workflows/ci.yml`) runs the type check, the unit tests and the end-to-end test on Windows for every push.
+GitHub Actions (`.github/workflows/ci.yml`) runs the type check, the unit tests and the end-to-end tests (app, editing tools, export queue) on Windows for every push.
 
 `npm run test:media` writes generated sample files (iPhone, Android and Sony-like) to `test-media/`.
 

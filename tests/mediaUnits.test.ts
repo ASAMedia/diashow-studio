@@ -6,7 +6,7 @@ import { parseRational } from '../src/main/ffmpeg'
 import { applyOrientation, photoFormatLabel } from '../src/main/media/photo'
 import { pairFiles, type ScannedFile } from '../src/main/media/scan'
 import { fitEven, fpsRational } from '../src/main/media/video'
-import { analyzeVideo, isDirectPlayable, outputFps, videoFormatLabel } from '../src/main/media/videoInfo'
+import { analyzeVideo, canCopyAudio, isDirectPlayable, outputFps, playbackPlan, videoFormatLabel } from '../src/main/media/videoInfo'
 import type { Tags } from '../src/main/media/exif'
 
 describe('applyOrientation', () => {
@@ -94,6 +94,53 @@ describe('video analysis', () => {
     const anamorphic = probe({ width: 1440, height: 1080, sample_aspect_ratio: '4:3' }, { format_name: 'mpegts' })
     expect(analyzeVideo(anamorphic)!.width).toBe(1920)
     expect(videoFormatLabel('00001.MTS', anamorphic, analyzeVideo(anamorphic)!)).toBe('AVCHD')
+  })
+
+  it('playbackPlan: direct only for streams verified in Electron 44, remux when only the wrapping is wrong', () => {
+    const aac = { index: 1, codec_type: 'audio', codec_name: 'aac', profile: 'LC', channels: 2, sample_rate: '48000' }
+    const plan = (path: string, p: ProbeResult, hevc = false): string => {
+      const r = playbackPlan(path, p, analyzeVideo(p)!, { hevc })
+      return r.kind === 'direct' ? 'direct' : `${r.kind}: ${r.reason}`
+    }
+    const mkv = { format_name: 'matroska,webm' }
+    // iPhone 16: AAC + spatial audio (APAC) next to H.264 plays as it is
+    expect(plan('IMG.MOV', probe({}, {}, [aac, { index: 2, codec_type: 'audio', codec_name: 'apple_apac', channels: 4 }]))).toBe('direct')
+    // H.264 + AAC in Matroska (e.g. a screen recording) plays as it is
+    expect(plan('show.mkv', probe({}, mkv, [aac]))).toBe('direct')
+    // Matroska with AC-3, MP4 with big-endian LPCM (Sony XAVC S): the video stream is copied
+    expect(plan('show.mkv', probe({}, mkv, [{ index: 1, codec_type: 'audio', codec_name: 'ac3', channels: 6 }]))).toBe('remux: audio ac3')
+    expect(plan('C0001.MP4', probe({}, {}, [{ index: 1, codec_type: 'audio', codec_name: 'pcm_s16be', channels: 2 }]))).toBe('remux: audio pcm_s16be')
+    // 8-bit HEVC only where the renderer decodes it, in MP4/MOV and Matroska; never 10-bit, HDR or rotated
+    const hevc8 = probe({ codec_name: 'hevc', profile: 'Main', pix_fmt: 'yuvj420p' }, {}, [aac])
+    expect(plan('PXL.mp4', hevc8)).toBe('proxy: codec hevc')
+    expect(plan('PXL.mp4', hevc8, true)).toBe('direct')
+    expect(plan('a.mkv', probe({ codec_name: 'hevc', profile: 'Main' }, mkv, [aac]), true)).toBe('direct')
+    expect(plan('PXL.mp4', probe({ codec_name: 'hevc', profile: 'Main 10', pix_fmt: 'yuv420p10le' }), true)).toBe('proxy: pixel format yuv420p10le')
+    expect(plan('PXL.mp4', probe({ codec_name: 'hevc', profile: 'Main 10', pix_fmt: 'yuv420p10le', color_transfer: 'arib-std-b67' }), true)).toBe('proxy: hdr')
+    expect(plan('PXL.mp4', probe({ codec_name: 'hevc', profile: 'Main', side_data_list: [{ side_data_type: 'Display Matrix', rotation: -90 }] }), true)).toBe('proxy: rotation')
+    // Larger than UHD and other containers keep their proxies
+    expect(plan('DJI.mp4', probe({ codec_name: 'hevc', profile: 'Main', width: 3840, height: 2880 }), true)).toBe('proxy: size')
+    expect(plan('00001.MTS', probe({}, { format_name: 'mpegts' }, [aac]))).toBe('proxy: container')
+    expect(plan('clip.avi', probe({}, { format_name: 'avi' }, [aac]))).toBe('proxy: container')
+    // VP9 in WebM as before; VP9 with an odd audio codec in WebM can't be remuxed into MP4 here
+    expect(plan('a.webm', probe({ codec_name: 'vp9', profile: 'Profile 0' }, mkv, [{ index: 1, codec_type: 'audio', codec_name: 'opus', channels: 2 }]))).toBe('direct')
+    expect(plan('a.webm', probe({ codec_name: 'vp9', profile: 'Profile 0' }, mkv, [{ index: 1, codec_type: 'audio', codec_name: 'ac3', channels: 2 }]))).toBe('proxy: audio ac3')
+  })
+
+  it('canCopyAudio: AAC-LC mono/stereo from MP4 or Matroska is kept, everything else re-encoded', () => {
+    const withAudio = (a: Record<string, unknown>, format: Record<string, unknown> = {}): boolean => {
+      const p = probe({}, format, [{ index: 1, codec_type: 'audio', codec_name: 'aac', profile: 'LC', channels: 2, sample_rate: '48000', ...a }])
+      return canCopyAudio(p, analyzeVideo(p)!)
+    }
+    expect(withAudio({})).toBe(true)
+    expect(withAudio({ channels: 1, sample_rate: '44100' })).toBe(true)
+    expect(withAudio({}, { format_name: 'matroska,webm' })).toBe(true)
+    expect(withAudio({ channels: 6 })).toBe(false)
+    expect(withAudio({ profile: 'HE-AAC' })).toBe(false)
+    expect(withAudio({ codec_name: 'pcm_s16be', profile: undefined })).toBe(false)
+    expect(withAudio({}, { format_name: 'mpegts' })).toBe(false)
+    const silent = probe({})
+    expect(canCopyAudio(silent, analyzeVideo(silent)!)).toBe(false)
   })
 
   it('labels Sony XAVC variants and ProRes', () => {

@@ -4,6 +4,7 @@ import { _electron as electron, test } from '@playwright/test'
 import { mkdtempSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { appArgs } from './launch'
 
 const root = resolve(__dirname, '..')
 const dir = process.env.DIASHOW_VISUAL_DIR
@@ -12,7 +13,7 @@ const theme = process.env.DIASHOW_THEME ?? 'magazine'
 test('preview pacing', async () => {
   test.skip(!dir, 'DIASHOW_VISUAL_DIR not set')
   const files = readdirSync(dir!).filter((f) => /\.(jpe?g|png|heic|mp4|mov)$/i.test(f)).sort().map((f) => join(dir!, f))
-  const app = await electron.launch({ args: ['.'], cwd: root, env: { ...process.env, DIASHOW_DATA_DIR: mkdtempSync(join(tmpdir(), 'diashow-pace-')) } })
+  const app = await electron.launch({ args: appArgs(), cwd: root, env: { ...process.env, DIASHOW_DATA_DIR: mkdtempSync(join(tmpdir(), 'diashow-pace-')) } })
   const page = await app.firstWindow()
   await page.waitForFunction(() => !!(window as any).__diashow)
   await page.evaluate(async (paths) => (window as any).__diashow.store.getState().createProject(paths, 'Pacing'), files)

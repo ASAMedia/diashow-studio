@@ -1,6 +1,6 @@
 // Turns a project into a timed sequence of slides. Pure and deterministic: the editor
 // preview, the fullscreen player and the export all use the same result.
-import type { AspectRatio, Entry, MediaItem, Project, TextEntry, VideoEntry } from './types'
+import type { AspectRatio, Entry, MediaItem, MusicTrack, Project, TextEntry, VideoEntry } from './types'
 import { classicTransitionSeconds, themeMeta } from './themes'
 import { groupEntries, mediaAspect, pickTemplate, templatesFor, type Template } from './layout'
 
@@ -21,10 +21,10 @@ export interface TimelineSlide {
   transIn: number
   transOut: number
   customDuration: boolean
-  /** Video slide: source time at slide start, and the playable span. */
-  video?: { trimIn: number; trimOut: number }
+  /** Video slide: the playable span of the source and its speed. */
+  video?: ClipSpan
   /** Grid slides: playable span of each video cell (null for photos), aligned with entries. */
-  clips?: ({ trimIn: number; trimOut: number } | null)[]
+  clips?: (ClipSpan | null)[]
   /** Photo slide playing a Live/Motion photo first. */
   live?: { duration: number }
   /** Title drawn over this slide (themes without a separate title slide). */
@@ -35,6 +35,22 @@ export interface TimelineSlide {
   /** Text entry shown as this slide's caption (so the filmstrip can still select it). */
   captionEntryId?: string
 }
+
+/** Part of a video that plays (source seconds) and how fast. */
+export interface ClipSpan {
+  trimIn: number
+  trimOut: number
+  speed: number
+}
+
+/** On-screen seconds of a clip span. */
+export const clipSeconds = (c: ClipSpan): number => (c.trimOut - c.trimIn) / c.speed
+
+export const MIN_SPEED = 0.25
+export const MAX_SPEED = 8
+
+/** Clip speed with sound: outside this range the clip plays silently. */
+export const speedHasSound = (speed: number): boolean => speed >= 0.5 - 1e-9 && speed <= 2 + 1e-9
 
 export interface Timeline {
   slides: TimelineSlide[]
@@ -55,11 +71,18 @@ export function aspectValue(a: AspectRatio): number {
   return w / h
 }
 
+/** The part of a song that plays (its trim), in seconds of the file. */
+export function trackSpan(t: MusicTrack): { from: number; to: number; length: number } {
+  const from = Math.min(Math.max(0, t.trimIn ?? 0), Math.max(0, t.duration - 1))
+  const to = Math.max(from + Math.min(1, t.duration), Math.min(t.duration, t.trimOut ?? t.duration))
+  return { from, to, length: to - from }
+}
+
 /** Playlist length including crossfades between songs. */
 export function musicLength(project: Project): number {
   const tracks = project.music.filter((t) => t.status !== 'error' && t.duration > 0)
   if (tracks.length === 0) return 0
-  const total = tracks.reduce((s, t) => s + t.duration, 0)
+  const total = tracks.reduce((s, t) => s + trackSpan(t).length, 0)
   return Math.max(0, total - project.settings.audio.crossfade * (tracks.length - 1))
 }
 
@@ -88,14 +111,15 @@ export function buildTimeline(project: Project, locale = 'de-DE'): Timeline {
   const meta = themeMeta(settings.theme)
   const aspect = aspectValue(settings.aspect)
   const byId = new Map(project.media.map((m) => [m.id, m]))
-  const usable = project.entries.filter((e) => e.type === 'text' || byId.get(e.mediaId)?.status !== 'error')
+  const usable = project.entries.filter((e) => !e.excluded && (e.type === 'text' || byId.get(e.mediaId)?.status !== 'error'))
   const maxClip = settings.maxVideoSeconds && settings.maxVideoSeconds > 0 ? settings.maxVideoSeconds : Infinity
-  const span = (e: VideoEntry, m: MediaItem): { trimIn: number; trimOut: number } => {
+  const span = (e: VideoEntry, m: MediaItem): ClipSpan => {
     const len = m.duration ?? 0
+    const speed = Math.min(MAX_SPEED, Math.max(MIN_SPEED, e.speed ?? 1))
     const trimIn = Math.min(Math.max(0, e.trimIn ?? 0), Math.max(0, len - 0.5))
-    // the show's maximum video length counts from the clip's start point
-    const out = Math.min(len || trimIn + 0.5, e.trimOut ?? len, trimIn + maxClip)
-    return { trimIn, trimOut: Math.max(trimIn + 0.5, out) }
+    // the show's maximum video length counts on screen, from the clip's start point
+    const out = Math.min(len || trimIn + 0.5, e.trimOut ?? len, trimIn + maxClip * speed)
+    return { trimIn, trimOut: Math.max(trimIn + 0.5, out), speed }
   }
   const playsLive = (e: Entry): boolean =>
     e.type === 'photo' && !!byId.get(e.mediaId)?.live && (e.playLive ?? settings.playLivePhotos)
@@ -140,9 +164,9 @@ export function buildTimeline(project: Project, locale = 'de-DE'): Timeline {
     } else if (first.type === 'video' && g.entries.length === 1) {
       const e = first as VideoEntry
       const m = byId.get(e.mediaId)!
-      const { trimIn, trimOut } = span(e, m)
-      const clip = trimOut - trimIn
-      const slide = { id: e.id, index: 0, kind: 'video' as const, entries: [e], media: [m], customDuration: e.duration != null, video: { trimIn, trimOut }, caption, captionEntryId }
+      const video = span(e, m)
+      const clip = clipSeconds(video)
+      const slide = { id: e.id, index: 0, kind: 'video' as const, entries: [e], media: [m], customDuration: e.duration != null, video, caption, captionEntryId }
       if (e.duration != null) drafts.push({ slide, fixed: Math.min(e.duration, clip), weight: 0, min: 0 })
       else if (settings.playFullVideos) drafts.push({ slide, fixed: Math.max(1, clip), weight: 0, min: 0 })
       else drafts.push({ slide, weight: 1, min: Math.min(1, clip), max: clip })
@@ -162,7 +186,7 @@ export function buildTimeline(project: Project, locale = 'de-DE'): Timeline {
       const custom = first.duration != null
       // videos in a grid play side by side; with "play in full" the slide lasts as long as the longest
       const clips = entries.map((e, i) => (e.type === 'video' ? span(e, media[i]) : null))
-      const longest = Math.max(0, ...clips.map((c) => (c ? c.trimOut - c.trimIn : 0)))
+      const longest = Math.max(0, ...clips.map((c) => (c ? clipSeconds(c) : 0)))
       drafts.push({
         slide: { id: first.id, index: 0, kind: 'photos', entries, media, template, customDuration: custom, live, caption, captionEntryId, ...(longest > 0 ? { clips } : {}) },
         fixed: custom ? first.duration : undefined,
@@ -244,9 +268,10 @@ export function musicBeatTimes(project: Project, until: number): number[] {
   let t = 0
   for (let i = 0; tracks.length && t < until && i < 500; i++) {
     const tr = tracks[i % tracks.length]
-    for (const b of tr.beats ?? []) if (b < tr.duration && t + b < until) out.push(t + b)
+    const { from, to, length } = trackSpan(tr)
+    for (const b of tr.beats ?? []) if (b >= from && b < to && t + b - from < until) out.push(t + b - from)
     if (!a.repeatMusic && i === tracks.length - 1) break
-    t += tr.duration - Math.min(a.crossfade, tr.duration / 2)
+    t += length - Math.min(a.crossfade, length / 2)
   }
   return out.sort((x, y) => x - y)
 }

@@ -463,6 +463,63 @@ export class AnnexBToTs {
   }
 }
 
+/**
+ * Counts the pictures of an Annex B stream (any chunking) the way AnnexBToTs does, at their first
+ * slice, and remembers the NAL type of the first picture, without parsing or copying NAL units.
+ * Export segments use it to check their frame count and that they start with an IDR picture.
+ */
+export class AnnexBFrameCounter {
+  frames = 0
+  /** NAL unit type of the first picture's first slice; null before any picture. */
+  firstType: number | null = null
+  /** Bytes from the last chunk that may begin a start code whose header is not complete yet. */
+  private carry: Uint8Array = new Uint8Array(0)
+  /** Bytes needed from a start code on: 3 + NAL header + the byte with the first-slice flag. */
+  private readonly need: number
+
+  constructor(private readonly codec: AnnexBCodec) {
+    this.need = codec === 'h264' ? 5 : 6
+  }
+
+  push(chunk: Uint8Array): void {
+    let b = chunk
+    if (this.carry.length) {
+      b = new Uint8Array(this.carry.length + chunk.length)
+      b.set(this.carry)
+      b.set(chunk, this.carry.length)
+    }
+    let i = 0
+    for (; i + this.need <= b.length; i++) {
+      if (b[i] !== 0 || b[i + 1] !== 0 || b[i + 2] !== 1) continue
+      this.nal(b, i + 3)
+      i += 2
+    }
+    this.carry = b.slice(i)
+  }
+
+  /** Call after the last chunk. */
+  end(): void {
+    this.carry = new Uint8Array(0)
+  }
+
+  /** The stream starts with a picture that begins a new sequence (H.264 IDR; HEVC IDR or BLA). */
+  get startsWithIdr(): boolean {
+    const t = this.firstType
+    if (t === null) return false
+    return this.codec === 'h264' ? t === 5 : t >= 16 && t <= 20
+  }
+
+  private nal(b: Uint8Array, h: number): void {
+    const type = this.codec === 'h264' ? b[h] & 0x1f : (b[h] >> 1) & 0x3f
+    const vcl = this.codec === 'h264' ? isH264Vcl(type) : isHevcVcl(type)
+    if (!vcl) return
+    const first = this.codec === 'h264' ? (b[h + 1] & 0x80) !== 0 : (b[h + 2] & 0x80) !== 0
+    if (!first) return
+    this.frames++
+    this.firstType ??= type
+  }
+}
+
 function concat(...parts: Uint8Array[]): Uint8Array {
   let n = 0
   for (const p of parts) n += p.length

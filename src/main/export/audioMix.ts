@@ -129,10 +129,47 @@ export async function mixDecodedClips(
   }
 }
 
-/** Decodes [offset, offset + duration) of a clip source to raw float32 stereo 48 kHz. */
+/** Playback rate of a clip's source (slow motion / time lapse), 1 when unset or invalid. */
+export function clipRate(clip: AudioPlanClip): number {
+  const rate = (clip as { rate?: unknown }).rate
+  return typeof rate === 'number' && Number.isFinite(rate) && rate > 0 ? rate : 1
+}
+
+/**
+ * atempo stages for a playback rate (pitch kept, like <audio>.playbackRate with preservesPitch).
+ * Each stage stays within 0.5..2, where atempo sounds best. Empty for rate 1.
+ */
+export function atempoChain(rate: number): string[] {
+  if (!(Number.isFinite(rate) && rate > 0) || Math.abs(rate - 1) < 1e-6) return []
+  const stages: number[] = []
+  let r = rate
+  while (r > 2) {
+    stages.push(2)
+    r /= 2
+  }
+  while (r < 0.5) {
+    stages.push(0.5)
+    r /= 0.5
+  }
+  if (Math.abs(r - 1) > 1e-6) stages.push(r)
+  return stages.map((s) => `atempo=${Number(s.toFixed(6))}`)
+}
+
+/**
+ * Decodes a clip to raw float32 stereo 48 kHz: duration * rate seconds of the source from offset,
+ * played at `rate`, so the result covers `duration` seconds of the timeline.
+ */
 export async function decodeClip(ff: Ffmpeg, clip: AudioPlanClip, outFile: string, signal?: AbortSignal): Promise<void> {
+  const rate = clipRate(clip)
+  const tempo = atempoChain(rate)
+  const span = Math.max(0, clip.duration) * rate
   await ff.run(
-    ['-ss', Math.max(0, clip.offset).toFixed(6), '-t', Math.max(0, clip.duration).toFixed(6), '-i', clip.src, '-vn', '-sn', '-dn', '-map', '0:a:0', '-f', 'f32le', '-acodec', 'pcm_f32le', '-ac', String(CHANNELS), '-ar', String(MIX_RATE), outFile],
+    [
+      '-ss', Math.max(0, clip.offset).toFixed(6), '-t', span.toFixed(6), '-i', clip.src,
+      '-vn', '-sn', '-dn', '-map', '0:a:0',
+      ...(tempo.length ? ['-af', tempo.join(',')] : []),
+      '-f', 'f32le', '-acodec', 'pcm_f32le', '-ac', String(CHANNELS), '-ar', String(MIX_RATE), outFile
+    ],
     { signal }
   )
 }

@@ -103,6 +103,51 @@ describe('GPU tone mapping', () => {
     })
   }
 
+  it('SDR: one libplacebo pass for scaling and rotation without a tone curve, only for streams the GPU decodes', () => {
+    const info = { width: 1080, height: 1920, rotation: 90, hdr: false, interlaced: false, chroma: '4:2:0', bitDepth: 8, stream: { index: 0, codec_name: 'h264' } } as VideoInfo
+    const g: GpuTonemap = { device: 1, decode: 'vulkan' }
+    expect(gpuVideoFilter(info, 1920, g, { fps: 30 })).toBe('fps=30,libplacebo=w=1080:h=1920:rotate=90:range=tv:format=yuv420p,setsar=1')
+    expect(gpuEligible(info, g)).toBe(true)
+    expect(gpuEligible(info)).toBe(false)
+    expect(gpuEligible(info, { device: 0, decode: 'upload' })).toBe(false)
+    expect(gpuEligible({ ...info, chroma: '4:2:2' }, g)).toBe(false)
+    expect(gpuEligible({ ...info, bitDepth: 10 }, g)).toBe(false)
+    expect(gpuEligible({ ...info, bitDepth: 10, stream: { index: 0, codec_name: 'hevc' } }, g)).toBe(true)
+    expect(gpuEligible({ ...info, stream: { index: 0, codec_name: 'prores' } }, g)).toBe(false)
+    expect(gpuEligible({ ...info, interlaced: true }, g)).toBe(false)
+  })
+
+  it('SDR on the GPU: rotated full-range H.264 gives the same proxy as the CPU chain', async (ctx) => {
+    if (!gpu || gpu.decode === 'upload') ctx.skip()
+    const stored = join(tmp, 'sdr-stored.mp4')
+    await ff.run(['-f', 'lavfi', '-i', 'testsrc2=s=1280x720:r=30:d=3', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuvj420p', '-color_range', 'pc', stored])
+    const src = join(tmp, 'sdr.mp4')
+    await ff.run(['-display_rotation', '-90', '-i', stored, '-c', 'copy', src])
+    const info = analyzeVideo(await ff.probe(src))!
+    expect([info.rotation, info.hdr]).toEqual([90, false])
+    expect(gpuEligible(info, gpu)).toBe(true)
+    const encoders = await ff.encoders()
+    const cpuOut = join(tmp, 'cpu-sdr.mp4')
+    const gpuOut = join(tmp, 'gpu-sdr.mp4')
+    await transcodeProxy(ff, src, info, cpuOut, { encoders, gpu: null })
+    const shaders = join(tmp, 'shaders-sdr')
+    mkdirSync(shaders)
+    await transcodeProxy(ff, src, info, gpuOut, { encoders, gpu, shaderCache: shaders })
+    // The GPU attempt ran (libplacebo stored its shaders) rather than the CPU fallback
+    expect(readdirSync(shaders).some((f) => f.startsWith('pl'))).toBe(true)
+    const [vc, vg] = (await Promise.all([ff.probe(cpuOut), ff.probe(gpuOut)])).map((p) => videoStream(p)!)
+    expect([vg.width, vg.height, vg.pix_fmt, vg.color_range, vg.nb_frames]).toEqual([vc.width, vc.height, 'yuv420p', 'tv', vc.nb_frames])
+    expect([vg.width, vg.height]).toEqual([720, 1280])
+    expect(rotationOf(vg)).toBe(0)
+    const [a, b] = await Promise.all([frames(cpuOut, 27, 48), frames(gpuOut, 27, 48)])
+    for (let f = 0; f < a.length; f++) {
+      let mad = 0
+      for (let i = 0; i < a[f].length; i++) mad += Math.abs(a[f][i] - b[f][i])
+      // wrong rotation or range would be off by 10+ levels
+      expect(mad / a[f].length, `frame ${f}`).toBeLessThan(3)
+    }
+  })
+
   it('falls back to the CPU chain when the GPU path fails', async () => {
     const src = join(tmp, 'hlg.mov')
     const info = analyzeVideo(await ff.probe(src))!

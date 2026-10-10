@@ -1,15 +1,17 @@
 // Media import + background processing. Electron-free: the IPC layer injects directories and
 // forwards onUpdate / onMusicUpdate to the renderer.
 //
-// Processing runs in phases so big imports stay responsive: every item first gets its thumbnail
-// (photos straight from the original, videos one frame), then photos get their display JPEG and
-// analysis (hash, sharpness), and only when no thumbnail/display work is left do video proxies start.
-// Each item emits few updates: thumbnail ready (status 'processing'), then 'ready' or 'error'.
-// Loudness (videos with sound, music) is measured with the processing; older cache entries get it
-// (and hash / sharpness) lazily with an extra update.
+// Processing keeps big imports responsive (see "processing" below): every item first gets its
+// thumbnail (photos straight from the original, videos one frame), in show order, with whatever the
+// renderer focuses (prioritize) first. Then display JPEGs (CPU), video sound (disk) and proxies (GPU)
+// run side by side; videos the renderer decodes need no proxy at all (playbackPlan). Hash and
+// sharpness come last, once every item is usable.
+// Each item emits few updates: thumbnail ready (status 'processing'), then 'ready' or 'error', then
+// one with the analysis. Loudness of video sound is measured while it is extracted; music and older
+// cache entries get it lazily with an extra update.
 import { existsSync } from 'node:fs'
 import { copyFile, link, mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
-import { availableParallelism } from 'node:os'
+import { availableParallelism, constants } from 'node:os'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import sharp from 'sharp'
 import { extOf, SHARP_IMAGE_EXT } from '@shared/formats'
@@ -22,26 +24,35 @@ import { detectBeatsInFile } from './beats'
 import { captureTimeOf, deviceOf, endExiftool, makeOf, orientationOf, readTags, type Tags } from './exif'
 import { detectGpuTonemap, type GpuTonemap } from './hdr'
 import { measureLoudness } from './loudness'
-import { extractMotionVideo, isMotionPhoto } from './motion'
+import { endsAtJpegEoi, extractMotionVideo, isMotionPhoto } from './motion'
 import { photoFormatLabel, renderPhoto, renderThumb } from './photo'
-import { createLimiter, createPriorityLimiter } from './queue'
+import { createGate, createLimiter, createPriorityLimiter, MediaOrder, type Gate } from './queue'
 import { quickPhotoMeta } from './quickMeta'
 import { RawDecoderPool, type RawDecoding } from './raw'
 import { mediaId, pairFiles, scanPaths, type ImportGroup, type ScannedFile } from './scan'
-import { extractAudio, PROXY_MAX, stripFiles, transcodeProxy, videoStrip, videoThumb } from './video'
-import { analyzeVideo, isDirectPlayable, videoFormatLabel, type VideoInfo } from './videoInfo'
+import { createTracer } from './trace'
+import { extractAudioWithLoudness, gpuEligible, PROXY_MAX, remuxVideo, stripFiles, transcodeProxy, videoStrip, videoThumb } from './video'
+import { analyzeVideo, canCopyAudio, playbackPlan, streamProxyReason, videoFormatLabel, type DirectDecode, type VideoInfo } from './videoInfo'
 
 export interface MediaServiceConfig {
   ffmpegDir: string
   cacheDir: string
   onUpdate?: (item: MediaItem) => void
   onMusicUpdate?: (track: MusicTrack) => void
-  /** Parallel thumbnail / display image / analysis tasks; default half the CPU threads, 2..8. */
+  /** Parallel thumbnail / display image / analysis tasks; default 60 % of the CPU threads, 2..12. */
   photoConcurrency?: number
+  /** Parallel proxy transcodes (hardware encoder sessions); default 4 (short clips spend ~1 s starting up). */
   videoConcurrency?: number
+  /** Parallel audio extractions and remuxes (disk, little CPU); default 3. */
+  audioConcurrency?: number
+  /**
+   * Decoders the renderer has besides H.264/VP9/AV1 (src/main/codecSupport.ts), asked when a video's
+   * playback is decided. Without it, HEVC originals get proxies.
+   */
+  directDecode?: () => Promise<DirectDecode>
   /** Injected for tests; defaults to two libraw-wasm worker threads. */
   rawDecoder?: RawDecoding
-  /** Tone-map HDR proxies on the GPU when available (default true). */
+  /** Make proxies on the GPU when available: HDR tone mapping, and SDR sources the GPU decodes (default true). */
   hdrGpu?: boolean
 }
 
@@ -84,6 +95,12 @@ export interface MediaService {
    * like importPaths. Resolves with old id → new item for the ones found.
    */
   relinkMedia(missing: MediaItem[], folder: string): Promise<Record<string, MediaItem>>
+  /**
+   * The renderer shows these media / music ids (most urgent first): all their pending work goes ahead
+   * of everything else, and they skip the waits for other items. Each call replaces the previous one;
+   * [] returns to show order. Unknown ids are ignored; running work is never interrupted.
+   */
+  prioritize(ids: string[]): void
   /** Resolves when no import/transcode/analysis job is queued or running. */
   idle(): Promise<void>
   dispose(): Promise<void>
@@ -97,6 +114,11 @@ const MUSIC_META = 'music.json'
 const SOURCE = 'source.json'
 /** Freshly imported items count as used by the cache cleanup until the renderer saved its project. */
 const RECENT_MS = 5 * 60_000
+/** GPU proxies run above normal priority (see ProxyOptions.gpuPriority). */
+const GPU_PRIORITY = constants.priority.PRIORITY_ABOVE_NORMAL
+/** Stills that may carry a Motion Photo video after their image data. */
+const JPEG_EXT = ['jpg', 'jpeg', 'jpe', 'jfif']
+/** Work classes (MediaOrder.key): thumbnails, then display images / sound / playback, then analysis. */
 const PRI_THUMB = 0
 const PRI_DISPLAY = 1
 const PRI_ANALYSIS = 2
@@ -105,6 +127,8 @@ interface Context {
   tags?: Tags
   probe?: ProbeResult
   liveProbe?: ProbeResult
+  /** JPEG & co. read with quickPhotoMeta: the XMP announces an embedded video. */
+  motionXmp?: boolean
 }
 
 function clean<T extends object>(obj: T): T {
@@ -156,7 +180,8 @@ function missingProxyOnly(item: MediaItem, cacheDir: string): 'video' | 'live' |
     if (typeof v === 'string' && !existsSync(v)) return null
   }
   if (item.kind === 'video') {
-    if (!item.thumb || !item.proxied || !item.playback || existsSync(item.playback) || !isInside(item.playback, cacheDir)) return null
+    // A proxy or a remux (proxied false): any playback copy in the cache can be made again
+    if (!item.thumb || !item.playback || existsSync(item.playback) || !isInside(item.playback, cacheDir)) return null
     return 'video'
   }
   if (!item.display || !item.live || !item.liveVideo || existsSync(item.liveVideo) || !isInside(item.liveVideo, cacheDir)) return null
@@ -263,18 +288,32 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
   const waveforms = new Map<string, Promise<number[]>>()
   const metaLimit = createLimiter(16)
   const threads = availableParallelism()
-  const workers = config.photoConcurrency ?? Math.max(2, Math.min(8, Math.floor(threads / 2)))
-  const work = createPriorityLimiter(workers)
+  const workers = config.photoConcurrency ?? Math.max(2, Math.min(12, Math.floor(threads * 0.6)))
+  /** Show order and the renderer's focus, shared by every queue and gate below. */
+  const order = new MediaOrder()
+  /** CPU: thumbnails, display images, analysis. */
+  const work = createPriorityLimiter(workers, order)
   // Many images in parallel with few libvips threads each beats few images with many threads
-  // (measured on 50 MP JPEGs: -35 % per photo); needs UV_THREADPOOL_SIZE >= workers (see threadpool.ts)
+  // (measured on 50 MP JPEGs: -35 % per photo; 12 x 2 threads beat 8 x 3 by ~15 % on 20 threads);
+  // needs UV_THREADPOOL_SIZE >= workers (see threadpool.ts)
   sharp.concurrency(Math.max(1, Math.round(threads / workers)))
-  const videoLimit = createLimiter(config.videoConcurrency ?? 2)
+  /** Hardware encoder sessions: proxies (Live Photo motion parts included). */
+  const encodeWork = createPriorityLimiter(config.videoConcurrency ?? 4, order)
+  /** Disk-bound FFmpeg runs: video sound (+ loudness), remuxes. */
+  const audioWork = createPriorityLimiter(config.audioConcurrency ?? 3, order)
+  /** Items still without a thumbnail; heavier work of other items waits for them. */
+  const thumbGate = createGate(order)
+  /** Photos still without a display image; CPU-decoded proxies wait for them. */
+  const displayGate = createGate(order)
+  /** Items (and music transcodes) still being processed; hash / sharpness / lazy loudness wait for them. */
+  const essentialGate = createGate(order)
   const musicLimit = createLimiter(2)
   const beatLimit = createLimiter(1)
   /** Media / track ids whose loudness was measured this session (silent ones stay undefined). */
   const loudnessTried = new Set<string>()
   const strips = new Map<string, Promise<string[]>>()
   const recent = new Map<string, number>()
+  const trace = createTracer()
   let disposed = false
 
   const folder = (id: string): string => join(config.cacheDir, id)
@@ -335,10 +374,16 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
     })
 
   const shaderCache = join(config.cacheDir, 'gpu')
+  /** The GPU path for this source (HDR tone mapping, or an SDR stream the GPU decodes), else null. */
+  /** The one-off GPU path detection, once started (dispose waits for it: it cleans up temp files). */
+  let gpuDetection: Promise<unknown> | null = null
   const gpuFor = async (vi: VideoInfo): Promise<GpuTonemap | null> => {
-    if (!vi.hdr || config.hdrGpu === false) return null
-    const gpu = await detectGpuTonemap(ff)
-    if (gpu) await mkdir(shaderCache, { recursive: true }).catch(() => {})
+    if (config.hdrGpu === false) return null
+    const detecting = detectGpuTonemap(ff)
+    gpuDetection ??= detecting
+    const gpu = await detecting
+    if (!gpu || !gpuEligible(vi, gpu)) return null
+    await mkdir(shaderCache, { recursive: true }).catch(() => {})
     return gpu
   }
 
@@ -382,8 +427,9 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
     const probe = probed.probe
     const info = analyzeVideo(probe)
     if (!info) return { ...base, status: 'error', error: 'No video stream' }
-    // GPU tone-mapping detection runs while the photos are processed, before the first HDR proxy
-    if (info.hdr) void gpuFor(info)
+    // GPU path detection runs while the thumbnails are made, before the first proxy (whether HEVC
+    // plays directly is only known later: assume it does)
+    if (streamProxyReason(info, { hevc: true })) void gpuFor(info)
     contexts.set(id, { tags, probe })
     return clean({
       ...base,
@@ -404,9 +450,11 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
     const base = { id, path: file.path, name: file.name, kind: 'photo' as const, status: 'pending' as const }
     const ctx: Context = {}
     let item: MediaItem
-    // JPEG & co. with a zoned EXIF date: header-only read, exiftool runs later in the background
+    // JPEG & co. with a zoned EXIF date: header-only read; exiftool runs later in the background, and
+    // only when the file may hold a Motion Photo
     const quick = SHARP_IMAGE_EXT.includes(file.ext) ? await quickPhotoMeta(file.path) : null
     if (quick?.captureTime !== undefined) {
+      ctx.motionXmp = !!quick.motionXmp
       item = clean({
         ...base,
         format: photoFormatLabel(file.path, {} as Tags),
@@ -472,7 +520,7 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
         items.set(id, cached)
         return [cached]
       }
-      const result = f.kind === 'video' ? [await prepareVideo(f, id)] : await preparePhoto(group, id)
+      const result = await trace.span('prepare', id, async () => (f.kind === 'video' ? [await prepareVideo(f, id)] : await preparePhoto(group, id)), { kind: f.kind })
       for (const it of result) items.set(it.id, it)
       return result
     }).finally(() => preparing.delete(id))
@@ -481,6 +529,16 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
   }
 
   // -------------------------------------------------------------- processing
+  //
+  // Order of work (MediaOrder): what the renderer looks at (prioritize) first, then the show order.
+  // Every item gets its thumbnail before any heavier work starts (thumbGate). Then, in parallel and
+  // each on its own resource: display images (CPU pool), the videos' sound and remuxes (audio pool)
+  // and proxies (encoder pool: those on the GPU path start at once, CPU-decoded ones once the display
+  // images are done, displayGate). Hash, sharpness and lazily filled loudness come last, once every
+  // item has its thumbnail, display image / playable video and sound (essentialGate); music beats and
+  // loudness only wait for the thumbnails and display images (afterCpuWork).
+  // Measured on 625 phone files (17 GB): everything ready after 130 s instead of 558 s; the hardware
+  // encoder (NVENC, ~300 fps at 1080p) is then the limit.
 
   /**
    * Called once an API call has its complete result: jobs start on the next macrotask, so the IPC
@@ -508,15 +566,32 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
     trackJob(id, runJob(id))
   }
 
+  /** leave() of a gate that may be called more than once for the same entry. */
+  function once(gate: Gate): () => void {
+    gate.enter()
+    let left = false
+    return () => {
+      if (left) return
+      left = true
+      gate.leave()
+    }
+  }
+
   async function runJob(id: string): Promise<void> {
     if (disposed) return
     const item = items.get(id)!
+    // Entered synchronously, so every item of a schedule() is counted before any of them waits
+    const leaveEssential = once(essentialGate)
+    const leaveThumb = once(thumbGate)
+    const leaveDisplay = item.kind === 'photo' ? once(displayGate) : () => {}
+    let ready = false
     try {
       await mkdir(folder(id), { recursive: true })
-      if (item.kind === 'photo') await processPhoto(id)
-      else await processVideo(id)
+      const stages = { leaveThumb, leaveDisplay }
+      await trace.span('job', id, () => (item.kind === 'photo' ? processPhoto(id, stages) : processVideo(id, stages)), { kind: item.kind })
       if (disposed) return
       update(id, { status: 'ready', progress: undefined, error: undefined })
+      ready = true
       await persist(id)
       await rememberSource(id)
     } catch (err) {
@@ -525,7 +600,11 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
       update(id, { status: 'error', progress: undefined, error: shortError(context, err) })
     } finally {
       contexts.delete(id)
+      leaveThumb()
+      leaveDisplay()
+      leaveEssential()
     }
+    if (ready && wantsAnalysis(items.get(id)!)) startAnalysis(id)
   }
 
   /** Size + time of the original next to the cache, so relinking can recognise a moved file. */
@@ -540,7 +619,14 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
     }
   }
 
-  async function processPhoto(id: string): Promise<void> {
+  interface Stages {
+    /** Thumbnail done (or failed): later stages of other items may start. */
+    leaveThumb: () => void
+    /** Display image done (or failed). */
+    leaveDisplay: () => void
+  }
+
+  async function processPhoto(id: string, stages: Stages): Promise<void> {
     const item = items.get(id)!
     const ctx = contexts.get(id) ?? {}
     const dir = folder(id)
@@ -551,35 +637,39 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
       quickThumb = await work(async () => {
         if (disposed) throw abortError()
         try {
-          await renderThumb(item.path, thumb)
+          await trace.span('photo.thumb', id, () => renderThumb(item.path, thumb))
           return true
         } catch {
           return false // the display pass below reports the real problem
         }
-      }, PRI_THUMB)
+      }, PRI_THUMB, id)
       if (quickThumb) update(id, { status: 'processing', thumb, error: undefined })
     }
+    // Formats without a quick thumbnail (HEIC, RAW, …) get theirs with the display image, which
+    // then counts as their thumbnail stage
+    if (quickThumb) stages.leaveThumb()
     // Full tags (motion photo markers, RAW previews). Read after the thumbnail pass so exiftool's
     // ~120 ms per photo doesn't compete with it, and before the display slot is taken.
-    const tags = ctx.tags ?? (await readTags(item.path, false))
+    // A plain JPEG (nothing after its image data, no video in its XMP) needs nothing else from them:
+    // sharp reads its orientation and colour profile itself. That saves exiftool's ~150 ms of CPU
+    // per photo while the thumbnails are made.
+    const plainJpeg = ctx.motionXmp === false && JPEG_EXT.includes(extOf(item.path)) && (await endsAtJpegEoi(item.path))
+    const tags = ctx.tags ?? (plainJpeg ? ({} as Tags) : await trace.span('photo.tags', id, () => readTags(item.path, false)))
     await work(async () => {
       if (disposed) throw abortError()
       if (!quickThumb) update(id, { status: 'processing', error: undefined })
-      const out = await renderPhoto({ ff, raw }, item.path, tags, { display, thumb: quickThumb ? undefined : thumb }, signal)
+      const out = await trace.span('photo.display', id, () => renderPhoto({ ff, raw }, item.path, tags, { display, thumb: quickThumb ? undefined : thumb }, signal), { ext: extOf(item.path) })
       set(id, { width: out.width, height: out.height, display, thumb })
-      try {
-        set(id, await analyzeImage(display))
-      } catch {
-        // analysis is optional; restore retries it
-      }
-    }, PRI_DISPLAY)
+    }, quickThumb ? PRI_DISPLAY : PRI_THUMB, id)
+    stages.leaveThumb()
+    stages.leaveDisplay()
 
     let live = item.live && existsSync(item.live.source) ? item.live : undefined
     let liveProbe = live ? ctx.liveProbe : undefined
     if (!live && isMotionPhoto(tags)) {
       try {
         const motion = join(dir, 'motion.mp4')
-        await extractMotionVideo(item.path, tags, motion)
+        await trace.span('photo.motion', id, () => extractMotionVideo(item.path, tags, motion))
         liveProbe = await ff.probe(motion, signal)
         const info = analyzeVideo(liveProbe)
         if (info) live = { source: motion, duration: info.duration }
@@ -601,83 +691,131 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
     }
   }
 
-  /** Playable motion part of a Live/Motion photo: the source itself or an H.264 proxy (live.mp4). */
+  /** What the renderer decodes besides H.264/VP9/AV1 (asked per video; the answer is cached by the caller). */
+  async function directDecode(): Promise<DirectDecode> {
+    try {
+      return (await config.directDecode?.()) ?? {}
+    } catch {
+      return {}
+    }
+  }
+
+  /** Playable motion part of a Live/Motion photo: the source itself, a remux or an H.264 proxy (live.mp4). */
   async function makeLiveVideo(id: string, source: string, probe?: ProbeResult): Promise<string> {
     probe ??= await ff.probe(source, signal)
     const info = analyzeVideo(probe)
     if (!info) throw new Error('no video stream')
-    if (isDirectPlayable(source, probe, info)) return source
+    const plan = playbackPlan(source, probe, info, await directDecode())
+    if (plan.kind === 'direct') return source
     const target = join(folder(id), 'live.mp4')
+    if (plan.kind === 'remux') {
+      await audioWork(() => trace.span('live.remux', id, () => remuxVideo(ff, source, info, target, { signal }), { reason: plan.reason }), PRI_DISPLAY, id)
+      return target
+    }
     const [encoders, gpu] = await Promise.all([ff.encoders(), gpuFor(info)])
-    await videoLimit(() => transcodeProxy(ff, source, info, target, { signal, encoders, gpu, shaderCache }))
+    await encodeWork(
+      () => trace.span('live.proxy', id, () => transcodeProxy(ff, source, info, target, { signal, encoders, gpu, shaderCache, gpuPriority: GPU_PRIORITY }), { reason: plan.reason, duration: info.duration }),
+      PRI_DISPLAY,
+      id
+    )
     return target
   }
 
-  /** Sets playback: the original when Chromium plays it, else an H.264 proxy (progress updates). */
+  /**
+   * Sets playback: the original when the renderer plays it, else a remux or an H.264 proxy (progress
+   * updates). Remuxes and GPU proxies start once all thumbnails exist; proxies decoded on the CPU
+   * also wait for the display images, which they would slow down.
+   */
   async function makeVideoPlayback(id: string, probe: ProbeResult, vi: VideoInfo): Promise<void> {
     const item = items.get(id)!
-    if (isDirectPlayable(item.path, probe, vi)) {
+    const plan = playbackPlan(item.path, probe, vi, await directDecode())
+    if (plan.kind === 'direct') {
+      trace.mark('video.direct', id, { codec: vi.stream.codec_name })
       set(id, { playback: item.path, proxied: false })
       return
     }
-    const proxy = join(folder(id), 'proxy.mp4')
-    const [encoders, gpu] = await Promise.all([ff.encoders(), gpuFor(vi)])
+    // Remux and proxy share the file name: both are rebuildable playback copies (cache cleanup)
+    const out = join(folder(id), 'proxy.mp4')
     let last = 0
     let lastAt = 0
-    await transcodeProxy(ff, item.path, vi, proxy, {
-      signal,
-      encoders,
-      gpu,
-      shaderCache,
-      onProgress: (p) => {
-        const now = Date.now()
-        if (p - last >= 0.02 && now - lastAt >= 500) {
-          last = p
-          lastAt = now
-          update(id, { progress: Math.round(p * 1000) / 1000 })
-        }
+    const onProgress = (p: number): void => {
+      const now = Date.now()
+      if (p - last >= 0.02 && now - lastAt >= 500) {
+        last = p
+        lastAt = now
+        update(id, { progress: Math.round(p * 1000) / 1000 })
       }
-    })
-    set(id, { playback: proxy, proxied: true })
+    }
+    await thumbGate.wait(id)
+    if (plan.kind === 'remux') {
+      await audioWork(async () => {
+        if (disposed) throw abortError()
+        await trace.span('video.remux', id, () => remuxVideo(ff, item.path, vi, out, { signal, onProgress }), { reason: plan.reason, duration: vi.duration })
+      }, PRI_DISPLAY, id)
+      set(id, { playback: out, proxied: false })
+      return
+    }
+    const [encoders, gpu] = await Promise.all([ff.encoders(), gpuFor(vi)])
+    const onGpu = !!gpu
+    if (!onGpu) await trace.span('video.waitDisplays', id, () => displayGate.wait(id))
+    const traceInfo = { reason: plan.reason, duration: vi.duration, codec: vi.stream.codec_name, edge: Math.max(vi.width, vi.height), fps: vi.fps, gpu: onGpu ? gpu!.decode : null }
+    await encodeWork(async () => {
+      if (disposed) throw abortError()
+      await trace.span('video.proxy', id, () => transcodeProxy(ff, item.path, vi, out, { signal, encoders, gpu, shaderCache, onProgress, gpuPriority: GPU_PRIORITY }), traceInfo)
+    }, PRI_DISPLAY, id)
+    set(id, { playback: out, proxied: true })
   }
 
-  async function processVideo(id: string): Promise<void> {
+  /** The video's sound (audio.m4a) and its loudness, read in one pass; no sound when that fails. */
+  async function makeVideoSound(id: string, probe: ProbeResult, vi: VideoInfo): Promise<void> {
+    const item = items.get(id)!
+    const audio = join(folder(id), 'audio.m4a')
+    await thumbGate.wait(id)
+    try {
+      const loudness = await audioWork(async () => {
+        if (disposed) throw abortError()
+        const extract = (copy: boolean): Promise<number | undefined> =>
+          trace.span('video.audio', id, () => extractAudioWithLoudness(ff, item.path, vi, audio, { signal, copy }), { duration: vi.duration, copy })
+        const copy = canCopyAudio(probe, vi)
+        try {
+          return await extract(copy)
+        } catch (err) {
+          // An odd stream the MP4 muxer refuses as is: encode it instead
+          if (!copy || isAbort(err) || signal.aborted) throw err
+          return await extract(false)
+        }
+      }, PRI_DISPLAY, id)
+      set(id, { audio, hasAudio: true, loudness })
+    } catch (err) {
+      if (isAbort(err) || signal.aborted) throw abortError()
+      set(id, { audio: undefined, hasAudio: false, loudness: undefined })
+    }
+    loudnessTried.add(id)
+  }
+
+  async function processVideo(id: string, stages: Stages): Promise<void> {
     const item = items.get(id)!
     const ctx = contexts.get(id) ?? {}
-    const dir = folder(id)
-    const thumb = join(dir, 'thumb.jpg')
-    const { probe, info: vi } = await work(async () => {
-      if (disposed) throw abortError()
-      const probe = ctx.probe ?? (await ff.probe(item.path, signal))
-      const info = analyzeVideo(probe)
-      if (!info) throw new Error('no video stream')
-      await videoThumb(ff, item.path, info, thumb, signal)
-      const hash = await imageHash(thumb).catch(() => undefined)
-      update(id, { status: 'processing', thumb, hash, error: undefined })
-      return { probe, info }
-    }, PRI_THUMB)
-    // Photos first: proxies would compete with the display images for the CPU
-    await work.drained(PRI_DISPLAY)
-    await videoLimit(async () => {
-      if (disposed) throw abortError()
-      let loudness: Promise<number | undefined> | null = null
-      if (vi.hasAudio) {
-        const audio = join(dir, 'audio.m4a')
-        try {
-          await extractAudio(ff, item.path, vi, audio, signal)
-          set(id, { audio, hasAudio: true })
-          // Measured while the proxy is being made
-          loudness = loudnessOf(audio)
-          loudness.catch(() => {})
-        } catch (err) {
-          if (isAbort(err)) throw err
-          set(id, { audio: undefined, hasAudio: false })
-        }
-      }
-      await makeVideoPlayback(id, probe, vi)
-      set(id, { loudness: loudness ? await loudness : undefined })
-      loudnessTried.add(id)
-    })
+    const thumb = join(folder(id), 'thumb.jpg')
+    let probe: ProbeResult
+    let vi: VideoInfo
+    try {
+      ;({ probe, info: vi } = await work(async () => {
+        if (disposed) throw abortError()
+        const probe = ctx.probe ?? (await ff.probe(item.path, signal))
+        const info = analyzeVideo(probe)
+        if (!info) throw new Error('no video stream')
+        await trace.span('video.thumb', id, () => videoThumb(ff, item.path, info, thumb, signal), { codec: info.stream.codec_name, hdr: info.hdr })
+        update(id, { status: 'processing', thumb, error: undefined })
+        return { probe, info }
+      }, PRI_THUMB, id))
+    } finally {
+      stages.leaveThumb()
+    }
+    // Sound and picture on their own resources at the same time; the item is ready when both are
+    const results = await Promise.allSettled([vi.hasAudio ? makeVideoSound(id, probe, vi) : Promise.resolve(), makeVideoPlayback(id, probe, vi)])
+    const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected')
+    if (failed) throw failed.reason
   }
 
   /** Restored item whose proxy was deleted: only the proxy is made again. */
@@ -688,17 +826,14 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
 
   async function runReproxy(id: string): Promise<void> {
     const item = items.get(id)!
+    const leaveEssential = once(essentialGate)
     try {
       await mkdir(folder(id), { recursive: true })
       if (item.kind === 'video') {
-        await work.drained(PRI_DISPLAY)
-        await videoLimit(async () => {
-          if (disposed) throw abortError()
-          const probe = await ff.probe(item.path, signal)
-          const vi = analyzeVideo(probe)
-          if (!vi) throw new Error('no video stream')
-          await makeVideoPlayback(id, probe, vi)
-        })
+        const probe = await ff.probe(item.path, signal)
+        const vi = analyzeVideo(probe)
+        if (!vi) throw new Error('no video stream')
+        await makeVideoPlayback(id, probe, vi)
         if (disposed) return
         update(id, { status: 'ready', progress: undefined, error: undefined })
       } else {
@@ -707,7 +842,6 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
         update(id, { liveVideo })
       }
       await persist(id)
-      if (wantsAnalysis(items.get(id)!)) startAnalysis(id)
     } catch (err) {
       if (disposed) return
       if (item.kind === 'video') update(id, { status: 'error', progress: undefined, error: shortError('Video could not be converted', err) })
@@ -715,32 +849,44 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
         update(id, { live: undefined, liveVideo: undefined })
         await persist(id)
       }
+    } finally {
+      leaveEssential()
     }
+    const it = items.get(id)
+    if (it && wantsAnalysis(it)) startAnalysis(id)
   }
 
+  /**
+   * Hash / sharpness (photos), hash (videos) and loudness of older cache entries. Waits until every
+   * item has its essential files (thumbnail, display image, playable video, sound), unless the
+   * renderer focuses this item; runs at the lowest priority of the CPU pool.
+   */
   function startAnalysis(id: string): void {
     const key = `analysis:${id}`
     if (jobs.has(key) || disposed) return
-    const job = work(async () => {
-      const it = items.get(id)
-      if (!it || disposed || !wantsAnalysis(it)) return
-      const patch: Partial<MediaItem> = {}
-      if (needsAnalysis(it)) {
-        try {
-          Object.assign(patch, it.kind === 'photo' ? await analyzeImage(it.display!) : { hash: await imageHash(it.thumb!) })
-        } catch {
-          // retried on the next restore
+    const job = (async () => {
+      await essentialGate.wait(id)
+      await work(async () => {
+        const it = items.get(id)
+        if (!it || disposed || !wantsAnalysis(it)) return
+        const patch: Partial<MediaItem> = {}
+        if (needsAnalysis(it)) {
+          try {
+            Object.assign(patch, await trace.span('analysis', id, async () => (it.kind === 'photo' ? await analyzeImage(it.display!) : { hash: await imageHash(it.thumb!) }), { kind: it.kind }))
+          } catch {
+            // retried on the next restore
+          }
         }
-      }
-      if (wantsLoudness(it)) {
-        loudnessTried.add(id)
-        const loudness = await loudnessOf(it.audio!)
-        if (loudness !== undefined) patch.loudness = loudness
-      }
-      if (disposed || !Object.keys(patch).length || items.get(id)?.status !== 'ready') return
-      update(id, patch)
-      await persist(id)
-    }, PRI_ANALYSIS).catch(() => {})
+        if (wantsLoudness(it)) {
+          loudnessTried.add(id)
+          const loudness = await trace.span('loudness', id, () => loudnessOf(it.audio!))
+          if (loudness !== undefined) patch.loudness = loudness
+        }
+        if (disposed || !Object.keys(patch).length || items.get(id)?.status !== 'ready') return
+        update(id, patch)
+        await persist(id)
+      }, PRI_ANALYSIS, id)
+    })().catch(() => {})
     trackJob(key, job)
   }
 
@@ -842,7 +988,7 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
   function startTrackLoudness(id: string): void {
     const key = `loudness:${id}`
     if (jobs.has(key) || disposed) return
-    const job = musicLimit(async () => {
+    const job = afterCpuWork(id).then(() => musicLimit(async () => {
       const t = tracks.get(id)
       if (!t || disposed || !trackWantsLoudness(t)) return
       loudnessTried.add(id)
@@ -851,12 +997,13 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
       updateTrack(id, { loudness })
       await mkdir(folder(id), { recursive: true })
       await persistTrack(id)
-    }).catch(() => {})
+    })).catch(() => {})
     trackJob(key, job)
   }
 
   function startMusicJob(id: string): void {
     if (jobs.has(`music:${id}`) || disposed) return
+    const leaveEssential = once(essentialGate)
     const job = musicLimit(async () => {
       if (disposed) return
       const track = updateTrack(id, { status: 'processing', error: undefined })
@@ -870,7 +1017,7 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
       } catch (err) {
         if (!disposed) updateTrack(id, { status: 'error', error: shortError('Audio could not be converted', err) })
       }
-    })
+    }).finally(leaveEssential)
     trackJob(`music:${id}`, job)
   }
 
@@ -878,7 +1025,7 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
   function startBeatJob(id: string): void {
     const key = `beats:${id}`
     if (jobs.has(key) || disposed) return
-    const job = beatLimit(async () => {
+    const job = afterCpuWork(id).then(() => beatLimit(async () => {
       const t = tracks.get(id)
       if (!t || t.beats || t.status === 'error' || disposed) return
       await mkdir(folder(id), { recursive: true })
@@ -887,8 +1034,18 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
       // No pulse found: an empty list, so it is not analysed again
       updateTrack(id, r ? { beats: r.beats, bpm: r.bpm } : { beats: [], bpm: undefined })
       await persistTrack(id)
-    }).catch(() => {})
+    })).catch(() => {})
     trackJob(key, job)
+  }
+
+  /**
+   * Music analysis (beats, loudness) waits for the CPU-heavy part of media processing (thumbnails,
+   * display images), not for proxies: it is cheap, and beat sync and the beat lane should not wait
+   * minutes for the graphics card.
+   */
+  async function afterCpuWork(id: string): Promise<void> {
+    await thumbGate.wait(id)
+    await displayGate.wait(id)
   }
 
   const wantsBeats = (t: MusicTrack): boolean => t.status !== 'error' && !t.beats
@@ -1007,9 +1164,9 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
   // -------------------------------------------------------------------- API
 
   async function importPaths(paths: string[]): Promise<MediaItem[]> {
-    const files = await scanPaths(paths)
+    const files = await trace.span('scan', undefined, () => scanPaths(paths))
     const groups = pairFiles(files)
-    const lists = await Promise.all(groups.map((g) => prepare(g)))
+    const lists = await trace.span('prepareAll', undefined, () => Promise.all(groups.map((g) => prepare(g))), { groups: groups.length })
     const seen = new Set<string>()
     const result: MediaItem[] = []
     const now = Date.now()
@@ -1019,11 +1176,13 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
       recent.set(it.id, now)
       result.push({ ...(items.get(it.id) ?? it) })
     }
+    result.sort((a, b) => a.captureTime - b.captureTime || a.name.localeCompare(b.name, undefined, { numeric: true }))
+    order.add(result.map((it) => it.id))
     schedule(
       result.filter((it) => it.status === 'pending').map((it) => it.id),
       result.filter(wantsAnalysis).map((it) => it.id)
     )
-    return result.sort((a, b) => a.captureTime - b.captureTime || a.name.localeCompare(b.name, undefined, { numeric: true }))
+    return result
   }
 
   return {
@@ -1032,6 +1191,7 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
     importPaths,
 
     async restoreMedia(list) {
+      order.add(list.map((it) => it?.id).filter((id): id is string => typeof id === 'string'))
       const requeue: string[] = []
       const analyze: string[] = []
       const reproxy: string[] = []
@@ -1218,6 +1378,10 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
       return result
     },
 
+    prioritize(ids) {
+      order.prioritize((Array.isArray(ids) ? ids : []).filter((id) => typeof id === 'string').slice(0, 2000))
+    },
+
     get(id) {
       const it = items.get(id)
       return it ? { ...it } : undefined
@@ -1241,7 +1405,9 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
       abort.abort()
       raw.dispose()
       await Promise.allSettled([...jobs.values(), ...writes.values()])
-      await endExiftool()
+      // A detection still running removes its test clips when it ends (at most ~60 s; usually 2-3 s)
+      const detection = gpuDetection ? Promise.race([gpuDetection, new Promise((r) => setTimeout(r, 5000).unref())]) : null
+      await Promise.all([endExiftool(), trace.close(), detection])
     }
   }
 }

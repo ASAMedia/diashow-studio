@@ -13,6 +13,7 @@ import type {
   Project,
   ProjectSummary
 } from './types'
+import type { ExportJobInfo, ExportTask, NewExportJob, SegmentInput } from './exportQueue'
 
 export interface DiashowApi {
   platform: string
@@ -90,12 +91,42 @@ export interface DiashowApi {
   cleanCache(what: 'unused' | 'hires' | 'proxies'): Promise<CacheInfo>
   /** Look for moved files in a folder (same name and size). Old media id -> found item (processing starts). */
   relinkMedia(missing: MediaItem[], folder: string): Promise<Record<string, MediaItem>>
+  /**
+   * What the user looks at now (media or music ids, most urgent first): their pending processing
+   * (thumbnail, display image, sound, proxy, analysis) goes ahead of all other work. Each call
+   * replaces the previous one; [] returns to show order. Resolves at once, not when the work is done.
+   */
+  mediaPrioritize(ids: string[]): Promise<void>
   listBackups(projectId: string): Promise<BackupInfo[]>
   restoreBackup(file: string): Promise<Project>
   getAppSettings(): Promise<AppSettings>
   setAppSettings(settings: AppSettings): Promise<void>
   /** Keep the display awake (fullscreen show, presentation, kiosk). */
   keepAwake(on: boolean): Promise<void>
+
+  // Export queue (src/shared/exportQueue.ts): jobs run one after another in a hidden worker window,
+  // in segments, and continue after a crash or restart.
+  /** Queues an export (rejects invalid jobs, or a second job writing the same file). Starts the worker. */
+  queueAdd(job: NewExportJob): Promise<ExportJobInfo>
+  /** All jobs, oldest first, including done / cancelled / failed ones until removed. */
+  queueList(): Promise<ExportJobInfo[]>
+  /** Stops a job (also a running one) and deletes its parts and partial output; state 'cancelled'. */
+  queueCancel(id: string): Promise<void>
+  /** Deletes a job that is not running (and its folder). */
+  queueRemove(id: string): Promise<void>
+  /** "Continue": paused / error → queued; starts the worker. */
+  queueResume(id: string): Promise<void>
+  /** Job list after every change, at most about 4 times a second (not sent to the worker). */
+  onQueueUpdate(cb: (jobs: ExportJobInfo[]) => void): () => void
+  // Worker window only (#export-worker):
+  /** Next task, or null when nothing is left (the worker window is then closed). May wait while a job is being joined. */
+  workerNext(): Promise<ExportTask | null>
+  /** Opens segment k; its frames / stream then go through exportFrame / exportChunk. */
+  segmentStart(jobId: string, k: number, input: SegmentInput): Promise<void>
+  /** Closes segment k after all its frames: checks the frame count and stores it. */
+  segmentFinish(jobId: string, k: number): Promise<void>
+  /** Gives up on the job (state 'error' with the message); then call workerNext() again. */
+  workerFail(jobId: string, message: string): Promise<void>
 }
 
 /** URL scheme served by the main process with HTTP Range support (needed for video seeking). */

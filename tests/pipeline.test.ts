@@ -230,17 +230,26 @@ describe('videos', () => {
     await expectAudio(v)
   })
 
-  it('Sony XAVC S (PCM), XAVC HS (HEVC 4:2:2 10-bit), XAVC S-I and AVCHD get proxies + audio', async () => {
+  it('Sony XAVC S (8-bit 4:2:0, PCM) is remuxed; XAVC HS (HEVC 4:2:2 10-bit), XAVC S-I and AVCHD get proxies; all get audio', async () => {
     expect(item('C0001.MP4').format).toBe('XAVC S · H.264')
     expect(item('C0002.MP4').format).toBe('XAVC HS · HEVC 4:2:2 10-bit')
     expect(item('C0003.MP4').format).toBe('XAVC S-I · H.264 4:2:2 10-bit')
     expect(item('00000.MTS').format).toBe('AVCHD')
-    for (const name of ['C0001.MP4', 'C0002.MP4', 'C0003.MP4', '00000.MTS']) {
+    for (const name of ['C0002.MP4', 'C0003.MP4', '00000.MTS']) {
       const v = item(name)
       await expectProxy(v, 1280, 720)
       await expectAudio(v)
     }
-    expect(item('C0001.MP4').fps).toBe(50)
+    // The video stream as it is (no transcode, full quality), without the LPCM track Chromium can't read
+    const sony = item('C0001.MP4')
+    expect(sony.proxied).toBe(false)
+    expect(sony.playback).toMatch(/proxy\.mp4$/)
+    const [src, out] = await Promise.all([ff.probe(sony.path), ff.probe(sony.playback!)])
+    const vs = videoStream(out)!
+    expect([vs.codec_name, vs.profile, vs.width, vs.height, vs.nb_frames]).toEqual(['h264', videoStream(src)!.profile, 1280, 720, videoStream(src)!.nb_frames])
+    expect(out.streams.filter((s) => s.codec_type === 'audio')).toHaveLength(0)
+    await expectAudio(sony)
+    expect(sony.fps).toBe(50)
   })
 })
 

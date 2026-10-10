@@ -1,5 +1,5 @@
-import type { LookId, MediaItem, Project, ThemeId } from '@shared/types'
-import { buildTimeline, slidesAt, type Timeline, type TimelineSlide } from '@shared/timeline'
+import type { LookId, MediaItem, Project, Rect, ThemeId } from '@shared/types'
+import { buildTimeline, clipSeconds, slidesAt, type Timeline, type TimelineSlide } from '@shared/timeline'
 import { Compositor, NEUTRAL_LOOK, NEUTRAL_POST, type Look, type PostParams, type Tex } from './gl'
 import { ExportVideoStore, ImageStore, TextStore, VideoPool } from './media'
 import type { Ctx, SlideState, Theme } from './types'
@@ -7,6 +7,7 @@ import { classic, kenburns, retro } from './themes/simple'
 import { magazine, origami, panels, reflections, vintage } from './themes/scene'
 import { drawShatter, scrapbook, shatter, snapshots } from './themes/extra'
 import { applyTextStyle, clamp01, drawTextBlock, smooth, type Box } from './draw'
+import { drawFreeText } from './freeText'
 
 export const THEME_IMPL: Record<ThemeId, Theme> = { classic, kenburns, retro, magazine, origami, panels, reflections, vintage, scrapbook, snapshots, shatter }
 
@@ -35,6 +36,8 @@ export class Engine {
   playing = false
   /** Photos drawn from a placeholder in the last frame because their full image wasn't loaded yet. */
   missing = 0
+  /** Areas to pixelate per media id (from every entry that uses the media). */
+  private privacy = new Map<string, Rect[]>()
 
   constructor(
     canvas: HTMLCanvasElement | OffscreenCanvas,
@@ -50,7 +53,19 @@ export class Engine {
   setProject(project: Project, tl?: Timeline): Timeline {
     this.project = project
     this.tl = tl ?? buildTimeline(project)
+    this.privacy.clear()
+    for (const e of project.entries) {
+      if (e.type === 'text' || !e.privacy?.length) continue
+      this.privacy.set(e.mediaId, [...(this.privacy.get(e.mediaId) ?? []), ...e.privacy])
+    }
     return this.tl
+  }
+
+  /** Every texture of a media item carries its pixelated areas, whichever theme draws it. */
+  private markPrivate(m: MediaItem | undefined, tex: Tex | null): Tex | null {
+    const rects = m && tex ? this.privacy.get(m.id) : undefined
+    if (rects && tex) this.c.markPrivate(tex, rects)
+    return tex
   }
 
   resize(W: number, H: number): void {
@@ -76,16 +91,17 @@ export class Engine {
    * Path and source time of the video in cell `index` of a slide at slide-local time. `hold`
    * is set once a clip has reached its end and shows its last frame (it must not keep playing).
    */
-  private videoSource(slide: TimelineSlide, local: number, index = 0): { path: string; time: number; hold: boolean } | null {
+  private videoSource(slide: TimelineSlide, local: number, index = 0): { path: string; time: number; hold: boolean; rate: number } | null {
     const m = slide.media[index]
     const span = slide.kind === 'video' ? slide.video : slide.clips?.[index]
     if (span && m?.playback) {
-      const end = span.trimOut - span.trimIn - 0.05
-      return { path: m.playback, time: span.trimIn + Math.max(0, Math.min(local, end)), hold: local >= end }
+      // local is screen time; the source runs `speed` times as fast
+      const end = clipSeconds(span) - 0.05 / span.speed
+      return { path: m.playback, time: span.trimIn + Math.max(0, Math.min(local, end)) * span.speed, hold: local >= end, rate: span.speed }
     }
     if (index === 0 && slide.live && m?.liveVideo) {
       const end = slide.live.duration - 0.05
-      return { path: m.liveVideo, time: Math.min(local, end), hold: local >= end }
+      return { path: m.liveVideo, time: Math.min(local, end), hold: local >= end, rate: 1 }
     }
     return null
   }
@@ -103,15 +119,16 @@ export class Engine {
       image: (m: MediaItem | undefined) => {
         if (!m) return null
         const full = this.images.get(m.display)
-        if (full) return full
+        if (full) return this.markPrivate(m, full)
         this.missing++
-        return this.images.get(m.thumb)
+        return this.markPrivate(m, this.images.get(m.thumb))
       },
       video: (slide, local, index) => {
         const src = this.videoSource(slide, local, index)
         if (!src) return null
-        if (this.videos) return this.videos.frame(src.path, src.time, this.playing && !src.hold)
-        return this.exportVideos!.get(src.path)
+        const m = slide.media[index ?? 0]
+        if (this.videos) return this.markPrivate(m, this.videos.frame(src.path, src.time, this.playing && !src.hold, src.rate))
+        return this.markPrivate(m, this.exportVideos!.get(src.path))
       },
       text: (spec) => this.texts.get(applyTextStyle(spec, project.settings.text))
     }
@@ -156,6 +173,7 @@ export class Engine {
     const c = this.c
     const theme = THEME_IMPL[this.project.settings.theme] ?? kenburns
     c.setLook({ ...NEUTRAL_LOOK, ...LOOKS[this.project.settings.look] })
+    c.clearPrivate()
     const ctx = this.ctx(t)
     if (this.mode === 'preview') {
       for (const m of this.neededMedia(t, 6)) if (m.kind === 'photo') ctx.image(m)
@@ -189,6 +207,10 @@ export class Engine {
       for (const s of states) theme.drawSlide(ctx, s)
     }
     if (!theme.ownCaption) for (const s of states) this.caption(ctx, s, theme)
+    for (const s of states) {
+      const o = smooth(s.inP) * (1 - smooth(s.outP))
+      for (const e of s.slide.entries) for (const ft of e.texts ?? []) drawFreeText(ctx, ft, o)
+    }
 
     const post: PostParams = { ...NEUTRAL_POST, ...(theme.post?.(ctx) ?? {}), time: t }
     c.post(c.targetTex(0), post)

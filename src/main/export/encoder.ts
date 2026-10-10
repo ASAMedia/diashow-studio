@@ -46,7 +46,9 @@ export function encoderArgs(encoder: string, codec: VideoCodec, quality: ExportQ
   const profile = codec === 'hevc' ? 'main' : 'high'
   if (encoder.endsWith('_nvenc')) {
     const cq = [23, 19, 16][q]
-    return ['-c:v', encoder, '-preset', 'p5', '-rc', 'vbr', '-cq', String(cq), '-b:v', '0', '-profile:v', profile, '-g', gop, ...hevcTag]
+    // p4 rather than p5: same quality and size (SSIM 0.9966 vs 0.9968), but H.264 4K runs at
+    // 93 instead of 36 frames/s on a laptop RTX, which made the encoder the 4K bottleneck
+    return ['-c:v', encoder, '-preset', 'p4', '-rc', 'vbr', '-cq', String(cq), '-b:v', '0', '-profile:v', profile, '-g', gop, ...hevcTag]
   }
   if (encoder.endsWith('_qsv')) {
     const gq = [23, 19, 16][q]
@@ -64,6 +66,33 @@ export function encoderArgs(encoder: string, codec: VideoCodec, quality: ExportQ
   const crf = [21, 18, 15][q]
   return ['-c:v', 'libx264', '-preset', 'medium', '-crf', String(crf), '-profile:v', 'high', '-g', gop]
 }
+
+/** FFmpeg input options for raw frames on stdin ('yuv': I420 top row first; 'rgba': rows bottom-up). */
+export function rawInputArgs(input: 'rgba' | 'yuv', width: number, height: number, fps: number): string[] {
+  return ['-f', 'rawvideo', '-pix_fmt', input === 'yuv' ? 'yuv420p' : 'rgba', '-s', `${width}x${height}`, '-r', fpsRational(fps), '-i', 'pipe:0']
+}
+
+/** Video filter for raw frames: BT.709 limited range tags; RGBA is flipped and converted first. */
+export function rawVideoFilter(input: 'rgba' | 'yuv', width: number, height: number): string {
+  const outW = Math.round(width / 2) * 2
+  const outH = Math.round(height / 2) * 2
+  // setparams tags the frames; FFmpeg takes colour tags from frames rather than -color_* options
+  const tags = 'setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv'
+  // the GPU already packed I420 the right way up; RGBA still needs flipping and converting
+  return input === 'yuv' ? tags : `vflip,scale=w=${outW}:h=${outH}:out_color_matrix=bt709:out_range=tv,format=yuv420p,${tags}`
+}
+
+/** Stream copy of an encoded stream: these options become the container's colour tags. */
+export function copyVideoArgs(codec: VideoCodec): string[] {
+  return [
+    '-c:v', 'copy',
+    ...(codec === 'hevc' ? ['-tag:v', 'hvc1'] : []),
+    '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709', '-color_range', 'tv'
+  ]
+}
+
+/** Audio encoding of the mixed WAV for MP4 exports. */
+export const AUDIO_OUT_ARGS = ['-c:a', 'aac', '-b:a', '256k', '-ar', '48000']
 
 let active: { cancel: () => Promise<void> } | null = null
 
@@ -137,21 +166,16 @@ export async function startExport(
 
     let encoder: string
     let args: string[]
-    const audioOut = ['-c:a', 'aac', '-b:a', '256k', '-ar', '48000', '-movflags', '+faststart', options.outPath]
-    if (raw) {
+    const audioOut = [...AUDIO_OUT_ARGS, '-movflags', '+faststart', options.outPath]
+    if (input === 'rgba' || input === 'yuv') {
       const info = encoders ?? (await ff.encoders())
       encoder = pickEncoder(options.codec, options.hardware, info)
-      const outW = Math.round(width / 2) * 2
-      const outH = Math.round(height / 2) * 2
-      // setparams tags the frames; FFmpeg takes colour tags from frames rather than -color_* options
-      const tags = 'setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv'
       args = [
         '-loglevel', 'error', '-y',
-        '-f', 'rawvideo', '-pix_fmt', input === 'yuv' ? 'yuv420p' : 'rgba', '-s', `${width}x${height}`, '-r', fpsRational(fps), '-i', 'pipe:0',
+        ...rawInputArgs(input, width, height, fps),
         '-i', wav,
         '-map', '0:v:0', '-map', '1:a:0',
-        // the GPU already packed I420 the right way up; RGBA still needs flipping and converting
-        '-vf', input === 'yuv' ? tags : `vflip,scale=w=${outW}:h=${outH}:out_color_matrix=bt709:out_range=tv,format=yuv420p,${tags}`,
+        '-vf', rawVideoFilter(input, width, height),
         ...encoderArgs(encoder, options.codec, options.quality, fps),
         ...audioOut
       ]
@@ -163,10 +187,7 @@ export async function startExport(
         '-f', 'mpegts', '-i', 'pipe:0',
         '-i', wav,
         '-map', '0:v:0', '-map', '1:a:0',
-        '-c:v', 'copy',
-        ...(input === 'hevc' ? ['-tag:v', 'hvc1'] : []),
-        // stream copy: these options become the container's colour tags
-        '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709', '-color_range', 'tv',
+        ...copyVideoArgs(input),
         ...audioOut
       ]
     }

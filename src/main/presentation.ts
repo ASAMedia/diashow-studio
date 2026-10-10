@@ -45,7 +45,7 @@ export function startPresentation(owner: BrowserWindow | undefined): void {
     presentation.focus()
     return
   }
-  const main = owner && !owner.isDestroyed() && owner !== presentation ? owner : BrowserWindow.getAllWindows().find((w) => w !== presentation)
+  const main = owner && !owner.isDestroyed() && owner !== presentation ? owner : BrowserWindow.getAllWindows().find((w) => w !== presentation && w.isVisible())
   const here = main ? screen.getDisplayMatching(main.getBounds()) : screen.getPrimaryDisplay()
   const other = screen.getAllDisplays().find((d) => d.id !== here.id)
   const win = new BrowserWindow({
