@@ -26,7 +26,7 @@ jobs:
       - run: npx vitest run
       - run: npx electron-vite build
       # runners have no GPU: WebGL runs on SwiftShader
-      - run: npx playwright test e2e/app.spec.ts e2e/features.spec.ts e2e/queue.spec.ts
+      - run: npx playwright test e2e/app.spec.ts e2e/features.spec.ts e2e/queue.spec.ts e2e/privacy.spec.ts
         env:
           DIASHOW_SOFTWARE_GL: '1'
         timeout-minutes: 40
