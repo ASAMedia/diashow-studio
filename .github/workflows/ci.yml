@@ -8,7 +8,7 @@ on:
 jobs:
   test:
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,10 +26,10 @@ jobs:
       - run: npx vitest run
       - run: npx electron-vite build
       # runners have no GPU: WebGL runs on SwiftShader
-      - run: npx playwright test e2e/app.spec.ts
+      - run: npx playwright test e2e/app.spec.ts e2e/features.spec.ts e2e/queue.spec.ts
         env:
           DIASHOW_SOFTWARE_GL: '1'
-        timeout-minutes: 25
+        timeout-minutes: 40
       - uses: actions/upload-artifact@v4
         if: always()
         with:
