@@ -1,0 +1,65 @@
+name: Release
+
+# Pushing a tag like v1.0.0 builds the Windows installer and the portable exe and publishes them as
+# a GitHub release, with the CHANGELOG.md section of that version as release notes.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Tag matches package.json and has release notes
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+          node scripts/release-notes.mjs "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # HEIC/HIF samples for the generated test media
+      - run: pip install pillow-heif numpy
+      # also downloads FFmpeg and the face models and writes THIRD_PARTY_NOTICES (postinstall)
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npx vitest run
+      # builds, regenerates vendor/THIRD_PARTY_NOTICES.txt and packages; never publishes by itself
+      - run: npm run dist -- --publish never
+      - name: FFmpeg source (GPL) of the bundled build
+        run: |
+          commit=$(vendor/ffmpeg/bin/ffmpeg.exe -hide_banner -version | head -n 1 | sed -nE 's/^ffmpeg version [^ ]*-g([0-9a-f]{7,40})-.*/\1/p')
+          tag=$(node -p "require('./vendor/ffmpeg/build.json').tag")
+          if [ -z "$commit" ]; then echo "::error::FFmpeg version has no commit"; exit 1; fi
+          mkdir -p release
+          curl -fsSL --retry 3 -o "release/ffmpeg-source-$commit.tar.gz" "https://github.com/FFmpeg/FFmpeg/archive/$commit.tar.gz"
+          curl -fsSL --retry 3 -o "release/ffmpeg-build-scripts-$tag.tar.gz" "https://github.com/BtbN/FFmpeg-Builds/archive/refs/tags/$tag.tar.gz"
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          cp vendor/THIRD_PARTY_NOTICES.txt release/THIRD_PARTY_NOTICES.txt
+          cp "dist/Diashow Studio-Setup-$version.exe" "release/Diashow.Studio-Setup-$version.exe"
+          cp "dist/Diashow Studio-$version-portable.exe" "release/Diashow.Studio-$version-portable.exe"
+          prerelease=""
+          case "$version" in *-*) prerelease="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" $prerelease --verify-tag \
+            --title "Diashow Studio $version" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            release/*
