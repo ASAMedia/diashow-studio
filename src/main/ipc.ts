@@ -16,6 +16,12 @@ import { cancelActiveExport, startExport, type ExportJob } from './export/encode
 import { registerExportQueue } from './export/queueMain'
 import { registerShare } from './share/shareMain'
 import { registerSystemCheck } from './systemCheck'
+import { registerAbout } from './about'
+import type { ProjectReportEvent } from '@shared/diagnostics'
+import { registerDiagnostics } from './diagnostics'
+import { checkDirectExport, checkLocalFile } from './ipcGuards'
+import { registerProjectRepair } from './projectRepair'
+import { collectSystemInfo } from './systemCheck'
 
 function broadcast(channel: string, payload: unknown): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -47,7 +53,9 @@ export function registerIpc(): void {
   // DIASHOW_DATA_DIR (used by the e2e tests) keeps cache and projects out of the user's folders
   const dataDir = process.env.DIASHOW_DATA_DIR
   const cacheDir = join(dataDir || app.getPath('userData'), 'cache')
-  const projects = createProjectStore(join(dataDir || app.getPath('documents'), 'Diashow Studio'))
+  // a project that had to be repaired when it was read: the editor shows what changed
+  const onReport = (event: ProjectReportEvent): void => broadcast('project:report', event)
+  const projects = createProjectStore(join(dataDir || app.getPath('documents'), 'Diashow Studio'), { onReport })
   const service = createMediaService({
     ffmpegDir,
     cacheDir,
@@ -93,17 +101,30 @@ export function registerIpc(): void {
   ipcMain.handle('media:restore', (_e, items: MediaItem[]) => service.restoreMedia(items))
   ipcMain.handle('music:import', (_e, paths: string[]) => service.importMusic(stringList(paths)))
   ipcMain.handle('music:restore', (_e, tracks: MusicTrack[]) => service.restoreMusic(tracks))
-  ipcMain.handle('audio:waveform', (_e, path: string, buckets: number) => service.waveform(path, buckets))
+  // paths FFmpeg reads for the renderer: existing files only, never URLs (ipcGuards.ts)
+  ipcMain.handle('audio:waveform', async (_e, path: string, buckets: number) => service.waveform(await checkLocalFile(path), buckets))
   ipcMain.handle('media:faces', (_e, id: string, faces: Rect[], desc?: number[][]) => service.setFaces(id, faces, desc))
   ipcMain.handle('media:video-faces', (_e, id: string, samples: VideoFaces[]) => service.setVideoFaces(id, samples))
-  ipcMain.handle('media:frames', (_e, path: string, times: number[], maxEdge: number) => service.videoFrames(path, times, maxEdge))
-  ipcMain.handle('media:strip', (_e, path: string, count: number, height: number) => service.videoStrip(path, count, height))
+  ipcMain.handle('media:frames', async (_e, path: string, times: number[], maxEdge: number) => service.videoFrames(await checkLocalFile(path), times, maxEdge))
+  ipcMain.handle('media:strip', async (_e, path: string, count: number, height: number) => service.videoStrip(await checkLocalFile(path), count, height))
   ipcMain.handle('media:relink', (_e, missing: MediaItem[], folder: string) => service.relinkMedia(missing, folder))
   ipcMain.handle('media:prioritize', (_e, ids: string[]) => service.prioritize(stringList(ids)))
   ipcMain.handle('media:stabilize', (_e, id: string) => service.stabilizeVideo(String(id)))
   // Sharing over the local network: uploads go to <Documents>/Diashow Studio/Uploads/<project>/<name>
   registerShare({ uploadsRoot: join(projects.dir, 'Uploads'), broadcast })
   registerSystemCheck({ ff: service.ffmpeg, cacheDir })
+  // About dialog, third-party notices and the update hint
+  registerAbout({ ff: service.ffmpeg, ffmpegDir, settings: appSettings })
+  // Damaged project files ("Projekt reparieren"), the error log and the diagnostics package
+  registerProjectRepair({ projects, onReport })
+  registerDiagnostics({
+    loadProject: (id) => projects.peek(id),
+    projectCounts: async () => (await projects.list()).map((p) => ({ slides: p.slideCount })),
+    damaged: async () => (await projects.damaged()).map((d) => ({ reason: d.reason, bytes: d.bytes, backups: d.backups })),
+    settings: () => appSettings.get(),
+    systemInfo: () => collectSystemInfo({ ff: service.ffmpeg, cacheDir }, 15_000),
+    ffmpegVersion: async () => /ffmpeg version (\S+)/.exec((await service.ffmpeg.capture(['-version'])).toString('utf8'))?.[1] ?? 'unknown'
+  })
   ipcMain.handle('cache:info', async () => service.cacheInfo(await projects.references()))
   ipcMain.handle('cache:clean', async (_e, what: 'unused' | 'hires' | 'proxies') => service.cleanCache(what, await projects.references()))
 
@@ -175,12 +196,12 @@ export function registerIpc(): void {
     const win = windowOf(e)
     const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
     if (r.canceled || !r.filePaths.length) return null
-    return importProjectFile(r.filePaths[0], projects)
+    return importProjectFile(r.filePaths[0], projects, { onReport })
   })
 
   ipcMain.handle('project:import-file', (_e, path: string) => {
     if (typeof path !== 'string' || !path) throw new Error('no project file')
-    return importProjectFile(path, projects)
+    return importProjectFile(path, projects, { onReport })
   })
 
   ipcMain.handle('project:list', () => projects.list())
@@ -204,7 +225,7 @@ export function registerIpc(): void {
     if (exportQueue.isWorker(e.sender)) throw new Error('the export worker uses segmentStart')
     exportJob = null
     const encoders = await service.ffmpeg.encoders()
-    exportJob = await startExport(options, ffmpegDir, join(cacheDir, 'export'), sendProgress, encoders)
+    exportJob = await startExport(checkDirectExport(options), ffmpegDir, join(cacheDir, 'export'), sendProgress, encoders)
   })
 
   ipcMain.handle('export:frame', async (e, rgba: Uint8Array) => {
@@ -253,7 +274,8 @@ export function registerIpc(): void {
 
   ipcMain.handle('app:displays', () => displayCount())
   ipcMain.handle('app:settings-get', () => appSettings.get())
-  ipcMain.handle('app:settings-set', (_e, settings: AppSettings) => appSettings.set(settings))
+  // merges: each part of the app (kiosk, update hint, …) writes only its own fields
+  ipcMain.handle('app:settings-set', (_e, settings: AppSettings) => appSettings.update(settings))
   ipcMain.handle('app:keep-awake', (e, on: boolean) => {
     const contents = e.sender
     const owner = contents.id

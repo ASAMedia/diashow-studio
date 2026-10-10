@@ -6,6 +6,7 @@ import { trackSpan } from '@shared/timeline'
 import { useStore } from '../store'
 import { timelineOf } from '../timeline'
 import { fmtSeconds, fmtTime, t } from '../i18n'
+import { friendly } from '../errors'
 import { Check, Section, Slider } from './ui'
 import { MusicTrim } from './MusicTrim'
 
@@ -58,7 +59,11 @@ export function MusicPanel() {
                 <span className="tt" title={tr.path}>
                   {tr.title}
                   {tr.artist && <span className="ar">{tr.artist}</span>}
-                  {tr.status === 'error' && <span className="ar" style={{ color: 'var(--danger)' }}>{tr.error}</span>}
+                  {tr.status === 'error' && (
+                    <span className="ar" style={{ color: 'var(--danger)' }} title={tr.error}>
+                      {friendly(tr.error ?? '', 'music').text}
+                    </span>
+                  )}
                   {chapters.length > 0 && (
                     <select className="chapter-pick" title={t('playsIn')} value={chapterOf.get(tr.id) ?? ''} onChange={(e) => useStore.getState().assignSong(tr.id, e.target.value || null)}>
                       <option value="">{t('wholeShow')}</option>

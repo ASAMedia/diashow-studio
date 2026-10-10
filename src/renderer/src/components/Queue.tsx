@@ -1,8 +1,11 @@
 // Export queue in the editor: one row per job, the queue dialog, and the chip in the title bar.
-import { AlertTriangle, FolderOpen, Loader2, Play, Trash2, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { AlertTriangle, Check, FolderOpen, ListOrdered, Loader2, Play, Trash2, X } from 'lucide-react'
 import type { ExportJobInfo } from '@shared/exportQueue'
+import { chapterText, type Chapter } from '@shared/chapters'
 import { useStore } from '../store'
 import { fmtTime, t } from '../i18n'
+import { friendly } from '../errors'
 
 const active = (j: ExportJobInfo): boolean => j.state === 'queued' || j.state === 'running'
 
@@ -22,8 +25,28 @@ function status(j: ExportJobInfo, waiting: boolean): string {
     case 'cancelled':
       return t('queueCancelled')
     case 'error':
-      return `${t('queueError')}: ${j.error ?? ''}`
+      // what to do instead of FFmpeg's last line (that stays in the tooltip and the log)
+      return `${t('queueError')}: ${friendly(j.error ?? '', 'export').text}`
   }
+}
+
+/** Puts the chapters on the clipboard as "0:00 Title" lines, e.g. for a YouTube description. */
+export function CopyChaptersButton({ chapters }: { chapters: Chapter[] }) {
+  const [copied, setCopied] = useState(false)
+  useEffect(() => {
+    if (!copied) return
+    const timer = setTimeout(() => setCopied(false), 2500)
+    return () => clearTimeout(timer)
+  }, [copied])
+  return (
+    <button
+      className="btn small copy-chapters"
+      title={copied ? t('chaptersCopied') : chapterText(chapters)}
+      onClick={() => void navigator.clipboard.writeText(chapterText(chapters)).then(() => setCopied(true), () => {})}
+    >
+      {copied ? <Check size={12} /> : <ListOrdered size={12} />} {t('copyChapters')}
+    </button>
+  )
 }
 
 /** A job with progress and the actions that fit its state. */
@@ -46,7 +69,7 @@ export function JobRow({ job }: { job: ExportJobInfo }) {
         <div style={{ width: `${pct}%` }} />
       </div>
       <div className="row job-status">
-        <span style={{ flex: 1 }}>
+        <span style={{ flex: 1 }} title={job.state === 'error' ? job.error : undefined}>
           {job.state === 'running' && <Loader2 size={12} className="spin" />} {status(job, waiting)}
         </span>
         {(job.state === 'paused' || job.state === 'error' || waiting) && (
@@ -54,6 +77,7 @@ export function JobRow({ job }: { job: ExportJobInfo }) {
             <Play size={12} /> {t('queueResume')}
           </button>
         )}
+        {job.state === 'done' && !!job.chapters?.length && <CopyChaptersButton chapters={job.chapters} />}
         {job.state === 'done' && (
           <button className="btn small" onClick={() => void window.api.revealInFolder(job.outPath)}>
             <FolderOpen size={12} /> {t('showInFolder')}

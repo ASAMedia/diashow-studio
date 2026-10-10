@@ -75,7 +75,18 @@ const api: DiashowApi = {
   systemInfo: () => ipcRenderer.invoke('system:info'),
   systemEncoderTest: () => ipcRenderer.invoke('system:encoders'),
   systemBenchMedia: () => ipcRenderer.invoke('system:bench-media'),
-  systemBenchCleanup: () => ipcRenderer.invoke('system:bench-cleanup')
+  systemBenchCleanup: () => ipcRenderer.invoke('system:bench-cleanup'),
+  aboutInfo: () => ipcRenderer.invoke('about:info'),
+  thirdPartyNotices: () => ipcRenderer.invoke('about:notices'),
+  checkUpdate: (force) => ipcRenderer.invoke('update:check', force === true),
+  logError: (entry) => ipcRenderer.send('diag:log', entry),
+  diagnosticsPreview: (input) => ipcRenderer.invoke('diag:preview', input),
+  diagnosticsSave: (input) => ipcRenderer.invoke('diag:save', input),
+  onProjectReport: (cb) => subscribe('project:report', cb),
+  damagedProjects: () => ipcRenderer.invoke('project:damaged'),
+  pickProjectFile: () => ipcRenderer.invoke('project:pick-file'),
+  inspectRepair: (ref) => ipcRenderer.invoke('project:repair-inspect', ref),
+  repairProject: (ref, choice) => ipcRenderer.invoke('project:repair', ref, choice)
 }
 
 contextBridge.exposeInMainWorld('api', api)

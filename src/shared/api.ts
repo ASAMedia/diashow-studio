@@ -17,6 +17,8 @@ import type {
 import type { ExportJobInfo, ExportTask, NewExportJob, SegmentInput } from './exportQueue'
 import type { ShareCommand, ShareFilesEvent, ShareStatus } from './share'
 import type { BenchMedia, EncoderTest, SystemInfo } from './systemCheck'
+import type { AboutInfo, UpdateStatus } from './about'
+import type { DamagedProject, DiagnosticsInput, DiagnosticsPreview, ProjectRef, ProjectReportEvent, RendererLogEntry, RepairChoice, RepairPlan } from './diagnostics'
 
 export interface DiashowApi {
   platform: string
@@ -114,6 +116,7 @@ export interface DiashowApi {
   listBackups(projectId: string): Promise<BackupInfo[]>
   restoreBackup(file: string): Promise<Project>
   getAppSettings(): Promise<AppSettings>
+  /** Merges the given fields into the stored settings (null clears a field). */
   setAppSettings(settings: AppSettings): Promise<void>
   /** Keep the display awake (fullscreen show, presentation, kiosk). */
   keepAwake(on: boolean): Promise<void>
@@ -164,6 +167,34 @@ export interface DiashowApi {
   systemBenchMedia(): Promise<BenchMedia>
   /** Deletes the benchmark media. */
   systemBenchCleanup(): Promise<void>
+
+  // About dialog and update hint (src/shared/about.ts)
+  aboutInfo(): Promise<AboutInfo>
+  /** THIRD_PARTY_NOTICES.txt shipped with the app; null when it is missing (development). */
+  thirdPartyNotices(): Promise<string | null>
+  /**
+   * Newest release on GitHub. Without `force` (start-up): at most once a day, nothing when switched
+   * off in Settings or in a development build. `force` (About dialog) always asks. Never rejects.
+   */
+  checkUpdate(force?: boolean): Promise<UpdateStatus>
+
+  // Diagnostics and project checks (src/shared/diagnostics.ts)
+  /** An error of this window for the log file (fire and forget; rate-limited and capped by the main process). */
+  logError(entry: RendererLogEntry): void
+  /** The files of the diagnostics package as they would be saved (nothing is written). */
+  diagnosticsPreview(input: DiagnosticsInput): Promise<DiagnosticsPreview>
+  /** Asks where to save the diagnostics package (zip) and writes it; null when cancelled. */
+  diagnosticsSave(input: DiagnosticsInput): Promise<string | null>
+  /** A project had to be repaired when it was opened, imported, restored or rescued. */
+  onProjectReport(cb: (event: ProjectReportEvent) => void): () => void
+  /** Project files in the projects folder that cannot be opened (damaged, or from a newer app). */
+  damagedProjects(): Promise<DamagedProject[]>
+  /** Asks for a .dshow file (open dialog) without reading it; null when cancelled. */
+  pickProjectFile(): Promise<string | null>
+  /** What a repair can rescue from a damaged project file, and its backups. */
+  inspectRepair(ref: ProjectRef): Promise<RepairPlan>
+  /** Repairs a damaged project (rescue or backup); resolves with the project to open. */
+  repairProject(ref: ProjectRef, choice: RepairChoice): Promise<Project>
 }
 
 /** URL scheme served by the main process with HTTP Range support (needed for video seeking). */

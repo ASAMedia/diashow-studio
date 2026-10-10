@@ -2,7 +2,7 @@
 // theme into screenshots (test-results/themes) and exports a short MP4.
 import { _electron as electron, expect, test } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { appArgs, EXPORT_SIZE, SOFTWARE_GL } from './launch'
@@ -217,6 +217,7 @@ test('import, preview every theme, export', async () => {
   expect(probe).toContain('codec_name=h264')
   expect(probe).toContain('codec_type=audio')
   await app.close()
+  rmSync(dataDir, { recursive: true, force: true, maxRetries: 3 })
   console.log(errors.length ? `renderer errors:\n${errors.join('\n')}` : 'no renderer errors')
   expect(errors).toEqual([])
 })

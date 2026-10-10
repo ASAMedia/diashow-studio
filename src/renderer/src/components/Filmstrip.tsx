@@ -8,6 +8,7 @@ import { themeMeta } from '@shared/themes'
 import { playerRef, useStore } from '../store'
 import { useTimeline } from '../timeline'
 import { fmtTime, t } from '../i18n'
+import { friendly } from '../errors'
 import { AudioLane } from './AudioLane'
 import { CARD, GAP, STEP, timeToX } from './stripScale'
 
@@ -366,7 +367,11 @@ function SlideCard(props: {
       )}
       {(s.kind === 'photos' || s.kind === 'text' || s.kind === 'video') && <DurationHandle slide={s} onDuration={props.onDuration} />}
       {busy && <div className="progress" style={{ width: `${Math.round((busy.progress ?? 0.05) * 100)}%` }} />}
-      {failed && <div className="err">{failed.error === 'missing' ? t('missing') : failed.format}</div>}
+      {failed && (
+        <div className="err" title={friendly(failed.error ?? '', 'import').text}>
+          {failed.error === 'missing' ? t('missing') : failed.format}
+        </div>
+      )}
       <span className="num">{s.index + 1}</span>
     </div>
   )

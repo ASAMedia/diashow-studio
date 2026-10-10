@@ -13,6 +13,7 @@ import { fmtTime, localeTag, t } from '../i18n'
 import { Check, Section, Slider, TITLE_STYLES } from './ui'
 import { BatchPanel, FreeTextSection, PrivacySection, SpeedSelect } from './SlideTools'
 import { TrimStrip } from './TrimStrip'
+import { ErrorText } from '../errors'
 
 /** Songs that play from this text slide on (a chapter of its own). */
 function ChapterMusic({ entry }: { entry: TextEntry }) {
@@ -74,7 +75,7 @@ function MediaInfo({ m }: { m: MediaItem }) {
         <dd>{new Date(m.captureTime).toLocaleString(localeTag(), { dateStyle: 'medium', timeStyle: 'short' })}</dd>
       </dl>
       {m.proxied && <p className="hint">{t('proxyNote')}</p>}
-      {m.status === 'error' && <p className="error">{m.error === 'missing' ? t('missing') : m.error}</p>}
+      {m.status === 'error' && <ErrorText err={m.error === 'missing' ? 'missing' : m.error ?? ''} context="import" />}
     </>
   )
 }

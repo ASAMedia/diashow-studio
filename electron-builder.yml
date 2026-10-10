@@ -16,6 +16,16 @@ extraResources:
   - from: vendor/ffmpeg/bin
     to: ffmpeg
     filter: ['*.exe', '*.dll']
+  # FFmpeg's GPL licence and which BtbN build it is (About dialog, THIRD_PARTY_NOTICES)
+  - from: vendor/ffmpeg
+    to: ffmpeg
+    filter: ['LICENSE.txt', 'build.json']
+# next to the exe: the app's licence and every third-party licence (scripts/third-party-notices.mjs)
+extraFiles:
+  - from: vendor/THIRD_PARTY_NOTICES.txt
+    to: THIRD_PARTY_NOTICES.txt
+  - from: LICENSE
+    to: LICENSE.txt
 win:
   target: [nsis, portable]
 nsis:
@@ -29,3 +39,11 @@ fileAssociations:
   - ext: dshow
     name: Diashow Studio project
     description: Diashow Studio project
+# Electron fuses: the packaged exe ignores ELECTRON_RUN_AS_NODE and NODE_OPTIONS (it cannot be
+# misused as a Node runtime), loads app code only from app.asar, and encrypts cookies. Node's inspect
+# arguments stay available: the e2e tests drive a packaged build (DIASHOW_EXE) through them.
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  onlyLoadAppFromAsar: true
+  enableCookieEncryption: true

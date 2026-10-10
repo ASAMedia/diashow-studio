@@ -1,12 +1,13 @@
 // Joining the parts of an export job: the segments' streams in order, muxed with mix.wav like a
-// regular WebCodecs export (AnnexBToTs → FFmpeg stream copy → MP4), checked, then moved over the
-// output.
+// regular WebCodecs export (AnnexBToTs → FFmpeg stream copy → MP4) and the chapter marks (an
+// ffmetadata file, -map_chapters), checked, then moved over the output.
 import type { ChildProcess } from 'node:child_process'
 import { once } from 'node:events'
 import { createReadStream, existsSync } from 'node:fs'
-import { rename } from 'node:fs/promises'
+import { rename, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { VideoCodec } from '@shared/types'
+import { chapterMetadata, type Chapter } from '@shared/chapters'
 import { abortError } from '../abort'
 import { summarizeStderr, type Ffmpeg } from '../ffmpeg'
 import { videoStream } from '../media/videoInfo'
@@ -25,6 +26,9 @@ export interface JoinOptions {
   partial: string
   out: string
   signal: AbortSignal
+  /** Chapter marks for the MP4, written to `chaptersFile` (ffmetadata) first. */
+  chapters?: Chapter[]
+  chaptersFile?: string
 }
 
 /** rename that retries a moment when the target is busy (Explorer preview, virus scanner). */
@@ -55,12 +59,16 @@ export async function joinSegments(ff: Ffmpeg, o: JoinOptions): Promise<void> {
   try {
     for (let k = 0; k < o.segments.length; k++) if (!existsSync(o.segments[k])) throw new Error(`segment ${k} is missing`)
     if (!existsSync(dirname(out))) throw new Error(`the folder ${dirname(out)} does not exist`)
+    const chapters = o.chapters?.length && o.chaptersFile ? o.chaptersFile : null
+    if (chapters) await writeFile(chapters, chapterMetadata(o.chapters!, totalFrames / o.fps), 'utf8')
+    check()
     const proc = ff.spawn(
       [
         '-loglevel', 'error', '-y',
         // MPEG-TS made by AnnexBToTs: the joined stream with pts/dts per frame
         '-f', 'mpegts', '-i', 'pipe:0',
         '-i', o.audio,
+        ...(chapters ? ['-f', 'ffmetadata', '-i', chapters, '-map_chapters', '2'] : []),
         '-map', '0:v:0', '-map', '1:a:0',
         ...copyVideoArgs(o.codec),
         ...AUDIO_OUT_ARGS,

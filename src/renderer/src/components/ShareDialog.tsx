@@ -2,13 +2,14 @@
 // the open show ("Fotos einsammeln"), or download the finished video ("Video verteilen"). The server
 // runs in the main process (src/main/share) only while this dialog is open.
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Copy, FolderOpen, Play, Square, Trash2, Upload, X } from 'lucide-react'
+import { AlertTriangle, Copy, FolderOpen, Play, Square, Trash2, Upload, X } from 'lucide-react'
 import { toString as qrSvg } from 'qrcode'
 import type { ShareAddress, ShareStatus } from '@shared/share'
 import { aspectValue } from '@shared/timeline'
 import { queueExport } from '../engine/exporter'
 import { useStore } from '../store'
 import { localeTag, t } from '../i18n'
+import { ErrorText } from '../errors'
 
 type Tab = 'collect' | 'distribute'
 
@@ -24,7 +25,7 @@ const size = (bytes: number): string =>
 
 function addressLabel(a: ShareAddress): string {
   const kind = a.kind === 'wifi' ? t('shareKindWifi') : a.kind === 'ethernet' ? t('shareKindEthernet') : a.kind === 'hotspot' ? t('shareKindHotspot') : a.kind === 'virtual' ? t('shareKindVirtual') : ''
-  return `${kind ? `${kind} · ` : ''}${a.name} · ${a.address}`
+  return `${kind ? `${kind} · ` : ''}${a.name} · ${a.address}${a.public ? ` · ${t('sharePublic')}` : ''}`
 }
 
 /** Even width × height with the short side `short` (like the export dialog). */
@@ -165,7 +166,8 @@ export function ShareDialog() {
   }, [status?.received])
 
   const limits = status?.limits
-  const statusError = status?.error === 'no-network' ? t('shareNoNetwork') : status?.error ? t('shareError').replace('{e}', status.error) : ''
+  // a public address (eduroam & co.): the server may be reachable from outside the Wi-Fi
+  const publicAddress = running && !!status?.addresses.find((a) => a.address === status.address)?.public
 
   return (
     <div className="overlay">
@@ -221,6 +223,11 @@ export function ShareDialog() {
                 <div className="share-url" data-testid={tab === 'collect' ? 'share-upload-url' : 'share-download-url'}>
                   {url}
                 </div>
+                {publicAddress && (
+                  <p className="share-warning" data-testid="share-public-warning">
+                    <AlertTriangle size={14} /> {t('sharePublicWarning')}
+                  </p>
+                )}
                 <div className="row">
                   <button
                     className="btn small"
@@ -237,8 +244,8 @@ export function ShareDialog() {
                 </div>
               </>
             )}
-            {statusError && <p className="error">{statusError}</p>}
-            {error && <p className="error">{error}</p>}
+            {status?.error && <ErrorText err={status.error} context="share" />}
+            {error && <ErrorText err={error} context="share" />}
 
             {tab === 'collect' && running && (
               <>

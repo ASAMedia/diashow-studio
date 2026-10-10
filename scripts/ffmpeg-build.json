@@ -1,0 +1,7 @@
+{
+  "comment": "Pinned FFmpeg build for vendor/ffmpeg (scripts/fetch-ffmpeg.mjs). BtbN keeps the last build of each month for two years, so pin a month-end autobuild. The GPL notice (THIRD_PARTY_NOTICES, About dialog) links this release and the FFmpeg commit.",
+  "branch": "9.0",
+  "tag": "autobuild-2026-09-30-13-08",
+  "asset": "ffmpeg-n9.0.2-17-g2a571b6068-win64-gpl-shared-9.0",
+  "sha256": "3da6c7b60bb9ccd73ec5b5e815ba804a0879eb362ba0e3beebce50174c022696"
+}

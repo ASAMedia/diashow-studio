@@ -296,12 +296,16 @@ export function buildTimeline(project: Project, locale = 'de-DE'): Timeline {
     }
   }
 
-  // Attach a pending title overlay to the first content slide.
+  // Attach a pending title overlay to the first content slide. A show that starts with a text slide
+  // (e.g. the first day title) gets the title as a slide of its own: the overlay would replace that
+  // slide's text, so the chapter would never be shown.
   const pending = drafts.findIndex((d) => d.slide.id === '__pending_title')
   if (pending >= 0) {
     const [p] = drafts.splice(pending, 1)
     const target = drafts[pending]
-    if (target) {
+    if (target?.slide.kind === 'text') {
+      drafts.splice(pending, 0, { ...p, slide: { ...p.slide, id: 'title' }, fixed: TEXT_SECONDS })
+    } else if (target) {
       target.slide.titleOverlay = true
       target.slide.title = p.slide.title
       target.min = Math.max(target.min, 3)

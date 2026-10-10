@@ -3,9 +3,11 @@
 import { randomUUID } from 'node:crypto'
 import { copyFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, join, resolve, sep } from 'node:path'
+import type { ProjectReportEvent } from '@shared/diagnostics'
 import type { ExportProgress, MediaItem, MusicTrack, Project } from '@shared/types'
 import { abortError } from './abort'
 import { mediaId } from './media/scan'
+import { hasChanges, readProjectText } from './projectSchema'
 import { PROJECT_EXT, type ProjectStore } from './projects'
 
 const RESERVED = /^(con|prn|aux|nul|com\d|lpt\d)$/i
@@ -158,14 +160,21 @@ async function idFor(path: string): Promise<string | null> {
  * are recomputed from the files as they are here, so the cache and later imports of the same files
  * line up; entries follow the new ids. The renderer then calls restoreMedia/restoreMusic.
  */
-export async function importProjectFile(path: string, store: ProjectStore): Promise<Project> {
+export interface ImportOptions {
+  /** The file had to be repaired (validation, or `salvage`); called with the id it got here. */
+  onReport?: (event: ProjectReportEvent) => void
+  /** Rescue what is readable from a cut-off file ("Repair"). */
+  salvage?: boolean
+}
+
+export async function importProjectFile(path: string, store: ProjectStore, opts: ImportOptions = {}): Promise<Project> {
   const file = resolve(path)
-  const p = JSON.parse(await readFile(file, 'utf8')) as Project
-  if (!p || typeof p !== 'object' || !Array.isArray(p.entries)) throw new Error('not a Diashow Studio project')
-  if (p.version !== 1) throw new Error(`unsupported project version: ${String(p.version)}`)
-  const validId = typeof p.id === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(p.id)
-  // Opening the project's own file in the projects folder: nothing to import
-  if (validId && samePath(file, join(store.dir, `${p.id}${PROJECT_EXT}`))) return store.load(p.id)
+  if (extname(file).toLowerCase() !== PROJECT_EXT) throw new Error('not a Diashow Studio project file (.dshow)')
+  // Opening a project's own file in the projects folder: nothing to import
+  const own = basename(file, extname(file))
+  if (!opts.salvage && /^[A-Za-z0-9_-]{1,128}$/.test(own) && samePath(file, join(store.dir, `${own}${PROJECT_EXT}`))) return store.load(own)
+  // migrated and validated: an older format is converted, a newer one refused, broken parts dropped
+  const { project: p, report } = readProjectText(await readFile(file, 'utf8'), { salvage: opts.salvage })
 
   const base = dirname(file)
   const remap = new Map<string, string>()
@@ -181,16 +190,25 @@ export async function importProjectFile(path: string, store: ProjectStore): Prom
     media.push(out)
   }
   const music: MusicTrack[] = []
+  const songs = new Map<string, string>()
   for (const track of Array.isArray(p.music) ? p.music : []) {
     const out: MusicTrack = { ...track, path: toAbsolute(base, track.path) }
     const id = await idFor(out.path)
-    if (id) out.id = id
+    if (id && id !== track.id) {
+      songs.set(track.id, id)
+      out.id = id
+    }
     music.push(out)
   }
-  const entries = p.entries.map((e) => (e.type !== 'text' && remap.has(e.mediaId) ? { ...e, mediaId: remap.get(e.mediaId)! } : e))
-  let id = validId ? p.id : randomUUID()
+  const entries = p.entries.map((e) => {
+    if (e.type !== 'text') return remap.has(e.mediaId) ? { ...e, mediaId: remap.get(e.mediaId)! } : e
+    // chapter songs follow their tracks' new ids
+    return e.music?.some((m) => songs.has(m)) ? { ...e, music: e.music.map((m) => songs.get(m) ?? m) } : e
+  })
+  let id = p.id
   if (await exists(join(store.dir, `${id}${PROJECT_EXT}`))) id = randomUUID()
   const project: Project = { ...p, id, entries, media, music, updatedAt: Date.now() }
   await store.save(project)
+  if (hasChanges(report)) opts.onReport?.({ projectId: id, source: 'import', report })
   return project
 }

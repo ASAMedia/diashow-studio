@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { AspectRatio, EncoderInfo, ExportQuality, Project, VideoCodec } from '@shared/types'
-import { aspectValue } from '@shared/timeline'
+import { aspectValue, buildTimeline } from '@shared/timeline'
+import { buildChapters } from '@shared/chapters'
 import { queueExport } from '../engine/exporter'
 import { useStore } from '../store'
+import { timelineOf } from '../timeline'
 import { localeTag, pick, t } from '../i18n'
-import { JobRow } from './Queue'
+import { CopyChaptersButton, JobRow } from './Queue'
 import { openFacesInShow } from '@shared/people'
 import { PrivacyReview } from './PrivacyReview'
 
@@ -55,6 +57,12 @@ export function ExportDialog() {
   // check before export: slides with faces that are not pixelated (optional)
   const [review, setReview] = useState(false)
   const openFaces = useMemo(() => openFacesInShow(project).length, [project])
+  // chapter marks (title + chapter slides) in the MP4; offered from two chapters on
+  const chapters = useMemo(() => {
+    const snapshot: Project = aspectId === project.settings.aspect ? project : { ...project, settings: { ...project.settings, aspect: aspectId } }
+    return buildChapters(snapshot, snapshot === project ? timelineOf(project) : buildTimeline(snapshot, localeTag()))
+  }, [project, aspectId])
+  const [withChapters, setWithChapters] = useState(true)
   const job = useStore((s) => s.exportJobs.find((j) => j.id === jobId))
   // beat sync also needs the beats of every song (they are found after the photos are ready)
   const busy =
@@ -88,7 +96,8 @@ export function ExportDialog() {
         snapshot,
         // sharp 4K: videos that only have a 1080p proxy get a full-resolution source first
         { outPath: out, width: w, height: h, fps, codec, quality, hardware: hardware && !!hwName, locale: localeTag(), hires: Math.max(w, h) > 1920 },
-        `${project.name} · ${label ? pick(label) : `${w}×${h}`}`
+        `${project.name} · ${label ? pick(label) : `${w}×${h}`}`,
+        withChapters
       )
       setJobId(info.id)
       setPhase('queued')
@@ -181,7 +190,22 @@ export function ExportDialog() {
                   {hwName ? ` (${hwName})` : ''}
                 </span>
               </label>
+              {chapters.length >= 2 && (
+                <>
+                  <span />
+                  <label className="check export-chapters">
+                    <input type="checkbox" checked={withChapters} onChange={(e) => setWithChapters(e.target.checked)} />
+                    <span>{t('exportChapters')}</span>
+                  </label>
+                </>
+              )}
             </div>
+            {chapters.length >= 2 && (
+              <p className="hint" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ flex: 1 }}>{t('exportChaptersHint').replace('{n}', String(chapters.length))}</span>
+                <CopyChaptersButton chapters={chapters} />
+              </p>
+            )}
             {enc && !hwName && <p className="hint">{t('noHardware')}</p>}
             {aspectId !== project.settings.aspect && <p className="hint">{t('aspectRelayout')}</p>}
             {busy && <p className="warn">{t('stillProcessing')}</p>}

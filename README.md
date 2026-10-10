@@ -4,6 +4,8 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
 
 ## Features
 
+- **Getting started:** on the first start a three-step assistant makes a first show (photos or a folder, theme and music, then play or export). It can be skipped and is also on the home screen ("New slideshow with assistant").
+- **Handbook:** F1 (or Help in Settings and the "⋯" menu) opens a short handbook in German or English, with screenshots and a searchable table of contents. It is bundled with the app and works offline.
 - **11 themes.** The seven Photos themes are Ken Burns, Origami, Reflections, Sliding Panels, Vintage Prints, Classic and Magazine. Four more are our own:
   - Retro Film: a Super 8 look.
   - Scrapbook: taped prints on kraft paper with handwritten captions.
@@ -34,7 +36,7 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
   - Slow motion and time lapse per clip (0.25× to 8×). Between 0.5× and 2× the sound plays along with its pitch kept; outside that range the clip is silent.
   - Text boxes anywhere on a slide: drag them in the preview and double-click to type. Each box has its own font, size, colour, rotation, and a shadow, dark band, white card or speech bubble behind it.
   - Several slides at once: Shift+click selects a range, Ctrl+click adds single slides, Ctrl+A selects all. The Slide tab then sets their duration, framing, clip speed, video sound and Live Photo motion together, pixelates their faces, or leaves them out of the show.
-  - Shortcuts: press F1 for the list. Short tips introduce the main steps on first use.
+  - Shortcuts: the list is in the handbook (F1) and in Settings. Short tips introduce the main steps on first use.
 - **Review ("Sichten"):** a grid of every photo and video for going through a big import with the keyboard.
   - X leaves an item out of the show and brings it back; it stays in the project.
   - 1–5 give stars, and the Space bar shows the item large.
@@ -56,6 +58,7 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
   - "Reduce shake" per clip: shaky phone videos are stabilised in the background (FFmpeg vid.stab, zoomed 6 % so no edges show). The preview and the export then use the steady version.
 - **Export presets:** YouTube 1080p/4K, Instagram Reel 9:16, Instagram 1:1, WhatsApp, TV/projector. Another aspect ratio relays the show.
   - 4K exports first prepare full-resolution versions of videos that only have a 1080p proxy.
+  - Chapters: the MP4 gets the show title and every chapter slide (also one shown as a caption) as chapter marks, so players such as VLC or QuickTime jump straight to "Tuesday" (option "Chapters as jump marks", on from two chapters). "Copy chapters" in the export dialog or the finished export puts the list on the clipboard as "0:00 Title" lines for a YouTube description.
 - **Export queue:** exports run in the background, one after another, while you keep editing. The title bar shows the progress.
   - Each export is a snapshot of the show, so later edits don't change it.
   - A hidden window renders exports in 30-second parts. After a crash or a restart the export continues from the last finished part ("Continue" in the queue).
@@ -79,6 +82,8 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
   - Automatic backups: before a save, the previous version is kept (at most every 10 minutes, the last 20). Restore them with "Restore an older version…" in the "⋯" menu.
   - Missing originals (moved folder, new drive letter) are found again with "Search a folder…" in the banner.
   - Settings show how much cache each part uses, with buttons to remove unused files, 4K versions or video proxies.
+  - Damaged files: every project is checked when it opens (also packed ones). Broken or unknown parts are dropped or repaired, and a notice says what changed; the file as it was stays as a backup. A file that can't be read at all (e.g. cut off by a power loss) is listed on the home screen with "Repair…": rescue what is readable, or take one of its backups. The damaged file is kept.
+  - The project format has a version and a migration chain (`src/main/projectSchema.ts`); a project saved by a newer version is refused with a hint to update instead of being opened half.
 - **Share over Wi-Fi** ("⋯" menu), local network only, no internet:
   - Collect photos: the laptop shows a QR code. Pupils open a page on their phones, enter their name if they like and upload photos and videos.
     - Files are stored in `Documents\Diashow Studio\Uploads\<project>\<name>\`.
@@ -86,7 +91,13 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
   - Hand out the video: offered files (e.g. a finished 720p export from the queue) can be watched and saved on the phones.
   - The server only runs while the dialog is open and only answers links with a random token.
   - On first use Windows asks whether to allow network access. On guest Wi-Fi that keeps devices apart, the Windows mobile hotspot helps.
+  - Networks that give every device a public address (eduroam and other campus Wi-Fi) work too. Such an address is marked "public", comes after private ones, and the dialog warns while it is used: the server may be reachable from outside the Wi-Fi, so the link should only go to the class and the server should be stopped after use.
 - **Pack project:** copies the project with all photos, videos and music into one folder for a USB stick or another PC. "Open project…" or a double-click on the .dshow loads it there.
+- **When something goes wrong:**
+  - Error messages say what happened and what to do (FFmpeg missing, disk full, file locked or missing, unreadable file, export encoder, blocked network port, damaged project), with the technical message under "Details".
+  - The app keeps an error log in `%APPDATA%\Diashow Studio\logs` (a few files of 2 MB): start, versions and graphics card, errors of the main process and the windows, crashes. Paths are shortened to `%USERPROFILE%`; no media content, face data or share links.
+  - "Create diagnostics package…" (Settings) shows every file it would contain and then saves a zip to e-mail: logs, system check, settings, versions, the export queue's states and a summary of the open project made of counts, formats and size classes only (no names, captions or paths of the photos).
+- **Security:** the windows run sandboxed with context isolation and a strict CSP, can't navigate away from the app, open other windows, use camera, microphone or location, or reach the internet; IPC only answers the app's own page; `dsmedia://` serves photos, videos and music only; FFmpeg only reads existing local files. The packaged exe can't be run as Node (Electron fuses).
 - **Presentation mode:** the show runs fullscreen on a second display (projector) while the laptop shows the current and next slide, time and controls.
 - **Kiosk mode:** choose a project in Settings, and the app starts straight into it, playing in a loop. The screen stays on while a show plays.
 - **Timing like Photos:**
@@ -110,6 +121,7 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
   - Export uses NVENC, Quick Sync or AMF when available.
   - Aspect ratios: 16:9, 4:3, 1:1, 9:16.
 - German and English UI, following the Windows language.
+- **About and updates:** "About Diashow Studio" (Settings) shows the versions of the app, Electron, Chromium and FFmpeg, the licences of everything bundled, and checks for a new release. At start the app asks GitHub at most once a day for the newest release and shows a hint in the title bar; it never installs anything, stays silent offline and can be switched off in Settings.
 
 ## Supported media
 
@@ -150,8 +162,13 @@ npm install          # also downloads FFmpeg 9.0 (BtbN GPL build) and the face m
 npm run dev          # start the app with hot reload
 npm test             # unit and pipeline tests (generates test media first)
 npm run e2e          # build + Playwright end-to-end test with screenshots of every theme
-npm run dist         # Windows installer and portable exe in dist/
+npm run dist         # Windows installer and portable exe in dist/ (writes THIRD_PARTY_NOTICES first)
+npm run notices      # vendor/THIRD_PARTY_NOTICES.txt: licences of FFmpeg, fonts, models and every bundled npm package
 ```
+
+The handbook lives in `src/renderer/src/handbook/de.md` and `en.md` (a small Markdown subset, see `handbook/markdown.tsx`). Its screenshots in `src/renderer/public/handbook/<de|en>/` are made from the generated test media by `npx electron-vite build && DIASHOW_HANDBOOK_SHOTS=1 npx playwright test e2e/handbook-shots.spec.ts`.
+
+**Releases:** add a section for the version to `CHANGELOG.md`, set the same version in `package.json`, and push a tag `v<version>`. `.github/workflows/release.yml` then runs the type check and unit tests, builds the installer and the portable exe, and publishes them as a GitHub release with that changelog section, `THIRD_PARTY_NOTICES.txt` and the source of the bundled FFmpeg build.
 
 GitHub Actions (`.github/workflows/ci.yml`) runs the type check, the unit tests and the end-to-end tests (app, editing tools, export queue) on Windows for every push.
 
@@ -159,4 +176,4 @@ GitHub Actions (`.github/workflows/ci.yml`) runs the type check, the unit tests 
 
 ## Licence
 
-MIT for the app code. The bundled FFmpeg build is GPL; see `vendor/ffmpeg/LICENSE.txt`. MediaPipe and the BlazeFace model are Apache-2.0; their usage statistics are blocked inside the app. Face recognition uses dlib's face recognition model (public domain, CC0) as converted by face-api.js (MIT), from `@vladmandic/face-api` (MIT), with TensorFlow.js (Apache-2.0). Fonts are under the SIL Open Font License (Inter, Anton, Cinzel, Special Elite, Playfair Display, Barlow Semi Condensed, Nunito Sans, Caveat).
+MIT for the app code. `THIRD_PARTY_NOTICES.txt` (next to the installed exe, and in the About dialog) lists every bundled licence. The bundled FFmpeg build is GPL-3.0 (BtbN, pinned in `scripts/ffmpeg-build.json`); see `vendor/ffmpeg/LICENSE.txt`, and the source of that exact build is attached to each release. MediaPipe and the BlazeFace model are Apache-2.0; their usage statistics are blocked inside the app. Face recognition uses dlib's face recognition model (public domain, CC0) as converted by face-api.js (MIT), from `@vladmandic/face-api` (MIT), with TensorFlow.js (Apache-2.0). Fonts are under the SIL Open Font License (Inter, Anton, Cinzel, Playfair Display, Barlow Semi Condensed, Nunito Sans, Caveat) and the Apache License 2.0 (Special Elite).

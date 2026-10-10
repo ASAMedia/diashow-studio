@@ -4,6 +4,7 @@ import { statSync } from 'node:fs'
 import { dirname, isAbsolute, resolve } from 'node:path'
 import type { ExportJobRequest, NewExportJob, SegmentInput } from '@shared/exportQueue'
 import type { AudioPlan, AudioPlanClip, ExportQuality, Project } from '@shared/types'
+import { MAX_CHAPTER_TITLE, oneLine, type Chapter } from '@shared/chapters'
 
 /** Job ids, also the names of the job folders. */
 export const ID_RE = /^[0-9a-z]{6,12}-[0-9a-f]{8}$/
@@ -72,12 +73,29 @@ function validateClip(raw: unknown, i: number): AudioPlanClip {
   return clip
 }
 
-function validateAudio(raw: unknown): AudioPlan {
+export function validateAudio(raw: unknown): AudioPlan {
   if (!isObject(raw)) throw new Error('audio plan missing')
   const { duration, clips } = raw
   if (!(finite(duration) && duration > 0 && duration <= 24 * 3600)) throw new Error('invalid show duration')
   if (!Array.isArray(clips) || clips.length > 10_000) throw new Error('invalid audio clips')
   return { duration, clips: clips.map(validateClip) }
+}
+
+/** Chapter marks: ascending starts inside the show, one-line titles (they go into an ffmetadata file). */
+export function validateChapters(raw: unknown, duration: number): Chapter[] | undefined {
+  if (raw === undefined) return undefined
+  if (!Array.isArray(raw) || raw.length > 1000) throw new Error('invalid chapters')
+  let last = -1
+  return raw.map((c, i) => {
+    if (!isObject(c)) throw new Error(`chapter ${i} invalid`)
+    const { start, title } = c
+    if (!(finite(start) && start >= 0 && start < duration)) throw new Error(`chapter ${i}: invalid start`)
+    if (start <= last) throw new Error(`chapter ${i}: chapters must be in ascending order`)
+    last = start
+    const text = typeof title === 'string' ? oneLine(title).slice(0, MAX_CHAPTER_TITLE) : ''
+    if (!text) throw new Error(`chapter ${i}: invalid title`)
+    return { start, title: text }
+  })
 }
 
 /** Checks a job coming from the renderer; returns a clean copy. */
@@ -89,7 +107,10 @@ export function validateNewJob(raw: unknown): NewExportJob {
   if (!isObject(project) || typeof project.id !== 'string' || !Array.isArray(project.media) || !Array.isArray(project.entries) || !isObject(project.settings)) {
     throw new Error('the export job needs a project')
   }
-  return { name, project: project as unknown as Project, request: validateRequest(raw.request), audio: validateAudio(raw.audio) }
+  const request = validateRequest(raw.request)
+  const audio = validateAudio(raw.audio)
+  const chapters = validateChapters(raw.chapters, audio.duration)
+  return { name, project: project as unknown as Project, request, audio, ...(chapters?.length ? { chapters } : {}) }
 }
 
 export function validateId(id: unknown): string {

@@ -6,11 +6,14 @@ import { readdir, rm } from 'node:fs/promises'
 import { basename, dirname, extname, join } from 'node:path'
 import type { ExportJobInfo, ExportJobRequest, ExportJobState, SegmentInput } from '@shared/exportQueue'
 import type { AudioPlan, Project, VideoCodec } from '@shared/types'
+import type { Chapter } from '@shared/chapters'
 import type { Segment } from './segments'
 import { finite, ID_RE, isObject } from './validate'
 
 const JOB_FILE = 'job.json'
 const MIX_FILE = 'mix.wav'
+/** The chapter marks as an FFmpeg ffmetadata file, written for the joining. */
+const CHAPTERS_FILE = 'chapters.txt'
 /** Decoded audio clips while the mix is made. */
 export const CLIPS_DIR = 'clips'
 
@@ -34,6 +37,8 @@ export interface JobFile {
   finishedAt?: number
   project: Project
   audio: AudioPlan
+  /** Chapter marks for the MP4 (NewExportJob.chapters). */
+  chapters?: Chapter[]
 }
 
 export type Phase = NonNullable<ExportJobInfo['phase']>
@@ -72,6 +77,7 @@ export const segmentLength = (job: Job, k: number): number =>
   Math.min(job.file.totalFrames, (k + 1) * job.file.segmentFrames) - k * job.file.segmentFrames
 export const segmentPath = (job: Job, k: number): string => join(job.dir, segmentName(k, job.file.request.codec))
 export const mixPath = (job: Job): string => join(job.dir, MIX_FILE)
+export const chaptersPath = (job: Job): string => join(job.dir, CHAPTERS_FILE)
 
 /** Segments still to render, ascending. */
 export const remaining = (job: Job): number[] => {

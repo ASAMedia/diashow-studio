@@ -18,6 +18,10 @@ import { QueueDialog } from './components/Queue'
 import { PrivacyReviewDialog } from './components/PrivacyReview'
 import { ShareDialog } from './components/ShareDialog'
 import { SystemCheck } from './components/SystemCheck'
+import { HandbookDialog } from './components/Handbook'
+import { AboutDialog } from './components/AboutDialog'
+import { Wizard } from './components/Wizard'
+import { DiagnosticsHost } from './components/ProjectRepair'
 import { watchStabilize } from './stabilize'
 import { timelineOf } from './timeline'
 
@@ -111,7 +115,7 @@ export function App() {
       const s = useStore.getState()
       if (e.key === 'F1') {
         e.preventDefault()
-        s.set({ dialog: s.dialog === 'help' ? null : 'help' })
+        s.set({ dialog: s.dialog === 'handbook' ? null : 'handbook' })
         return
       }
       if (e.key === 'Escape' && s.dialog) {
@@ -181,7 +185,11 @@ export function App() {
       {dialog === 'privacyReview' && <PrivacyReviewDialog />}
       {dialog === 'share' && <ShareDialog />}
       {dialog === 'systemcheck' && <SystemCheck />}
+      {dialog === 'handbook' && <HandbookDialog />}
+      {dialog === 'about' && <AboutDialog />}
+      <Wizard />
       {presenting && <PresenterPanel />}
+      <DiagnosticsHost />
       {dragging && <div className="window-drop">{t('dropHere')}</div>}
     </div>
   )

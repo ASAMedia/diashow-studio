@@ -6,10 +6,15 @@
 export interface ShareAddress {
   /** Adapter name as Windows shows it, e.g. "WLAN" or "Ethernet 2". */
   name: string
-  /** Private IPv4 address. */
+  /** IPv4 address: private (RFC 1918), or public when `public` is set. */
   address: string
   /** 'hotspot': the laptop's own mobile hotspot (192.168.137.x); 'virtual': VM / VPN / WSL adapters. */
   kind: 'wifi' | 'ethernet' | 'hotspot' | 'other' | 'virtual'
+  /**
+   * Not a private address (e.g. eduroam gives every device a public one): the server may be reachable
+   * from outside the Wi-Fi. Listed after the private addresses; the dialog warns while it is in use.
+   */
+  public?: boolean
 }
 
 /** A file a phone sent. */
@@ -39,7 +44,7 @@ export interface ShareStatus {
   /** Address the server listens on, and its port. */
   address?: string
   port?: number
-  /** Private IPv4 interfaces, best first (Wi-Fi, Ethernet, hotspot, others). */
+  /** IPv4 interfaces, best first: private ones (Wi-Fi, Ethernet, hotspot, others), then public ones. */
   addresses: ShareAddress[]
   /** Upload page (collect photos). */
   uploadUrl?: string

@@ -8,7 +8,7 @@ import { useStore } from '../store'
 import { pick, t } from '../i18n'
 import { Check, FONTS, Section, Slider, TITLE_STYLES } from './ui'
 
-function ThemeThumb({ id, thumbs }: { id: ThemeId; thumbs: string[] }) {
+export function ThemeThumb({ id, thumbs }: { id: ThemeId; thumbs: string[] }) {
   const img = (i: number, style: CSSProperties): ReactNode =>
     thumbs.length ? (
       <img src={mediaUrl(thumbs[i % thumbs.length])} style={{ position: 'absolute', objectFit: 'cover', ...style }} alt="" />

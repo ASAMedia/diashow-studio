@@ -6,6 +6,7 @@ import { DEFAULT_SETTINGS } from '@shared/types'
 import type { ExportJobInfo } from '@shared/exportQueue'
 import { themeMeta } from '@shared/themes'
 import { t } from './i18n'
+import { notifyError } from './errors'
 import type { Player } from './engine/player'
 import * as edits from './entryEdits'
 import { entriesFor, uid } from './entryEdits'
@@ -32,7 +33,7 @@ interface State {
   canUndo: boolean
   canRedo: boolean
   /** 'share': photos from phones / video to phones over the Wi-Fi; 'systemcheck': opened from Settings. */
-  dialog: 'rejects' | 'pack' | 'settings' | 'backups' | 'help' | 'queue' | 'share' | 'systemcheck' | 'privacyReview' | null
+  dialog: 'rejects' | 'pack' | 'settings' | 'backups' | 'help' | 'queue' | 'share' | 'systemcheck' | 'privacyReview' | 'handbook' | 'about' | null
   /** Export queue, oldest first (kept by the main process). */
   exportJobs: ExportJobInfo[]
   presenting: boolean
@@ -90,7 +91,8 @@ interface State {
 let saveTimer: ReturnType<typeof setTimeout> | undefined
 function scheduleSave(p: Project): void {
   clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => void window.api.saveProject(p), 600)
+  // a failed save (disk full, locked folder) must not go unnoticed
+  saveTimer = setTimeout(() => void window.api.saveProject(p).catch((e) => notifyError(e, 'save')), 600)
 }
 
 // Undo history. Snapshots are whole projects (cheap to keep: media items are shared data);
@@ -158,7 +160,7 @@ export const useStore = create<State>((set, get) => ({
     }
     resetHistory()
     set({ project, view: 'editor', selection: [], playhead: 0, tab: 'themes', canUndo: false, canRedo: false })
-    await window.api.saveProject(project)
+    await window.api.saveProject(project).catch((e) => notifyError(e, 'save'))
     if (paths.length) await get().importMedia(paths)
     return get().project!
   },
@@ -181,7 +183,7 @@ export const useStore = create<State>((set, get) => ({
 
   closeProject() {
     const p = get().project
-    if (p) void window.api.saveProject(p)
+    if (p) void window.api.saveProject(p).catch((e) => notifyError(e, 'save'))
     resetHistory()
     set({ project: null, view: 'home', selection: [], fullscreen: false, canUndo: false, canRedo: false, privacyEdit: null, textSel: null })
     void get().loadProjects()
@@ -267,7 +269,13 @@ export const useStore = create<State>((set, get) => ({
   },
 
   async importMedia(paths, placement = 'selection') {
-    const items = await window.api.importPaths(paths)
+    let items: MediaItem[]
+    try {
+      items = await window.api.importPaths(paths)
+    } catch (e) {
+      notifyError(e, 'import')
+      return
+    }
     if (!items.length) return
     const { selection } = get()
     get().update((p) => {

@@ -107,6 +107,36 @@ async function benchPhoto(path: string, seed: number): Promise<void> {
   await sharp(Buffer.from(svg)).jpeg({ quality: 88 }).toFile(path)
 }
 
+/** What the system check's main-process part sees (also written into the diagnostics package). */
+export async function collectSystemInfo(cfg: { ff: Ffmpeg; cacheDir: string }, tonemapTimeout = 90_000): Promise<SystemInfo> {
+  const [devices, encoders, hevc, tonemap, disk, ffmpeg] = await Promise.all([
+    gpuDevices(),
+    cfg.ff.encoders(),
+    withTimeout(directDecodeSupport().then((d) => d.hevc ?? null), 8000, null),
+    withTimeout(detectGpuTonemap(cfg.ff), tonemapTimeout, null),
+    freeSpace(cfg.cacheDir),
+    ffmpegVersion(cfg.ff)
+  ])
+  const features = Object.fromEntries(Object.entries(app.getGPUFeatureStatus() as unknown as Record<string, string>).map(([k, v]) => [k, String(v)]))
+  return {
+    gpu: { devices, features },
+    encoders,
+    hevcDirect: hevc,
+    tonemap: tonemap ? { device: tonemap.device, decode: tonemap.decode } : null,
+    cpu: { model: (cpus()[0]?.model ?? 'unknown').trim(), threads: availableParallelism() },
+    memory: { total: totalmem(), free: freemem() },
+    disk: { path: cfg.cacheDir, ...disk },
+    versions: {
+      app: app.getVersion(),
+      electron: process.versions.electron ?? '',
+      chrome: process.versions.chrome ?? '',
+      node: process.versions.node,
+      ffmpeg,
+      windows: process.platform === 'win32' ? windowsVersion(version(), release()) : `${version()} (${release()})`
+    }
+  }
+}
+
 export function registerSystemCheck(cfg: { ff: Ffmpeg; cacheDir: string }): void {
   const benchDirs = new Set<string>()
   const cleanup = async (): Promise<void> => {
@@ -115,34 +145,7 @@ export function registerSystemCheck(cfg: { ff: Ffmpeg; cacheDir: string }): void
     await Promise.all(dirs.map((d) => rm(d, { recursive: true, force: true, maxRetries: 3 }).catch(() => {})))
   }
 
-  ipcMain.handle('system:info', async (): Promise<SystemInfo> => {
-    const [devices, encoders, hevc, tonemap, disk, ffmpeg] = await Promise.all([
-      gpuDevices(),
-      cfg.ff.encoders(),
-      withTimeout(directDecodeSupport().then((d) => d.hevc ?? null), 8000, null),
-      withTimeout(detectGpuTonemap(cfg.ff), 90_000, null),
-      freeSpace(cfg.cacheDir),
-      ffmpegVersion(cfg.ff)
-    ])
-    const features = Object.fromEntries(Object.entries(app.getGPUFeatureStatus() as unknown as Record<string, string>).map(([k, v]) => [k, String(v)]))
-    return {
-      gpu: { devices, features },
-      encoders,
-      hevcDirect: hevc,
-      tonemap: tonemap ? { device: tonemap.device, decode: tonemap.decode } : null,
-      cpu: { model: (cpus()[0]?.model ?? 'unknown').trim(), threads: availableParallelism() },
-      memory: { total: totalmem(), free: freemem() },
-      disk: { path: cfg.cacheDir, ...disk },
-      versions: {
-        app: app.getVersion(),
-        electron: process.versions.electron ?? '',
-        chrome: process.versions.chrome ?? '',
-        node: process.versions.node,
-        ffmpeg,
-        windows: process.platform === 'win32' ? windowsVersion(version(), release()) : `${version()} (${release()})`
-      }
-    }
-  })
+  ipcMain.handle('system:info', (): Promise<SystemInfo> => collectSystemInfo(cfg))
 
   // One after another: hardware sessions running side by side would slow each other down
   ipcMain.handle('system:encoders', async (): Promise<EncoderTest[]> => {

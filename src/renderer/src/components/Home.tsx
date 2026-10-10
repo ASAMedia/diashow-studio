@@ -1,7 +1,9 @@
-import { FileUp, FolderOpen, Plus, Trash2, Play } from 'lucide-react'
+import { FileUp, FolderOpen, Plus, Trash2, Play, Wand2 } from 'lucide-react'
 import { mediaUrl } from '@shared/api'
 import { useStore } from '../store'
 import { Tip } from './Settings'
+import { openWizard } from './Wizard'
+import { DamagedProjects, importProjectSafely, openProjectSafely } from './ProjectRepair'
 import { localeTag, t } from '../i18n'
 
 export function Home() {
@@ -27,15 +29,15 @@ export function Home() {
         <h1>{t('yourProjects')}</h1>
         <button
           className="btn"
-          onClick={async () => {
-            const p = await window.api.openProjectFile()
-            if (p) await useStore.getState().openProjectData(p)
-          }}
+          onClick={() => void importProjectSafely(null)}
         >
           <FileUp size={15} /> {t('openFile')}
         </button>
         <button className="btn" onClick={quickShow} title={t('quickShowHint')}>
           <Play size={15} /> {t('quickShow')}
+        </button>
+        <button className="btn" onClick={openWizard}>
+          <Wand2 size={15} /> {t('wizardOpen')}
         </button>
         <button className="btn primary" onClick={newProject}>
           <Plus size={15} /> {t('newProject')}
@@ -50,7 +52,7 @@ export function Home() {
       {projects.length > 0 && (
         <div className="projects">
           {projects.map((p) => (
-            <div key={p.id} className="project" onClick={() => void useStore.getState().openProject(p.id)}>
+            <div key={p.id} className="project" onClick={() => void openProjectSafely(p.id)}>
               {p.cover ? <img className="cover" src={mediaUrl(p.cover)} alt="" /> : <div className="cover" />}
               <div className="meta">
                 <b>{p.name}</b>
@@ -72,6 +74,7 @@ export function Home() {
           ))}
         </div>
       )}
+      <DamagedProjects />
     </div>
   )
 }

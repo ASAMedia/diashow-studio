@@ -2,6 +2,7 @@
 // segments, so exports run in the background one after another and resume after a crash or a
 // restart from the last finished segment.
 import type { AudioPlan, ExportQuality, Project, VideoCodec } from './types'
+import type { Chapter } from './chapters'
 
 export interface ExportJobRequest {
   outPath: string
@@ -26,6 +27,8 @@ export interface NewExportJob {
   request: ExportJobRequest
   /** Built by the renderer from the snapshot (buildAudioPlan). */
   audio: AudioPlan
+  /** Chapter marks written into the MP4 (buildChapters), ascending; none when left out. */
+  chapters?: Chapter[]
 }
 
 export type ExportJobState = 'queued' | 'running' | 'paused' | 'done' | 'error' | 'cancelled'
@@ -49,6 +52,8 @@ export interface ExportJobInfo {
   width: number
   height: number
   codec: VideoCodec
+  /** Chapter marks of the export, when it has them. */
+  chapters?: Chapter[]
 }
 
 /** Work handed to the worker window. */

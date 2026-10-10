@@ -4,9 +4,15 @@
 // 10 minutes per project; the newest 20 are kept. The first save of a session backs up the version
 // on disk only when it is older than that (the state a previous session left), so quick successive
 // saves of a new project create no backups.
+//
+// Every project read from disk is migrated and validated (projectSchema.ts): broken parts are dropped or
+// repaired and reported through `onReport`; when data was lost, the file as it was is kept as a backup
+// first. Files that cannot be read at all are listed by damaged() and can be rescued with repair().
 import { copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
+import type { DamagedProject, ProjectReportEvent, RepairChoice, RepairPlan, RepairReport } from '@shared/diagnostics'
 import type { BackupInfo, Project, ProjectSummary } from '@shared/types'
+import { cleanProjectText, formatVersion, hasChanges, lostData, PROJECT_VERSION, ProjectFormatError, readProjectText } from './projectSchema'
 
 export const PROJECT_EXT = '.dshow'
 const BACKUPS = '.backups'
@@ -19,6 +25,8 @@ export interface ProjectStoreOptions {
   keepBackups?: number
   /** Clock, injectable for tests. */
   now?: () => number
+  /** A project read from disk had to be repaired (dropped or fixed parts). */
+  onReport?: (event: ProjectReportEvent) => void
 }
 
 export interface ProjectReferences {
@@ -40,6 +48,17 @@ export interface ProjectStore {
   listBackups(id: string): Promise<BackupInfo[]>
   /** Makes a backup the current version (backing up the current one first) and returns it. */
   restoreBackup(file: string): Promise<Project>
+  /** A project as load() returns it, without reporting, backing up or anything else (diagnostics). */
+  peek(id: string): Promise<Project>
+  /** Project files that cannot be opened: unreadable or broken ('damaged'), or from a newer app ('too-new'). */
+  damaged(): Promise<DamagedProject[]>
+  /** What can be rescued from a damaged project file, and its backups. */
+  inspectRepair(id: string): Promise<RepairPlan>
+  /**
+   * Replaces a damaged project with what could be rescued from it, or with one of its backups. The
+   * damaged file is kept next to the backups (`<time>.damaged`).
+   */
+  repair(id: string, choice: RepairChoice): Promise<Project>
 }
 
 /** Ids become file names; only allow safe characters so an id can never escape the folder. */
@@ -79,12 +98,29 @@ export function backupTime(name: string): number | null {
   return Number.isFinite(t) ? t : null
 }
 
+/** The raw JSON of a project file (for summaries and references), or null when unreadable. */
 async function readProject(path: string): Promise<Project | null> {
   try {
-    const p = JSON.parse(await readFile(path, 'utf8')) as Project
+    const p = JSON.parse(cleanProjectText(await readFile(path, 'utf8'))) as Project
     return p && typeof p === 'object' && Array.isArray(p.entries) ? p : null
   } catch {
     return null
+  }
+}
+
+/** A project file read, migrated and validated; throws ProjectFormatError. */
+async function readChecked(path: string, opts: { fallbackId?: string; salvage?: boolean } = {}): Promise<{ project: Project; report: RepairReport }> {
+  return readProjectText(await readFile(path, 'utf8'), opts)
+}
+
+/** The project name in the text of a damaged file, if it is still there. */
+function nameIn(text: string): string | undefined {
+  const m = /"name"\s*:\s*"((?:[^"\\]|\\.){0,200})"/.exec(text)
+  if (!m) return undefined
+  try {
+    return JSON.parse(`"${m[1]}"`) as string
+  } catch {
+    return undefined
   }
 }
 
@@ -149,6 +185,18 @@ export function createProjectStore(dir: string, opts: ProjectStoreOptions = {}):
     await Promise.all(all.slice(keep).map((n) => rm(join(folder, n), { force: true })))
   }
 
+  async function listBackups(id: string): Promise<BackupInfo[]> {
+    const folder = backupDir(id)
+    const names = await backupNames(id)
+    const list = await Promise.all(
+      names.map(async (name): Promise<BackupInfo> => {
+        const p = await readProject(join(folder, name))
+        return { file: join(folder, name), savedAt: backupTime(name)!, slideCount: p ? p.entries.length : 0 }
+      })
+    )
+    return list.sort((a, b) => b.savedAt - a.savedAt || b.file.localeCompare(a.file))
+  }
+
   return {
     dir,
 
@@ -165,6 +213,8 @@ export function createProjectStore(dir: string, opts: ProjectStoreOptions = {}):
           .map(async (n) => {
             const p = await readProject(join(dir, n))
             if (!p || typeof p.id !== 'string') return null
+            // a newer app's project is listed by damaged(): it cannot be opened here
+            if ((formatVersion(p) ?? 0) > PROJECT_VERSION) return null
             return summarize({ ...p, media: Array.isArray(p.media) ? p.media : [] })
           })
       )
@@ -172,8 +222,13 @@ export function createProjectStore(dir: string, opts: ProjectStoreOptions = {}):
     },
 
     async load(id) {
-      const p = JSON.parse(await readFile(file(id), 'utf8')) as Project
+      const { project: p, report } = await readChecked(file(id), { fallbackId: id })
       if (p.id !== id) p.id = id
+      if (hasChanges(report)) {
+        // the editor saves the repaired project right away: keep the file as it was
+        if (lostData(report)) await serial(id, () => backupCurrent(id)).catch(() => {})
+        opts.onReport?.({ projectId: id, source: 'open', report })
+      }
       return p
     },
 
@@ -229,17 +284,7 @@ export function createProjectStore(dir: string, opts: ProjectStoreOptions = {}):
       return { ids, paths }
     },
 
-    async listBackups(id) {
-      const folder = backupDir(id)
-      const names = await backupNames(id)
-      const list = await Promise.all(
-        names.map(async (name): Promise<BackupInfo> => {
-          const p = await readProject(join(folder, name))
-          return { file: join(folder, name), savedAt: backupTime(name)!, slideCount: p ? p.entries.length : 0 }
-        })
-      )
-      return list.sort((a, b) => b.savedAt - a.savedAt || b.file.localeCompare(a.file))
-    },
+    listBackups,
 
     async restoreBackup(path) {
       if (typeof path !== 'string' || !path) throw new Error('no backup file')
@@ -249,13 +294,111 @@ export function createProjectStore(dir: string, opts: ProjectStoreOptions = {}):
       if (resolve(backupDir(id)).toLowerCase() !== folder.toLowerCase() || backupTime(basename(full)) === null) {
         throw new Error('not a backup of this app')
       }
-      const p = await readProject(full)
-      if (!p) throw new Error('backup is damaged')
+      const { project: p, report } = await readChecked(full, { fallbackId: id })
       const project: Project = { ...p, id, updatedAt: now() }
       return serial(id, async () => {
         // The version being replaced becomes a backup itself, so the restore can be undone
         await backupCurrent(id)
         await writeAtomic(file(id), project)
+        if (hasChanges(report)) opts.onReport?.({ projectId: id, source: 'backup', report })
+        return project
+      })
+    },
+
+    async peek(id) {
+      return (await readChecked(file(id), { fallbackId: id })).project
+    },
+
+    async damaged() {
+      let names: string[]
+      try {
+        names = await readdir(dir)
+      } catch {
+        return []
+      }
+      const found = await Promise.all(
+        names
+          .filter((n) => n.toLowerCase().endsWith(PROJECT_EXT) && /^[A-Za-z0-9_-]{1,128}$/.test(n.slice(0, -PROJECT_EXT.length)))
+          .map(async (n): Promise<DamagedProject | null> => {
+            const id = n.slice(0, -PROJECT_EXT.length)
+            const path = join(dir, n)
+            let text: string
+            let bytes: number
+            let modifiedAt: number
+            try {
+              const st = await stat(path)
+              if (!st.isFile()) return null
+              bytes = st.size
+              modifiedAt = st.mtimeMs
+              text = await readFile(path, 'utf8')
+            } catch {
+              return null
+            }
+            try {
+              readProjectText(text, { fallbackId: id })
+              return null
+            } catch (err) {
+              const base = { id, file: path, bytes, modifiedAt, backups: (await backupNames(id)).length }
+              if (err instanceof ProjectFormatError && err.code === 'too-new') return { ...base, reason: 'too-new', version: err.version }
+              const name = nameIn(text)
+              return { ...base, reason: 'damaged', ...(name ? { name } : {}) }
+            }
+          })
+      )
+      return found.filter((d): d is DamagedProject => d !== null).sort((a, b) => b.modifiedAt - a.modifiedAt)
+    },
+
+    async inspectRepair(id) {
+      const path = file(id)
+      let salvage: RepairPlan['salvage'] = null
+      try {
+        const { project, report } = await readChecked(path, { fallbackId: id, salvage: true })
+        salvage = { name: project.name, slides: project.entries.length, media: project.media.length, music: project.music.length, report }
+      } catch {
+        // nothing readable (or a newer app's file): only the backups can help
+      }
+      const backups = await Promise.all(
+        (await listBackups(id)).map(async (b) => {
+          const readable = await readFile(b.file, 'utf8').then(
+            (text) => {
+              readProjectText(text, { fallbackId: id })
+              return true
+            },
+            () => false
+          ).catch(() => false)
+          return readable ? b : { ...b, damaged: true }
+        })
+      )
+      return { id, file: path, salvage, backups }
+    },
+
+    async repair(id, choice) {
+      checkId(id)
+      let result: { project: Project; report: RepairReport }
+      if (choice?.kind === 'backup') {
+        const full = resolve(String(choice.file ?? ''))
+        if (resolve(backupDir(id)).toLowerCase() !== dirname(full).toLowerCase() || backupTime(basename(full)) === null) {
+          throw new Error('not a backup of this project')
+        }
+        result = await readChecked(full, { fallbackId: id })
+      } else if (choice?.kind === 'salvage') {
+        result = await readChecked(file(id), { fallbackId: id, salvage: true })
+      } else throw new Error('unknown repair')
+      const project: Project = { ...result.project, id, updatedAt: now() }
+      return serial(id, async () => {
+        // the damaged file stays next to the backups (neither listed nor pruned with them)
+        const current = file(id)
+        const mtime = await stat(current).then(
+          (st) => st.mtimeMs,
+          () => null
+        )
+        if (mtime !== null) {
+          await mkdir(backupDir(id), { recursive: true })
+          await copyFile(current, join(backupDir(id), `${backupStamp(mtime)}.damaged`))
+        }
+        await writeAtomic(current, project)
+        lastBackup.set(id, now())
+        opts.onReport?.({ projectId: id, source: 'repair', report: result.report })
         return project
       })
     }

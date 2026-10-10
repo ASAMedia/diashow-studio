@@ -408,6 +408,11 @@ export interface BackupInfo {
 export interface AppSettings {
   /** Kiosk: open this project fullscreen in a loop when the app starts. */
   kioskProjectId?: string | null
+  /** Look for a newer release on GitHub when the app starts (at most once a day); on unless false. */
+  updateCheck?: boolean
+  /** Last automatic update check (ms since 1970) and the newest release it found. */
+  updateCheckedAt?: number
+  updateLatest?: { version: string; url: string } | null
 }
 
 export interface EncoderInfo {

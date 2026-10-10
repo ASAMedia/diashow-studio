@@ -1,5 +1,10 @@
 // dsmedia://f/<encoded absolute path> → local file, with HTTP Range support so <video> seeking and
 // mediabunny's UrlSource work.
+//
+// Access limits: only photo, video and audio files are served (every file the renderer shows, the
+// cache's thumbnails, display images and proxies included, has such an extension), never documents,
+// keys or browser data, and never SVG (a document that can run scripts). Device paths (\\?\, \\.\),
+// alternate data streams (file.txt:x.jpg) and requests from web pages other than the app's are refused.
 import { protocol } from 'electron'
 import { createReadStream } from 'node:fs'
 import { stat } from 'node:fs/promises'
@@ -7,7 +12,35 @@ import { isAbsolute } from 'node:path'
 import { Readable } from 'node:stream'
 import type { ReadableStream as WebReadableStream } from 'node:stream/web'
 import { MEDIA_SCHEME, pathFromMediaUrl } from '@shared/api'
-import { extOf } from '@shared/formats'
+import { AUDIO_EXT, extOf, IMAGE_EXT, VIDEO_EXT } from '@shared/formats'
+
+const SERVED_EXT = new Set([...IMAGE_EXT, ...VIDEO_EXT, ...AUDIO_EXT])
+
+/** May the renderer read this file through dsmedia://? (See the access limits above.) */
+export function mediaPathAllowed(path: string): boolean {
+  if (typeof path !== 'string' || !path || path.length > 4000 || path.includes('\0') || !isAbsolute(path)) return false
+  // \\?\C:\…, \\.\PhysicalDrive0, \??\…: Win32 device namespaces
+  if (/^[\\/]{2}[?.][\\/]|^[\\/]\?\?[\\/]/.test(path)) return false
+  // a colon only right after the drive letter: no alternate data streams
+  if (path.indexOf(':', /^[A-Za-z]:/.test(path) ? 2 : 0) >= 0) return false
+  // forward slashes count as separators on Windows; "." / ".." segments are resolved by the OS: refuse them
+  if (/(^|[\\/])\.{1,2}([\\/]|$)/.test(path)) return false
+  return SERVED_EXT.has(extOf(path))
+}
+
+/**
+ * Pages that may read media: the app's own (file://, "null" for file pages, the dev server) and
+ * dsmedia itself. A request without Origin (a plain <img>/<video>) is fine.
+ */
+export function originAllowed(origin: string | null, devUrl = process.env.ELECTRON_RENDERER_URL): boolean {
+  if (!origin || origin === 'null' || origin.startsWith('file://') || origin.startsWith(`${MEDIA_SCHEME}://`)) return true
+  if (!devUrl) return false
+  try {
+    return new URL(devUrl).origin === origin
+  } catch {
+    return false
+  }
+}
 
 const MIME: Record<string, string> = {
   jpg: 'image/jpeg',
@@ -75,13 +108,14 @@ const CORS = {
 
 export async function handleMediaRequest(request: Request): Promise<Response> {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: { ...CORS, 'Access-Control-Allow-Methods': 'GET, HEAD' } })
+  if (!originAllowed(request.headers.get('origin'))) return new Response('forbidden', { status: 403 })
   let path: string
   try {
     path = pathFromMediaUrl(request.url)
   } catch {
     return new Response('bad url', { status: 400 })
   }
-  if (!isAbsolute(path)) return new Response('not found', { status: 404 })
+  if (!mediaPathAllowed(path)) return new Response('not found', { status: 404 })
   let size: number
   try {
     const st = await stat(path)

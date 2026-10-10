@@ -18,8 +18,8 @@ import { joinSegments } from './assemble'
 import { mixAudioPlan } from './audioMix'
 import { pickEncoder } from './encoder'
 import {
-  CLIPS_DIR, currentFrame, deleteWorkFiles, loadJobs, makeJob, mixPath, partialOutputPath, remaining, saveJob, segmentCount, segmentLength,
-  segmentPath, type Job, type JobFile, type Phase
+  chaptersPath, CLIPS_DIR, currentFrame, deleteWorkFiles, loadJobs, makeJob, mixPath, partialOutputPath, remaining, saveJob, segmentCount,
+  segmentLength, segmentPath, type Job, type JobFile, type Phase
 } from './jobStore'
 import { openChunkSegment, openRawSegment } from './segments'
 import { validateId, validateInput, validateNewJob } from './validate'
@@ -189,7 +189,8 @@ export async function openExportQueue(opts: ExportQueueOptions): Promise<ExportQ
       ...(f.finishedAt ? { finishedAt: f.finishedAt } : {}),
       width: f.request.width,
       height: f.request.height,
-      codec: f.request.codec
+      codec: f.request.codec,
+      ...(f.chapters?.length ? { chapters: f.chapters } : {})
     }
   }
 
@@ -301,7 +302,8 @@ export async function openExportQueue(opts: ExportQueueOptions): Promise<ExportQ
         totalFrames,
         partial,
         out: request.outPath,
-        signal: ctrl.signal
+        signal: ctrl.signal,
+        ...(job.file.chapters?.length ? { chapters: job.file.chapters, chaptersFile: chaptersPath(job) } : {})
       })
       job.file.state = 'done'
       job.file.finishedAt = Date.now()
@@ -423,7 +425,8 @@ export async function openExportQueue(opts: ExportQueueOptions): Promise<ExportQ
         segments: [],
         createdAt,
         project: job.project,
-        audio: job.audio
+        audio: job.audio,
+        ...(job.chapters?.length ? { chapters: job.chapters } : {})
       }
       const entry = makeJob(file, dir)
       saveJob(entry)

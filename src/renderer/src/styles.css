@@ -289,6 +289,9 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--accent); margi
 .trim-handle { position: absolute; top: 0; bottom: 0; width: 10px; margin-left: -5px; background: var(--accent); border-radius: 3px; cursor: ew-resize; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4); }
 
 .notices:empty { display: none; }
+/* fixed rows: without notices the filmstrip must not move into the flexible row (it was squeezed off-screen) */
+.editor > .workspace { grid-row: 2; }
+.editor > .strip { grid-row: 3; }
 .tip, .banner { display: flex; align-items: center; gap: 12px; margin: 10px 16px 0; padding: 10px 12px; border-radius: 8px; background: var(--accent-soft); color: var(--text); font-size: 12.5px; }
 .home .tip { margin: 0 0 18px; }
 .banner { background: rgba(255, 200, 97, 0.14); color: #ffd78a; }
@@ -422,3 +425,33 @@ textarea.free-text.editing { color: #fff; background: rgba(20, 20, 22, 0.85); bo
 
 .people-details { margin-top: 8px; }
 .people-details summary { cursor: pointer; color: var(--text-2); font-size: 12px; margin-bottom: 6px; }
+
+/* friendly error messages, notices, project repair, diagnostics package (errors.tsx, ProjectRepair.tsx, Diagnostics.tsx) */
+.friendly-error { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; user-select: text; }
+.friendly-error .link { background: none; border: 0; padding: 0; color: var(--accent); font-size: 12px; text-decoration: underline; }
+.friendly-error .detail { flex-basis: 100%; font-size: 11px; color: var(--text-3); white-space: pre-wrap; word-break: break-word; }
+.notice-stack { position: fixed; right: 16px; bottom: 16px; z-index: 60; display: flex; flex-direction: column; gap: 8px; width: 420px; max-width: calc(100vw - 32px); }
+.notice-stack.upper { bottom: auto; top: calc(var(--titlebar) + 12px); z-index: 35; }
+.notice { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: var(--radius); background: var(--panel-2); border: 1px solid var(--danger); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); color: var(--text); font-size: 12.5px; }
+.notice.info { border-color: var(--accent); }
+.notice .notice-icon { flex: none; margin-top: 1px; color: var(--danger); }
+.notice.info .notice-icon { color: var(--accent); }
+.notice-body { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.notice-text { color: var(--text-2); }
+.repair-report { margin: 0; padding-left: 18px; color: var(--text-2); font-size: 12px; }
+.damaged-projects { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+.damaged-project { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--danger); }
+.damaged-project .notice-icon { color: var(--danger); flex: none; }
+.damaged-project .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.diag-privacy { background: var(--accent-soft); border-radius: 8px; padding: 8px 10px; font-size: 12px; color: var(--text-2); margin: 0 0 10px; }
+.diag-files { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--radius); max-height: 46vh; overflow-y: auto; }
+.diag-file + .diag-file { border-top: 1px solid var(--line-soft); }
+.diag-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 10px; background: none; border: 0; text-align: left; color: var(--text); }
+.diag-head:hover { background: var(--bg-2); }
+.diag-head .name { font-family: ui-monospace, Consolas, monospace; font-size: 12px; min-width: 170px; }
+.diag-head .about { flex: 1; color: var(--text-2); font-size: 12px; }
+.diag-head .val { color: var(--text-3); font-size: 12px; }
+.diag-preview { margin: 0; padding: 8px 12px; max-height: 240px; overflow: auto; background: var(--bg); color: var(--text-2); font-size: 11px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; user-select: text; }
+.diag-saved { margin-top: 8px; font-size: 12px; color: var(--ok); }
+.share-warning { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--text); font-size: 12px; }
+.share-warning svg { flex: none; margin-top: 2px; color: var(--danger); }

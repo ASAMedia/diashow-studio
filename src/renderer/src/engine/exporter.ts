@@ -9,6 +9,7 @@ import type { ExportQuality, Project, VideoCodec } from '@shared/types'
 import type { ExportJobInfo, ExportJobRequest, ExportTask, SegmentInput } from '@shared/exportQueue'
 import { buildTimeline, type Timeline } from '@shared/timeline'
 import { buildAudioPlan } from '@shared/audioPlan'
+import { buildChapters } from '@shared/chapters'
 import { Engine, loadFonts } from './engine'
 import { Compositor } from './gl'
 
@@ -259,10 +260,15 @@ export async function exportShow(
   }
 }
 
-/** Queues an export of a snapshot of the project; the audio plan is built here like the timeline. */
-export function queueExport(project: Project, request: ExportJobRequest, name: string): Promise<ExportJobInfo> {
-  const audio = buildAudioPlan(project, buildTimeline(project, request.locale))
-  return window.api.queueAdd({ name, project, request, audio })
+/**
+ * Queues an export of a snapshot of the project; the audio plan and the chapter marks are built here
+ * like the timeline. Chapters go into the MP4 when `chapters` is on and the show has at least two.
+ */
+export function queueExport(project: Project, request: ExportJobRequest, name: string, chapters = true): Promise<ExportJobInfo> {
+  const tl = buildTimeline(project, request.locale)
+  const audio = buildAudioPlan(project, tl)
+  const marks = chapters ? buildChapters(project, tl).filter((c) => c.start < audio.duration) : []
+  return window.api.queueAdd({ name, project, request, audio, ...(marks.length >= 2 ? { chapters: marks } : {}) })
 }
 
 /** The hidden export window (#export-worker): takes jobs from the queue and renders their segments. */

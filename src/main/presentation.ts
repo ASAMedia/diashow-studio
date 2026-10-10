@@ -3,11 +3,19 @@
 import { BrowserWindow, screen, shell } from 'electron'
 import { join } from 'node:path'
 
+/**
+ * Every app window (editor, presentation, export worker): sandboxed renderer without Node, isolated
+ * preload (only `window.api`), web security on. security.ts adds navigation, permission and IPC limits.
+ */
 export function rendererWebPreferences(): Electron.WebPreferences {
   return {
     preload: join(__dirname, '../preload/index.js'),
-    sandbox: false,
+    sandbox: true,
     contextIsolation: true,
+    nodeIntegration: false,
+    nodeIntegrationInWorker: false,
+    webSecurity: true,
+    webviewTag: false,
     backgroundThrottling: false
   }
 }

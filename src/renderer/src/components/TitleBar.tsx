@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { CalendarDays, Clapperboard, QrCode, ScanFace, ChevronLeft, Download, Eraser, FolderTree, History, Images, LayoutGrid, Loader2, MonitorPlay, MoreHorizontal, Package, Play, Redo2, ScanSearch, Settings, SortAsc, Undo2 } from 'lucide-react'
+import { CalendarDays, CircleHelp, Clapperboard, QrCode, ScanFace, ChevronLeft, Download, Eraser, FolderTree, History, Images, LayoutGrid, Loader2, MonitorPlay, MoreHorizontal, Package, Play, Redo2, ScanSearch, Settings, SortAsc, Undo2 } from 'lucide-react'
 import { useStore } from '../store'
 import { useTimeline } from '../timeline'
 import { fmtTime, t } from '../i18n'
 import { QueueChip } from './Queue'
+import { UpdateChip } from './Updates'
 
 export function TitleBar() {
   const project = useStore((s) => s.project)
@@ -29,7 +30,11 @@ export function TitleBar() {
           <Images size={18} /> {t('appName')}
         </div>
         <div className="grow" />
+        <UpdateChip />
         <QueueChip />
+        <button className="btn ghost icon" title={`${t('help')} (F1)`} onClick={() => useStore.getState().set({ dialog: 'handbook' })}>
+          <CircleHelp size={17} />
+        </button>
         <button className="btn ghost icon" title={t('settings')} onClick={() => useStore.getState().set({ dialog: 'settings' })}>
           <Settings size={17} />
         </button>
@@ -75,6 +80,7 @@ export function TitleBar() {
         <Redo2 size={16} />
       </button>
       <div className="grow" />
+      <UpdateChip />
       <QueueChip />
       {busy > 0 && (
         <span className="chip">
@@ -124,6 +130,9 @@ export function TitleBar() {
             <hr />
             <button onClick={() => set({ dialog: 'settings' })}>
               <Settings size={14} /> {t('settings')}
+            </button>
+            <button onClick={() => set({ dialog: 'handbook' })}>
+              <CircleHelp size={14} /> {t('help')}
             </button>
           </div>
         )}

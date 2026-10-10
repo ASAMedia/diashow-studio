@@ -3,6 +3,8 @@ import { FolderSearch, X } from 'lucide-react'
 import type { BackupInfo, CacheInfo } from '@shared/types'
 import { useStore } from '../store'
 import { localeTag, t } from '../i18n'
+import { UpdateSetting } from './Updates'
+import { DiagnosticsDialog } from './Diagnostics'
 
 export type PreviewQuality = 'high' | 'medium' | 'low'
 
@@ -32,6 +34,7 @@ export function SettingsDialog() {
   const [cache, setCache] = useState<CacheInfo | null>(null)
   const [busy, setBusy] = useState(false)
   const [kiosk, setKiosk] = useState<string>('')
+  const [diagnostics, setDiagnostics] = useState(false)
 
   useEffect(() => {
     void window.api.cacheInfo().then(setCache)
@@ -153,12 +156,31 @@ export function SettingsDialog() {
           <p className="hint">{t('kioskHint')}</p>
         </div>
 
+        <UpdateSetting />
+
+        <div className="section">
+          <h3>{t('diagnostics')}</h3>
+          <div className="row">
+            <button className="btn small" data-testid="diagnostics-open" onClick={() => setDiagnostics(true)}>
+              {t('diagButton')}
+            </button>
+          </div>
+          <p className="hint">{t('diagHint')}</p>
+        </div>
+        {diagnostics && <DiagnosticsDialog onClose={() => setDiagnostics(false)} />}
+
         <div className="actions">
           <button className="btn" onClick={() => set({ dialog: 'systemcheck' })}>
             {t('systemCheck')}
           </button>
           <button className="btn" onClick={() => set({ dialog: 'help' })}>
             {t('shortcuts')}
+          </button>
+          <button className="btn" onClick={() => set({ dialog: 'handbook' })}>
+            {t('help')}
+          </button>
+          <button className="btn" onClick={() => set({ dialog: 'about' })}>
+            {t('about')}
           </button>
           <button className="btn primary" onClick={() => set({ dialog: null })}>
             {t('close')}

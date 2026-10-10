@@ -33,11 +33,16 @@ export function registerShare(cfg: ShareMainConfig): { stop(): Promise<void> } {
   let timer: ReturnType<typeof setTimeout> | null = null
   let lastSent = 0
 
-  /** Tests set DIASHOW_SHARE_HOST=127.0.0.1: loopback needs no firewall permission. */
+  /**
+   * Tests set DIASHOW_SHARE_HOST=127.0.0.1: loopback needs no firewall permission. With
+   * DIASHOW_SHARE_PUBLIC=1 it counts as a public address (the dialog's warning).
+   */
   const addresses = (): ShareStatus['addresses'] => {
     const list = lanAddresses()
     const forced = process.env.DIASHOW_SHARE_HOST
-    return forced ? [{ name: 'DIASHOW_SHARE_HOST', address: forced, kind: 'other' }, ...list.filter((a) => a.address !== forced)] : list
+    if (!forced) return list
+    const entry: ShareStatus['addresses'][number] = { name: 'DIASHOW_SHARE_HOST', address: forced, kind: 'other', ...(process.env.DIASHOW_SHARE_PUBLIC === '1' ? { public: true } : {}) }
+    return [entry, ...list.filter((a) => a.address !== forced)]
   }
 
   const status = (): ShareStatus => {

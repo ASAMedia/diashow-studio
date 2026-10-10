@@ -113,7 +113,12 @@ function decodeHeader(v: string | string[] | undefined): string {
 }
 
 const token = (): string => randomBytes(24).toString('base64url')
-const sameToken = (a: string, b: string): boolean => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b))
+/** Constant-time comparison; byte lengths are compared first (a non-ASCII guess must not throw). */
+const sameToken = (a: string, b: string): boolean => {
+  const x = Buffer.from(a)
+  const y = Buffer.from(b)
+  return x.length === y.length && timingSafeEqual(x, y)
+}
 
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',

@@ -3,20 +3,27 @@ import { app, BrowserWindow, protocol } from 'electron'
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { MEDIA_SCHEME } from '@shared/api'
+import { initLogging, log, rateLimiter } from './diagnostics'
 import { registerIpc } from './ipc'
 import { denyPopups, loadRenderer, rendererWebPreferences } from './presentation'
 import { registerMediaProtocol } from './protocol'
+import { hardenApp } from './security'
 
 // Tests (and portable setups) can keep all data in one folder instead of AppData/Documents.
 if (process.env.DIASHOW_DATA_DIR) {
   app.setPath('userData', join(process.env.DIASHOW_DATA_DIR, 'userData'))
   app.setPath('documents', join(process.env.DIASHOW_DATA_DIR, 'documents'))
 }
+// Error log in <userData>/logs; navigation, permission and IPC limits for every window (security.ts)
+initLogging()
+const securityLog = rateLimiter(30, 10_000)
+hardenApp((message) => securityLog() && log().warn('security', message))
 // CI runners have no GPU: WebGL then runs on SwiftShader.
 if (process.env.DIASHOW_SOFTWARE_GL) app.commandLine.appendSwitch('enable-unsafe-swiftshader')
 
+// The page's CSP lists dsmedia: where it is needed (img, media, connect); it does not bypass the CSP
 protocol.registerSchemesAsPrivileged([
-  { scheme: MEDIA_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true, bypassCSP: true } }
+  { scheme: MEDIA_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } }
 ])
 
 /** .dshow files among command line arguments (double click in Explorer → "app.exe" "file.dshow"). */

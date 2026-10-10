@@ -1,14 +1,14 @@
 {
   "name": "diashow-studio",
   "productName": "Diashow Studio",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Photo and video slideshows for Windows, inspired by the macOS Photos slideshow feature",
   "main": "./out/main/index.js",
   "author": "ASAMedia",
   "license": "MIT",
   "private": true,
   "scripts": {
-    "postinstall": "node scripts/fetch-ffmpeg.mjs && node scripts/fetch-models.mjs",
+    "postinstall": "node scripts/fetch-ffmpeg.mjs && node scripts/fetch-models.mjs && node scripts/third-party-notices.mjs",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
@@ -16,7 +16,8 @@
     "test": "vitest run",
     "test:media": "node scripts/make-test-media.mjs",
     "e2e": "electron-vite build && playwright test",
-    "dist": "electron-vite build && electron-builder --win"
+    "dist": "electron-vite build && node scripts/third-party-notices.mjs && electron-builder --win",
+    "notices": "node scripts/third-party-notices.mjs"
   },
   "dependencies": {
     "exiftool-vendored": "^39.0.1",

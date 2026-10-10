@@ -21,6 +21,11 @@ import { PresentView } from './components/Presentation'
 import { playerRef, useStore } from './store'
 import { exportShow, queueExport, runExportWorker } from './engine/exporter'
 import { detectFaces, faceTestApi } from './faces'
+import { installErrorReporting } from './diagnostics'
+import { importProjectSafely } from './components/ProjectRepair'
+
+// Errors of every window (editor, presentation, export worker) go into the log file
+installErrorReporting()
 
 // Test hook used by the Playwright end-to-end tests.
 ;(window as unknown as { __diashow: unknown }).__diashow = { store: useStore, player: playerRef, exportShow, queueExport, detectFaces, faces: faceTestApi }
@@ -36,10 +41,8 @@ if (route === '#export-worker') {
     void runExportWorker()
   })
 } else if (route !== '#present') {
-  window.api.onOpenFile(async (path) => {
-    const p = await window.api.importProjectFile(path)
-    await useStore.getState().openProjectData(p)
-  })
+  // a damaged or too new file shows a friendly notice (with "Repair…") instead of failing silently
+  window.api.onOpenFile((path) => void importProjectSafely(path))
 }
 
 if (route !== '#export-worker') {
