@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { appArgs } from './launch'
+import { launchOptions } from './launch'
 
 const root = resolve(__dirname, '..')
 const mediaDir = join(root, 'test-media')
@@ -32,7 +32,7 @@ test('export queue: background jobs one after another, resume after a worker cra
   test.setTimeout(20 * 60 * 1000)
   if (!existsSync(mediaDir)) execFileSync('node', ['scripts/make-test-media.mjs'], { cwd: root, stdio: 'inherit' })
   const dataDir = mkdtempSync(join(tmpdir(), 'diashow-queue-'))
-  const app = await electron.launch({ args: appArgs(), cwd: root, env: { ...process.env, DIASHOW_DATA_DIR: dataDir } })
+  const app = await electron.launch(launchOptions(root, dataDir))
   const page = await app.firstWindow()
   const errors: string[] = []
   page.on('console', (m) => {

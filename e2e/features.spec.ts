@@ -6,7 +6,7 @@ import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import sharp from 'sharp'
-import { appArgs } from './launch'
+import { launchOptions } from './launch'
 
 const root = resolve(__dirname, '..')
 const mediaDir = join(root, 'test-media')
@@ -41,7 +41,7 @@ test('review grid, batch edits, text boxes, pixelation, speed, song section, exp
   test.setTimeout(15 * 60 * 1000)
   if (!existsSync(mediaDir)) execFileSync('node', ['scripts/make-test-media.mjs'], { cwd: root, stdio: 'inherit' })
   const dataDir = mkdtempSync(join(tmpdir(), 'diashow-feat-'))
-  const app = await electron.launch({ args: appArgs(), cwd: root, env: { ...process.env, DIASHOW_DATA_DIR: dataDir } })
+  const app = await electron.launch(launchOptions(root, dataDir))
   const page = await app.firstWindow()
   const errors: string[] = []
   page.on('console', (m) => {
