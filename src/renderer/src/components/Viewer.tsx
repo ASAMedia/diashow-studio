@@ -13,6 +13,7 @@ import { timelineOf, useTimeline } from '../timeline'
 import { fmtTime, localeTag, t } from '../i18n'
 import { previewQuality, QUALITY } from './Settings'
 import { FreeTextLayer, PrivacyEditor } from './Overlays'
+import { CollageEditor } from './CollageEditor'
 import { prioritize } from '../priority'
 
 function useBox(ref: React.RefObject<HTMLElement | null>): { w: number; h: number } {
@@ -130,6 +131,7 @@ export function Viewer() {
         <div className="frame" style={{ width: fw, height: fh, visibility: empty ? 'hidden' : 'visible' }}>
           <canvas ref={canvasRef} />
           {!playing && !kbEdit && !privacyEdit && editSlide && <CropEditor slide={editSlide} scale={fw / (canvasRef.current?.width || fw)} />}
+          {!playing && !kbEdit && !privacyEdit && atPlayhead?.template?.id === 'free' && <CollageEditor slide={atPlayhead} w={fw} h={fh} />}
           {!playing && !kbEdit && !privacyEdit && atPlayhead && <FreeTextLayer slide={atPlayhead} w={fw} h={fh} />}
           {privacyEdit && !playing && <PrivacyEditor entryId={privacyEdit} w={fw} h={fh} />}
           {kbEdit && selectedPhoto && <KenBurnsEditor entry={selectedPhoto.e} display={selectedPhoto.m.display} mediaAspect={selectedPhoto.m.width / selectedPhoto.m.height} frameAspect={aspect} w={fw} h={fh} />}

@@ -15,10 +15,13 @@ import { availableParallelism, constants } from 'node:os'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import sharp from 'sharp'
 import { extOf, SHARP_IMAGE_EXT } from '@shared/formats'
-import type { CacheInfo, ExportProgress, MediaItem, MusicTrack, Rect } from '@shared/types'
+import type { CacheInfo, ExportProgress, MediaItem, MusicTrack, Rect, VideoFaces } from '@shared/types'
 import { cacheInfo as scanCacheInfo, cleanCache as cleanCacheDir, ID_FOLDER, type CleanTarget } from '../cache'
+import { sanitizeDescriptors, sanitizeVideoFaces } from './faceData'
+import { MAX_EDGE as FRAMES_MAX_EDGE, MAX_FRAMES, videoFrames, videoInfoCached } from './frames'
 import { Ffmpeg, FfmpegError, type ProbeResult } from '../ffmpeg'
-import { analyzeImage, imageHash } from './analysis'
+import { analyzeImage, imageHash, videoFrameHash } from './analysis'
+import { stabilizeFile } from './stabilize'
 import { analyzeMusic, computeWaveform, transcodeMusic } from './audio'
 import { detectBeatsInFile } from './beats'
 import { captureTimeOf, deviceOf, endExiftool, makeOf, orientationOf, readTags, type Tags } from './exif'
@@ -75,8 +78,15 @@ export interface MediaService {
   importMusic(paths: string[]): Promise<MusicTrack[]>
   restoreMusic(tracks: MusicTrack[]): Promise<MusicTrack[]>
   waveform(path: string, buckets: number): Promise<number[]>
-  /** Stores face rects (normalised, clamped to 0..1) on a known item, persists and emits it. */
-  setFaces(id: string, faces: Rect[]): Promise<void>
+  /**
+   * Stores face rects (normalised, clamped to 0..1) on a known item, persists and emits it. `desc`:
+   * one descriptor per face (128 numbers); without it, older descriptors are dropped.
+   */
+  setFaces(id: string, faces: Rect[], desc?: number[][]): Promise<void>
+  /** Stores the faces found in sampled frames of a video, persists and emits the item. */
+  setVideoFaces(id: string, samples: VideoFaces[]): Promise<void>
+  /** JPEG frames of a video at source times (ascending), fitting maxEdge; empty where none could be read. */
+  videoFrames(path: string, times: number[], maxEdge: number): Promise<Uint8Array[]>
   /** Video id → playable path at up to maxEdge (hi-res proxies are created and cached as needed). */
   prepareHires(ids: string[], maxEdge: number, opts?: HiresOptions): Promise<Record<string, string>>
   get(id: string): MediaItem | undefined
@@ -101,6 +111,12 @@ export interface MediaService {
    * [] returns to show order. Unknown ids are ignored; running work is never interrupted.
    */
   prioritize(ids: string[]): void
+  /**
+   * Makes a stabilised copy of a ready video's playback file (stab.mp4 in its cache folder: same frames,
+   * timestamps and size, slightly zoomed), one video at a time. Progress goes out as `stabilizing`
+   * (0..1) through onUpdate, the result as `stabilized`. Resolves at once when it exists already.
+   */
+  stabilizeVideo(id: string): Promise<void>
   /** Resolves when no import/transcode/analysis job is queued or running. */
   idle(): Promise<void>
   dispose(): Promise<void>
@@ -218,15 +234,26 @@ export function pickRelinkCandidate(
 }
 
 function stripDerived(item: MediaItem): MediaItem {
-  const { thumb: _t, display: _d, playback: _p, audio: _a, liveVideo: _l, proxied: _x, progress: _g, error: _e, ...rest } = item
+  const { thumb: _t, display: _d, playback: _p, audio: _a, liveVideo: _l, proxied: _x, progress: _g, error: _e, stabilized: _s, stabilizing: _r, ...rest } = item
   return { ...rest, status: 'pending' }
+}
+
+/**
+ * Without a stabilised version whose file is gone (cache cleanup: made again on request) and without
+ * the progress of a run that ended with the app.
+ */
+function withStabilized(item: MediaItem): MediaItem {
+  const gone = !!item.stabilized && !existsSync(item.stabilized)
+  if (item.stabilizing === undefined && !gone) return item
+  return clean({ ...item, stabilizing: undefined, stabilized: gone ? undefined : item.stabilized })
 }
 
 /** Ready items from older versions lack the analysis fields; they are filled in lazily. */
 function needsAnalysis(item: MediaItem): boolean {
   if (item.status !== 'ready') return false
   if (item.kind === 'photo') return !!item.display && (item.hash === undefined || item.sharpness === undefined)
-  return !!item.thumb && item.hash === undefined
+  // hash2 and bitrate (finding the same clip twice) came later than the thumbnail hash
+  return !!item.thumb && (item.hash === undefined || (!!item.playback && item.hash2 === undefined))
 }
 
 /** Keeps well-formed rects, clamped into the unit square. */
@@ -312,6 +339,9 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
   /** Media / track ids whose loudness was measured this session (silent ones stay undefined). */
   const loudnessTried = new Set<string>()
   const strips = new Map<string, Promise<string[]>>()
+  /** Stabilisation runs per media id; one at a time (both passes keep the CPU busy). */
+  const stabilizing = new Map<string, Promise<void>>()
+  const stabilizeLimit = createLimiter(1)
   const recent = new Map<string, number>()
   const trace = createTracer()
   let disposed = false
@@ -504,7 +534,7 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
   async function fromCache(id: string): Promise<MediaItem | null> {
     const cached = await readJson<MediaItem>(join(folder(id), META))
     if (!cached || cached.id !== id || cached.status !== 'ready' || !cacheFilesPresent(cached)) return null
-    return cached
+    return withStabilized(cached)
   }
 
   function prepare(group: ImportGroup): Promise<MediaItem[]> {
@@ -861,6 +891,27 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
    * item has its essential files (thumbnail, display image, playable video, sound), unless the
    * renderer focuses this item; runs at the lowest priority of the CPU pool.
    */
+  /**
+   * Videos: hash of a frame at 60 % of the playable copy (with the thumbnail's hash at 10 % it tells
+   * the same clip from another one of the same scene) and the original's bit rate (to keep the
+   * original over a re-encode). Each part stays unset when it can't be read (retried on restore).
+   */
+  async function clipSignature(it: MediaItem): Promise<Partial<MediaItem>> {
+    const out: Partial<MediaItem> = {}
+    try {
+      out.hash2 = await videoFrameHash(ff, it.playback!, (it.duration ?? 0) * 0.6, signal)
+    } catch {
+      // unreadable frame
+    }
+    try {
+      const size = (await stat(it.path)).size
+      if (it.duration && it.duration > 0) out.bitrate = Math.round((size * 8) / it.duration)
+    } catch {
+      // original gone
+    }
+    return out
+  }
+
   function startAnalysis(id: string): void {
     const key = `analysis:${id}`
     if (jobs.has(key) || disposed) return
@@ -872,10 +923,11 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
         const patch: Partial<MediaItem> = {}
         if (needsAnalysis(it)) {
           try {
-            Object.assign(patch, await trace.span('analysis', id, async () => (it.kind === 'photo' ? await analyzeImage(it.display!) : { hash: await imageHash(it.thumb!) }), { kind: it.kind }))
+            Object.assign(patch, await trace.span('analysis', id, async () => (it.kind === 'photo' ? await analyzeImage(it.display!) : { hash: it.hash ?? (await imageHash(it.thumb!)) }), { kind: it.kind }))
           } catch {
             // retried on the next restore
           }
+          if (it.kind === 'video' && it.playback) Object.assign(patch, await trace.span('analysis.clip', id, () => clipSignature(it)))
         }
         if (wantsLoudness(it)) {
           loudnessTried.add(id)
@@ -888,6 +940,62 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
       }, PRI_ANALYSIS, id)
     })().catch(() => {})
     trackJob(key, job)
+  }
+
+  // -------------------------------------------------------------- stabilise
+
+  async function stabilizeVideo(id: string): Promise<void> {
+    // e.g. forgotten by a cache cleanup before the renderer restored its project again
+    if (!items.has(id) && typeof id === 'string' && ID_FOLDER.test(id)) {
+      const cached = await fromCache(id)
+      if (cached && !items.has(id)) items.set(id, cached)
+    }
+    const it = items.get(id)
+    if (!it || it.kind !== 'video') throw new Error('unknown video')
+    if (it.stabilized && existsSync(it.stabilized)) return
+    let job = stabilizing.get(id)
+    if (!job) {
+      job = runStabilize(id).finally(() => stabilizing.delete(id))
+      stabilizing.set(id, job)
+      trackJob(`stabilize:${id}`, job.catch(() => {}))
+    }
+    return job
+  }
+
+  async function runStabilize(id: string): Promise<void> {
+    await stabilizeLimit(async () => {
+      const it = items.get(id)
+      if (!it || disposed) throw abortError()
+      if (it.status !== 'ready' || !it.playback) throw new Error('video not ready')
+      if (it.stabilized && existsSync(it.stabilized)) return
+      const out = join(folder(id), 'stab.mp4')
+      let last = 0
+      let lastAt = 0
+      update(id, { stabilizing: 0 })
+      try {
+        await mkdir(folder(id), { recursive: true })
+        await trace.span('video.stabilize', id, async () =>
+          stabilizeFile(ff, it.playback!, out, {
+            signal,
+            encoders: await ff.encoders(),
+            onProgress: (p) => {
+              const now = Date.now()
+              if (p - last >= 0.02 && now - lastAt >= 400) {
+                last = p
+                lastAt = now
+                update(id, { stabilizing: Math.round(p * 1000) / 1000 })
+              }
+            }
+          })
+        )
+        if (disposed) return
+        update(id, { stabilized: out, stabilizing: undefined })
+        await persist(id)
+      } catch (err) {
+        if (!disposed && items.has(id)) update(id, { stabilizing: undefined })
+        throw err
+      }
+    })
   }
 
   // ------------------------------------------------------------------ hi-res
@@ -1151,6 +1259,7 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
       playback: moved(cached.playback),
       audio: moved(cached.audio),
       liveVideo: moved(cached.liveVideo),
+      stabilized: moved(cached.stabilized),
       live: cached.live ? { ...cached.live, source: moved(cached.live.source)! } : undefined
     })
     await writeJson(join(to, META), next)
@@ -1207,6 +1316,7 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
           } catch {
             return clean({ ...it, status: 'error' as const, error: 'missing', progress: undefined })
           }
+          it = withStabilized(it)
           if (!changed && it.status === 'ready' && cacheFilesPresent(it)) {
             items.set(it.id, it)
             if (wantsAnalysis(it)) analyze.push(it.id)
@@ -1226,7 +1336,7 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
           }
           let fresh = stripDerived(it)
           // An edited original invalidates what was derived from its content
-          if (changed) fresh = clean({ ...fresh, faces: undefined, sharpness: undefined, hash: undefined, loudness: undefined })
+          if (changed) fresh = clean({ ...fresh, faces: undefined, faceDesc: undefined, videoFaces: undefined, sharpness: undefined, hash: undefined, loudness: undefined, hash2: undefined, bitrate: undefined })
           if (fresh.live && !existsSync(fresh.live.source)) delete fresh.live
           items.set(it.id, fresh)
           requeue.push(it.id)
@@ -1296,15 +1406,40 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
       return p
     },
 
-    async setFaces(id, faces) {
+    async setFaces(id, faces, desc) {
       if (!items.has(id)) {
         if (typeof id !== 'string' || !/^[0-9a-f]{16}$/.test(id)) return
         const cached = await fromCache(id)
         if (!cached) return
         items.set(id, cached)
       }
-      update(id, { faces: sanitizeFaces(faces) })
+      const rects = sanitizeFaces(faces)
+      // descriptors only fit when no rect was dropped
+      const aligned = Array.isArray(faces) && rects.length === faces.length
+      update(id, { faces: rects, faceDesc: aligned ? sanitizeDescriptors(desc, rects.length) : undefined })
       await persist(id)
+    },
+
+    async setVideoFaces(id, samples) {
+      if (!items.has(id)) {
+        if (typeof id !== 'string' || !/^[0-9a-f]{16}$/.test(id)) return
+        const cached = await fromCache(id)
+        if (!cached) return
+        items.set(id, cached)
+      }
+      if (items.get(id)?.kind !== 'video') return
+      update(id, { videoFaces: sanitizeVideoFaces(samples) })
+      await persist(id)
+    },
+
+    async videoFrames(path, times, maxEdge) {
+      if (typeof path !== 'string' || !path) throw new Error('no video')
+      const list = (Array.isArray(times) ? times : []).filter((t): t is number => typeof t === 'number' && Number.isFinite(t) && t >= 0).slice(0, MAX_FRAMES)
+      list.sort((a, b) => a - b)
+      const edge = Math.max(64, Math.min(FRAMES_MAX_EDGE, Math.round(Number(maxEdge)) || 1280))
+      const info = await videoInfoCached(ff, path, signal)
+      if (!info) throw new Error('no video stream')
+      return videoFrames(ff, path, info, list, edge, signal)
     },
 
     prepareHires,
@@ -1381,6 +1516,8 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
     prioritize(ids) {
       order.prioritize((Array.isArray(ids) ? ids : []).filter((id) => typeof id === 'string').slice(0, 2000))
     },
+
+    stabilizeVideo,
 
     get(id) {
       const it = items.get(id)

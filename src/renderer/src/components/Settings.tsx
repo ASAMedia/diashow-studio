@@ -154,6 +154,9 @@ export function SettingsDialog() {
         </div>
 
         <div className="actions">
+          <button className="btn" onClick={() => set({ dialog: 'systemcheck' })}>
+            {t('systemCheck')}
+          </button>
           <button className="btn" onClick={() => set({ dialog: 'help' })}>
             {t('shortcuts')}
           </button>

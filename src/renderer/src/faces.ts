@@ -1,146 +1,269 @@
-// Face detection for face-aware crops and Ken Burns. MediaPipe's BlazeFace runs offline in
-// WebAssembly; results are stored with the media item through the main process.
-import { FaceDetector, FilesetResolver } from '@mediapipe/tasks-vision'
-import { mediaUrl } from '@shared/api'
-import type { Rect } from '@shared/types'
+// Faces in the background: detection (face-aware crops, Ken Burns, pixelation) and descriptors
+// ("pixelate this person everywhere") for every photo, and faces in frames sampled across every
+// video. The work runs in the vision worker (vision/), offline; results are stored with the media
+// item through the main process. The queue pauses while the show plays, exports or presents.
+import type { MediaItem, Rect, VideoFaces } from '@shared/types'
+import { faceArea, faceDistance, followFace, MATCH_THRESHOLD, rectAt, sampleTimes, thinDescriptors } from '@shared/people'
+import { analyzeBitmap, analyzePath, loadBitmap, setDelegate, visionWorkers } from './vision/client'
 import { useStore } from './store'
 
-let detector: Promise<FaceDetector> | null = null
-
-// MediaPipe reports usage statistics to Google. The page's CSP blocks that anyway; answering
-// the request locally keeps it from even trying (and from logging errors).
-const TELEMETRY = 'odml.pa.googleapis.com'
-const realFetch = window.fetch.bind(window)
-window.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
-  return url.includes(TELEMETRY) ? Promise.resolve(new Response(null, { status: 204 })) : realFetch(input, init)
-}
-
-function getDetector(): Promise<FaceDetector> {
-  detector ??= (async () => {
-    // copied next to index.html by scripts/fetch-models.mjs
-    const base = new URL('./vision/', document.baseURI).href
-    const fileset = await FilesetResolver.forVisionTasks(base)
-    return FaceDetector.createFromOptions(fileset, {
-      baseOptions: { modelAssetPath: `${base}blaze_face_short_range.tflite`, delegate: 'CPU' },
-      runningMode: 'IMAGE',
-      minDetectionConfidence: 0.6
-    })
-  })()
-  return detector
-}
-
-const iou = (a: Rect, b: Rect): number => {
-  const x = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x))
-  const y = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y))
-  const inter = x * y
-  return inter / (a.w * a.h + b.w * b.h - inter)
-}
-
-/** Overlap relative to the smaller box (a face found again in a neighbouring tile). */
-const overlap = (a: Rect, b: Rect): number => {
-  const x = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x))
-  const y = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y))
-  return (x * y) / Math.min(a.w * a.h, b.w * b.h)
-}
-
-/**
- * Faces as rects normalised to the image. BlazeFace (short range) only finds faces that fill a
- * fair part of its 128 px input, so besides the whole picture it looks at overlapping tiles of
- * shrinking size. `thorough` adds a fine grid for the small faces at the back of group photos
- * (used when pixelating faces, where a missed face matters).
- */
+/** Faces as rects normalised to the image; `thorough` adds a fine tile grid for small faces at the back of group photos. */
 export async function detectFaces(path: string, thorough = false): Promise<Rect[]> {
-  const det = await getDetector()
-  const blob = await (await fetch(mediaUrl(path))).blob()
-  let bmp = await createImageBitmap(blob)
-  const scale = Math.min(1, (thorough ? 2400 : 1600) / Math.max(bmp.width, bmp.height))
-  if (scale < 1) {
-    const small = await createImageBitmap(bmp, { resizeWidth: Math.round(bmp.width * scale), resizeHeight: Math.round(bmp.height * scale), resizeQuality: 'medium' })
-    bmp.close()
-    bmp = small
-  }
-  const W = bmp.width
-  const H = bmp.height
-  const found: Rect[] = []
-  const collect = (src: TexImageSource & { width: number; height: number }, ox: number, oy: number, sw: number, sh: number, minScore: number): void => {
-    for (const d of det.detect(src).detections) {
-      const b = d.boundingBox
-      if (!b || (d.categories[0]?.score ?? 0) < minScore) continue
-      const r = {
-        x: (ox + (b.originX / src.width) * sw) / W,
-        y: (oy + (b.originY / src.height) * sh) / H,
-        w: ((b.width / src.width) * sw) / W,
-        h: ((b.height / src.height) * sh) / H
+  return (await analyzePath(path, { levels: thorough ? 'thorough' : 'photo' })).faces
+}
+
+/** Faces of a picture and their descriptors (undefined where the worker couldn't compute them). */
+export async function analyzePicture(path: string, thorough = false): Promise<{ faces: Rect[]; desc?: number[][] }> {
+  const r = await analyzePath(path, { levels: thorough ? 'thorough' : 'photo', describe: true })
+  return { faces: r.faces, desc: r.desc }
+}
+
+/** Descriptors of faces already known by their boxes (e.g. found before descriptors existed). */
+export async function describeFaces(path: string, faces: Rect[]): Promise<number[][] | undefined> {
+  if (!faces.length) return []
+  return (await analyzePath(path, { known: faces, describe: true })).desc
+}
+
+/** Puts face data into the open project at once (the main process stores it and sends the item back). */
+function applyLocally(id: string, patch: Partial<MediaItem>): void {
+  const p = useStore.getState().project
+  if (p?.media.some((m) => m.id === id)) useStore.setState({ project: { ...p, media: p.media.map((m) => (m.id === id ? { ...m, ...patch } : m)) } })
+}
+
+/** Stores the faces of a photo with their descriptors. */
+export async function saveFaces(id: string, faces: Rect[], desc: number[][] | undefined): Promise<void> {
+  applyLocally(id, { faces, faceDesc: desc })
+  await window.api.setFaces(id, faces, desc).catch(() => {})
+}
+
+/** True while the show plays, exports or presents: background analysis waits. */
+export function analysisPaused(): boolean {
+  const s = useStore.getState()
+  return s.playing || s.exportOpen || s.fullscreen || s.presenting || s.exportJobs.some((j) => j.state === 'running')
+}
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+
+async function whilePaused(cancelled: () => boolean): Promise<void> {
+  while (analysisPaused() && !cancelled()) await sleep(1500)
+}
+
+/** Frames per request to the main process (one decoding pass each). */
+const FRAME_BATCH = 16
+/** Size video frames are analysed at (long edge, about 720p). */
+export const FRAME_EDGE = 1280
+
+/**
+ * Faces with descriptors in frames sampled every 0.5 s across a clip (its playback file: rotated
+ * and tone-mapped like the preview), several frames at a time (one per vision worker). Waits
+ * between frames while the show plays or exports; null when cancelled.
+ */
+export async function analyzeVideo(m: MediaItem, cancelled: () => boolean = () => false): Promise<VideoFaces[] | null> {
+  const src = m.playback ?? m.path
+  const times = sampleTimes(m.duration ?? 0)
+  const out: VideoFaces[] = []
+  for (let i = 0; i < times.length; i += FRAME_BATCH) {
+    await whilePaused(cancelled)
+    if (cancelled()) return null
+    const batch = times.slice(i, i + FRAME_BATCH)
+    const frames = await window.api.videoFrames(src, batch, FRAME_EDGE)
+    let next = 0
+    const lane = async (): Promise<void> => {
+      while (next < batch.length) {
+        const k = next++
+        if (!frames[k]?.length) continue
+        await whilePaused(cancelled)
+        if (cancelled()) return
+        const bmp = await createImageBitmap(new Blob([frames[k] as Uint8Array<ArrayBuffer>], { type: 'image/jpeg' }))
+        // the fine grid (small faces) every second sample, i.e. once a second
+        const r = await analyzeBitmap(bmp, { levels: (i + k) % 2 === 0 ? 'frame' : 'frameQuick', describe: true })
+        out.push(r.desc ? { t: batch[k], faces: r.faces, desc: r.desc } : { t: batch[k], faces: r.faces })
       }
-      if (r.w > 0.004 && r.h > 0.004 && !found.some((f) => iou(f, r) > 0.3 || overlap(f, r) > 0.5)) found.push(r)
     }
+    await Promise.all(Array.from({ length: visionWorkers() }, lane))
+    if (cancelled()) return null
   }
-  collect(bmp, 0, 0, W, H, 0.6)
-  // smaller tiles need more confidence: there is more background that might look like a face
-  const levels = [
-    { n: 3, size: 0.45, minScore: 0.6 },
-    { n: 5, size: 0.24, minScore: 0.7 },
-    ...(thorough ? [{ n: 9, size: 0.13, minScore: 0.75 }] : [])
-  ]
-  for (const { n, size, minScore } of levels) {
-    const tw = W * size
-    const th = H * size
-    const canvas = new OffscreenCanvas(Math.round(tw), Math.round(th))
-    const g = canvas.getContext('2d')!
-    const step = (1 - size) / (n - 1)
-    for (let iy = 0; iy < n; iy++) {
-      for (let ix = 0; ix < n; ix++) {
-        g.drawImage(bmp, ix * step * W, iy * step * H, tw, th, 0, 0, canvas.width, canvas.height)
-        collect(canvas, ix * step * W, iy * step * H, tw, th, minScore)
-      }
-    }
-  }
-  bmp.close()
-  return found.map((r) => ({ x: +r.x.toFixed(4), y: +r.y.toFixed(4), w: +r.w.toFixed(4), h: +r.h.toFixed(4) }))
+  out.sort((a, b) => a.t - b.t)
+  return thinDescriptors(out)
 }
 
 /**
- * Works through the open project's photos in the background, one at a time, and pauses while
- * the show plays or exports so it never costs frames.
+ * Follows one face through a clip from the still it was clicked on (time t0, box `box`, descriptor
+ * `desc` when it has one), frame by frame every 0.25 s in both directions inside [from, to]: the
+ * detector looks for it near where it was. With a descriptor, a face found must be the same person,
+ * and after a quick pan it is looked for in a wide area. While it is not found (turned away,
+ * covered), the area stays where it was seen last; after a second without it, following stops.
+ * For faces the sampled analysis did not catch. Returns the keyframes as pixelated areas.
+ */
+export async function trackFace(m: MediaItem, t0: number, box: Rect, from: number, to: number, desc?: number[], cancelled: () => boolean = () => false): Promise<{ t: number; r: Rect }[]> {
+  const src = m.playback ?? m.path
+  const STEP = 0.25
+  const keys: { t: number; r: Rect }[] = [{ t: t0, r: box }]
+  const same = (d: number[] | undefined, limit: number): boolean => !desc || !d?.length || faceDistance(desc, d) <= limit
+  let found = 0
+  for (const dir of [1, -1]) {
+    let cur = box
+    let misses = 0
+    let k = 1
+    let stop = false
+    while (!stop && !cancelled()) {
+      const times: number[] = []
+      for (let n = 0; n < FRAME_BATCH; n++, k++) {
+        const t = Math.round((t0 + dir * STEP * k) * 1000) / 1000
+        if (t < from || t > to) break
+        times.push(t)
+      }
+      if (!times.length) break
+      const asc = [...times].sort((a, b) => a - b)
+      const frames = await window.api.videoFrames(src, asc, FRAME_EDGE)
+      const byTime = new Map(asc.map((t, i) => [t, frames[i]]))
+      for (const t of times) {
+        const jpeg = byTime.get(t)
+        if (!jpeg?.length) {
+          stop = true
+          break
+        }
+        const blob = new Blob([jpeg as Uint8Array<ArrayBuffer>], { type: 'image/jpeg' })
+        let r = await analyzeBitmap(await createImageBitmap(blob), { levels: 'frame', known: [cur], locate: 'near', describe: !!desc })
+        let hit = (r.score?.[0] ?? 0) > 0 && same(r.desc?.[0], 0.65)
+        // lost after a quick pan: look wider, but only take the same person
+        if (!hit && desc) {
+          r = await analyzeBitmap(await createImageBitmap(blob), { levels: 'frame', known: [cur], locate: 'wide', describe: true })
+          hit = (r.score?.[0] ?? 0) > 0 && !!r.desc?.[0]?.length && same(r.desc[0], MATCH_THRESHOLD)
+        }
+        if (hit) {
+          cur = r.faces[0]
+          misses = 0
+          found++
+        } else if (++misses > 4) {
+          stop = true
+          break
+        }
+        // a missed frame keeps the last place: better pixelated a moment too long than too short
+        keys.push({ t, r: cur })
+      }
+    }
+  }
+  if (!found) return []
+  keys.sort((a, b) => a.t - b.t)
+  const round = (r: Rect): Rect => ({ x: +r.x.toFixed(4), y: +r.y.toFixed(4), w: +r.w.toFixed(4), h: +r.h.toFixed(4) })
+  return keys.map((k) => ({ t: k.t, r: round(faceArea(k.r)) }))
+}
+
+/** Videos the editor wants analysed first (the pixelation editor is open on them). */
+const urgent: string[] = []
+/** Media analysed (or failed) in this session; not tried again unless asked for. */
+const tried = new Set<string>()
+let wake: (() => void) | null = null
+
+/** Moves a video (or photo) to the front of the background analysis. */
+export function analyzeSoon(mediaId: string): void {
+  if (!urgent.includes(mediaId)) urgent.unshift(mediaId)
+  tried.delete(mediaId)
+  wake?.()
+}
+
+/** Media ids being analysed now (for status hints). */
+export const analyzing = new Set<string>()
+
+type Work = 'detect' | 'describe' | 'video'
+
+function needsWork(m: MediaItem): Work | null {
+  if (m.status !== 'ready') return null
+  if (m.kind === 'photo') {
+    if (!m.display) return null
+    if (m.faces === undefined) return 'detect'
+    if (m.faces.length > 0 && m.faceDesc === undefined) return 'describe'
+    return null
+  }
+  return m.videoFaces === undefined && !!m.duration && !!(m.playback ?? m.path) ? 'video' : null
+}
+
+/**
+ * Works through the open project's media in the background: photos first (quick, one per vision
+ * worker at a time), then videos (one at a time, its frames spread over the workers). Pauses while
+ * the show plays, exports or presents, so it never costs frames.
  */
 export function startFaceQueue(): () => void {
-  const tried = new Set<string>()
-  let running = false
+  let running = 0
+  let videoRunning = false
   let stopped = false
   let timer: ReturnType<typeof setTimeout> | undefined
-  const tick = async (): Promise<void> => {
-    if (running || stopped) return
-    const s = useStore.getState()
-    if (s.playing || s.exportOpen || s.fullscreen || s.presenting) {
-      clearTimeout(timer)
-      timer = setTimeout(() => void tick(), 1500)
-      return
-    }
-    const next = s.project?.media.find((m) => m.kind === 'photo' && m.status === 'ready' && m.display && m.faces === undefined && !tried.has(m.id))
-    if (!next) return
-    running = true
-    tried.add(next.id)
-    try {
-      const faces = await detectFaces(next.display!)
-      const p = useStore.getState().project
-      if (p?.media.some((m) => m.id === next.id)) {
-        useStore.setState({ project: { ...p, media: p.media.map((m) => (m.id === next.id ? { ...m, faces } : m)) } })
-      }
-      await window.api.setFaces(next.id, faces).catch(() => {})
-    } catch (e) {
-      console.warn('face detection failed', next.name, e)
-    } finally {
-      running = false
-    }
+  const later = (ms: number): void => {
     clearTimeout(timer)
-    timer = setTimeout(() => void tick(), 20)
+    timer = setTimeout(() => void tick(), ms)
   }
-  const unsubscribe = useStore.subscribe(() => void tick())
-  void tick()
+  const pick = (media: MediaItem[]): { m: MediaItem; work: Work } | null => {
+    const ok = (m: MediaItem | undefined): Work | null => (m && !tried.has(m.id) && !analyzing.has(m.id) ? needsWork(m) : null)
+    for (const id of urgent) {
+      const m = media.find((x) => x.id === id)
+      const work = ok(m)
+      if (m && work) return { m, work }
+    }
+    for (const m of media) {
+      const work = m.kind === 'photo' ? ok(m) : null
+      if (work) return { m, work }
+    }
+    for (const m of media) {
+      const work = m.kind === 'video' ? ok(m) : null
+      if (work) return { m, work }
+    }
+    return null
+  }
+  const run = async (m: MediaItem, work: Work, projectId: string): Promise<void> => {
+    const cancelled = (): boolean => stopped || useStore.getState().project?.id !== projectId
+    try {
+      if (work === 'detect') {
+        const { faces, desc } = await analyzePicture(m.display!)
+        if (!cancelled()) await saveFaces(m.id, faces, desc)
+      } else if (work === 'describe') {
+        const desc = await describeFaces(m.display!, m.faces!)
+        if (!cancelled() && desc) await saveFaces(m.id, m.faces!, desc)
+      } else {
+        const samples = await analyzeVideo(m, cancelled)
+        if (samples && !cancelled()) {
+          applyLocally(m.id, { videoFaces: samples })
+          await window.api.setVideoFaces(m.id, samples).catch(() => {})
+        } else tried.delete(m.id)
+      }
+    } catch (e) {
+      console.warn('face analysis failed', m.name, e)
+    }
+  }
+  const tick = (): void => {
+    if (stopped || videoRunning) return
+    if (analysisPaused()) return later(1500)
+    const s = useStore.getState()
+    while (s.project && running < visionWorkers()) {
+      const next = pick(s.project.media)
+      // a video uses every worker: it waits for the photos in work, and they for it
+      if (!next || (next.work === 'video' && running > 0)) break
+      const { m, work } = next
+      running++
+      analyzing.add(m.id)
+      tried.add(m.id)
+      if (work === 'video') videoRunning = true
+      void run(m, work, s.project.id).finally(() => {
+        running--
+        analyzing.delete(m.id)
+        if (work === 'video') videoRunning = false
+        const u = urgent.indexOf(m.id)
+        if (u >= 0) urgent.splice(u, 1)
+        later(20)
+      })
+      if (work === 'video') break
+    }
+  }
+  wake = tick
+  const unsubscribe = useStore.subscribe(tick)
+  tick()
   return () => {
     stopped = true
+    wake = null
     clearTimeout(timer)
     unsubscribe()
   }
 }
+
+/** Hooks for the end-to-end tests and measurements (window.__diashow.faces). */
+export const faceTestApi = { analyzePath, analyzeBitmap, loadBitmap, setDelegate, analyzeVideo, describeFaces, analyzePicture, followFace, rectAt, trackFace }

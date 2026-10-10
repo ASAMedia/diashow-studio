@@ -5,14 +5,13 @@ import { themeMeta } from '@shared/themes'
 import { MAX_SPEED, MIN_SPEED, speedHasSound, type TimelineSlide } from '@shared/timeline'
 import { useStore } from '../store'
 import { t } from '../i18n'
+import { requestStabilize, useStabilizeRequest } from '../stabilize'
+import { allVideoTracks, faceArea, photoPersonFaces, videoPersonTracks } from '@shared/people'
 import { Check, FONTS, Section, Slider } from './ui'
+import { PeopleList } from './PeopleList'
 
-/** A detected face grown to cover hair and chin, as the area to pixelate. */
-export function faceArea(r: Rect): Rect {
-  const x = Math.max(0, r.x - r.w * 0.18)
-  const y = Math.max(0, r.y - r.h * 0.3)
-  return { x, y, w: Math.min(1 - x, r.w * 1.36), h: Math.min(1 - y, r.h * 1.5) }
-}
+/** A detected face grown to cover hair and chin, as the area to pixelate (now in @shared/people). */
+export { faceArea }
 
 const sameArea = (a: Rect, b: Rect): boolean => Math.abs(a.x - b.x) < 1e-4 && Math.abs(a.y - b.y) < 1e-4 && Math.abs(a.w - b.w) < 1e-4
 
@@ -21,27 +20,46 @@ const sameArea = (a: Rect, b: Rect): boolean => Math.abs(a.x - b.x) < 1e-4 && Ma
 export function PrivacySection({ entry, media }: { entry: PhotoEntry | VideoEntry; media: MediaItem }) {
   const set = useStore((s) => s.set)
   const setEntry = useStore((s) => s.setEntry)
+  const people = useStore((s) => s.project?.people)
   const editing = useStore((s) => s.privacyEdit === entry.id)
   const n = entry.privacy?.length ?? 0
+  const nTracks = entry.type === 'video' ? (entry.privacyTracks?.length ?? 0) : 0
+  const nPeople = entry.type === 'video' ? videoPersonTracks(media, people).length : photoPersonFaces(media, people).length
   const faces = (media.faces ?? []).map(faceArea)
+  // videos: every face found in the clip, followed through it
+  const all = (): void => {
+    if (entry.type === 'video') setEntry(entry.id, { privacyTracks: allVideoTracks(entry, media) } as Partial<VideoEntry>)
+    else setEntry(entry.id, { privacy: faces } as Partial<PhotoEntry>)
+  }
+  const anyFaces = entry.type === 'video' ? !!media.videoFaces?.some((s) => s.faces.length) : faces.length > 0
   return (
     <Section title={t('privacy')}>
       <div className="row">
         <button className={`btn small ${editing ? 'on' : ''}`} onClick={() => set({ privacyEdit: editing ? null : entry.id, kbEdit: null })}>
           <ScanFace size={13} /> {t('privacyEdit')}
         </button>
-        {faces.length > 0 && (
-          <button className="btn small ghost" onClick={() => setEntry(entry.id, { privacy: faces } as Partial<PhotoEntry>)}>
+        {anyFaces && (
+          <button className="btn small ghost" onClick={all}>
             {t('privacyAll')}
           </button>
         )}
-        {n > 0 && (
-          <button className="btn small ghost" onClick={() => setEntry(entry.id, { privacy: undefined } as Partial<PhotoEntry>)}>
+        {n + nTracks > 0 && (
+          <button className="btn small ghost" onClick={() => setEntry(entry.id, { privacy: undefined, privacyTracks: undefined } as Partial<VideoEntry>)}>
             {t('privacyNone')}
           </button>
         )}
       </div>
       {n > 0 && <p className="hint">{t('privacyCount').replace('{n}', String(n))}</p>}
+      {nTracks > 0 && <p className="hint">{t('privacyTracks').replace('{n}', String(nTracks))}</p>}
+      {nPeople > 0 && <p className="hint">{t('privacyPeople').replace('{n}', String(nPeople))}</p>}
+      {!!people?.length && (
+        <details className="people-details">
+          <summary>
+            {t('peopleTitle')} ({people.length})
+          </summary>
+          <PeopleList />
+        </details>
+      )}
     </Section>
   )
 }
@@ -78,7 +96,44 @@ export function SpeedSelect({ entry, hasAudio }: { entry: VideoEntry; hasAudio: 
         </select>
       </div>
       {hasAudio && !speedHasSound(v) && <p className="hint">{t('speedSilent')}</p>}
+      <StabilizeToggle entry={entry} />
     </>
+  )
+}
+
+// ---------------------------------------------------------------- stabilise
+
+/** "Reduce shake": plays the clip's stabilised version (made in the background on first use). */
+export function StabilizeToggle({ entry }: { entry: VideoEntry }) {
+  const setEntry = useStore((s) => s.setEntry)
+  const media = useStore((s) => s.project?.media.find((m) => m.id === entry.mediaId))
+  const request = useStabilizeRequest(entry.mediaId)
+  if (!media || media.kind !== 'video') return null
+  const on = !!entry.stabilize
+  const progress = media.stabilizing
+  return (
+    <div className="stabilize">
+      <Check
+        checked={on}
+        onChange={(v) => {
+          setEntry(entry.id, { stabilize: v || undefined } as Partial<VideoEntry>)
+          if (v && !media.stabilized && media.status === 'ready') requestStabilize(media.id, true)
+        }}
+      >
+        {t('stabilize')}
+      </Check>
+      {on && progress !== undefined && (
+        <>
+          <p className="hint">{t('stabilizing').replace('{p}', String(Math.floor(progress * 100)))}</p>
+          <div className="bar">
+            <div style={{ width: `${Math.round(progress * 100)}%` }} />
+          </div>
+        </>
+      )}
+      {on && progress === undefined && !media.stabilized && request === 'asked' && <p className="hint">{t('stabilizeQueued')}</p>}
+      {on && progress === undefined && !media.stabilized && request === 'failed' && <p className="hint error">{t('stabilizeFailed')}</p>}
+      {on && media.stabilized && <p className="hint">{t('stabilizeHint')}</p>}
+    </div>
   )
 }
 
@@ -198,8 +253,8 @@ export function BatchPanel({ entries, slides }: { entries: Entry[]; slides: Time
   const speed = common(videos, (e) => String(e.speed ?? 1))
   const sound = common(videos, (e) => (e.muted ? 'off' : 'on'))
   const live = common(lives, (e) => (e.playLive == null ? 'default' : e.playLive ? 'on' : 'off'))
-  const withFaces = visual.filter((e) => media.get(e.mediaId)?.faces?.length)
-  const pixelated = visual.filter((e) => e.privacy?.length).length
+  const withFaces = visual.filter((e) => media.get(e.mediaId)?.faces?.length || media.get(e.mediaId)?.videoFaces?.some((s) => s.faces.length))
+  const pixelated = visual.filter((e) => e.privacy?.length || (e.type === 'video' && e.privacyTracks?.length)).length
   const mergeable = meta.maxPerSlide > 1 && slides.length > 1 && slides.every((s) => s.kind === 'photos' || s.kind === 'video') && visual.length <= meta.maxPerSlide
 
   const mixed = <option value="mixed">{t('unchanged')}</option>
@@ -324,7 +379,10 @@ export function BatchPanel({ entries, slides }: { entries: Entry[]; slides: Time
                 onClick={() =>
                   updateEntries(withFaces.map((x) => x.id), (x) => {
                     if (x.type === 'text') return
-                    x.privacy = (media.get(x.mediaId)?.faces ?? []).map(faceArea)
+                    const m = media.get(x.mediaId)
+                    // videos: every face followed through the clip
+                    if (x.type === 'video' && m) x.privacyTracks = allVideoTracks(x, m)
+                    else x.privacy = (m?.faces ?? []).map(faceArea)
                   })
                 }
               >
@@ -332,7 +390,7 @@ export function BatchPanel({ entries, slides }: { entries: Entry[]; slides: Time
               </button>
             )}
             {pixelated > 0 && (
-              <button className="btn small ghost" onClick={() => updateEntries(ids, (x) => x.type !== 'text' && delete x.privacy)}>
+              <button className="btn small ghost" onClick={() => updateEntries(ids, (x) => x.type !== 'text' && delete x.privacy && (x.type !== 'video' || delete x.privacyTracks))}>
                 {t('privacyBatchOff')}
               </button>
             )}

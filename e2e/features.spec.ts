@@ -140,6 +140,31 @@ test('review grid, batch edits, text boxes, pixelation, speed, song section, exp
   expect(plan.offset).toBe(1)
   expect(plan.duration).toBeLessThanOrEqual(3.001)
 
+  // ---- music per chapter: a chapter slide gets the second song, picked in the music tab
+  const chapterId = await state<string>(page, `const at = s.project.entries.filter((e) => e.type !== 'text' && !e.excluded)[3].id; s.select([at]); s.addText(); const st = d.store.getState(); st.setEntry(st.selection[0], { title: 'Montag', titleStyle: 'bigDate' }); return st.selection[0]`)
+  await page.locator('.rail button').nth(1).click()
+  await page.locator('.track').nth(1).locator('select.chapter-pick').selectOption(chapterId)
+  const segs = await state<{ tracks: string[]; chapterId?: string }[]>(page, `return d.player.current.tl.musicSegments.map((x) => ({ tracks: x.tracks, chapterId: x.chapterId }))`)
+  const songIds = await state<string[]>(page, `return s.project.music.map((m) => m.id)`)
+  expect(segs.length).toBe(2)
+  expect(segs[1]).toEqual({ tracks: [songIds[1]], chapterId })
+  expect(segs[0].tracks).not.toContain(songIds[1])
+
+  // ---- free collage: three photos on one slide, one dragged by hand
+  const collage = await state<string[]>(page, `s.setTheme('magazine'); const ids = s.project.entries.filter((e) => e.type === 'photo' && !e.excluded).slice(0, 3).map((e) => e.id); s.mergeEntries(ids); d.store.getState().setEntry(ids[0], { layout: 'free' }); d.store.getState().select(ids); return ids`)
+  await page.waitForTimeout(500)
+  await expect(page.locator('.collage-item')).toHaveCount(3)
+  const start = await state<{ x: number; y: number }>(page, `return d.player.current.tl.slides.find((x) => x.template?.id === 'free').places[0]`)
+  const item = (await page.locator('.collage-item').first().boundingBox())!
+  await page.mouse.move(item.x + item.width / 2, item.y + item.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(item.x + item.width / 2 + 80, item.y + item.height / 2 + 40, { steps: 5 })
+  await page.mouse.up()
+  const moved = await state<{ x: number; y: number } | undefined>(page, `return s.project.entries.find((e) => e.id === ${JSON.stringify(collage[0])}).place`)
+  expect(moved).toBeDefined()
+  expect(moved!.x).toBeGreaterThan(start.x + 0.02)
+  expect(moved!.y).toBeGreaterThan(start.y + 0.01)
+
   // ---- export everything (text box, pixelation, slowed videos)
   const out = join(dataDir, 'features.mp4')
   const duration = await state<number>(page, `return d.player.current.tl.duration`)

@@ -1,5 +1,5 @@
-import type { LookId, MediaItem, Project, Rect, ThemeId } from '@shared/types'
-import { buildTimeline, clipSeconds, slidesAt, type Timeline, type TimelineSlide } from '@shared/timeline'
+import type { LookId, MediaItem, Project, TextEntry, ThemeId } from '@shared/types'
+import { buildTimeline, clipSeconds, slidesAt, titleStyleOf, type Timeline, type TimelineSlide } from '@shared/timeline'
 import { Compositor, NEUTRAL_LOOK, NEUTRAL_POST, type Look, type PostParams, type Tex } from './gl'
 import { ExportVideoStore, ImageStore, TextStore, VideoPool } from './media'
 import type { Ctx, SlideState, Theme } from './types'
@@ -8,6 +8,9 @@ import { magazine, origami, panels, reflections, vintage } from './themes/scene'
 import { drawShatter, scrapbook, shatter, snapshots } from './themes/extra'
 import { applyTextStyle, clamp01, drawTextBlock, smooth, type Box } from './draw'
 import { drawFreeText } from './freeText'
+import { drawStyledTitle } from './titles'
+import { drawCollage } from './collage'
+import { PrivacyIndex } from './privacy'
 
 export const THEME_IMPL: Record<ThemeId, Theme> = { classic, kenburns, retro, magazine, origami, panels, reflections, vintage, scrapbook, snapshots, shatter }
 
@@ -36,8 +39,8 @@ export class Engine {
   playing = false
   /** Photos drawn from a placeholder in the last frame because their full image wasn't loaded yet. */
   missing = 0
-  /** Areas to pixelate per media id (from every entry that uses the media). */
-  private privacy = new Map<string, Rect[]>()
+  /** Areas to pixelate per media id: drawn areas, followed faces, marked people (engine/privacy.ts). */
+  private privacy = new PrivacyIndex()
 
   constructor(
     canvas: HTMLCanvasElement | OffscreenCanvas,
@@ -53,18 +56,17 @@ export class Engine {
   setProject(project: Project, tl?: Timeline): Timeline {
     this.project = project
     this.tl = tl ?? buildTimeline(project)
-    this.privacy.clear()
-    for (const e of project.entries) {
-      if (e.type === 'text' || !e.privacy?.length) continue
-      this.privacy.set(e.mediaId, [...(this.privacy.get(e.mediaId) ?? []), ...e.privacy])
-    }
+    this.privacy.setProject(project)
     return this.tl
   }
 
-  /** Every texture of a media item carries its pixelated areas, whichever theme draws it. */
-  private markPrivate(m: MediaItem | undefined, tex: Tex | null): Tex | null {
-    const rects = m && tex ? this.privacy.get(m.id) : undefined
-    if (rects && tex) this.c.markPrivate(tex, rects)
+  /**
+   * Every texture of a media item carries its pixelated areas, whichever theme draws it. `time`:
+   * source time of a video frame (faces followed through the clip).
+   */
+  private markPrivate(m: MediaItem | undefined, tex: Tex | null, time?: number, path?: string): Tex | null {
+    const rects = m && tex ? this.privacy.at(m, time, !!path && path === m.stabilized) : undefined
+    if (rects?.length && tex) this.c.markPrivate(tex, rects)
     return tex
   }
 
@@ -97,7 +99,10 @@ export class Engine {
     if (span && m?.playback) {
       // local is screen time; the source runs `speed` times as fast
       const end = clipSeconds(span) - 0.05 / span.speed
-      return { path: m.playback, time: span.trimIn + Math.max(0, Math.min(local, end)) * span.speed, hold: local >= end, rate: span.speed }
+      // "Reduce shake": the stabilised copy has the same frames and timing as playback
+      const e = slide.entries[index]
+      const path = e?.type === 'video' && e.stabilize && m.stabilized ? m.stabilized : m.playback
+      return { path, time: span.trimIn + Math.max(0, Math.min(local, end)) * span.speed, hold: local >= end, rate: span.speed }
     }
     if (index === 0 && slide.live && m?.liveVideo) {
       const end = slide.live.duration - 0.05
@@ -127,8 +132,8 @@ export class Engine {
         const src = this.videoSource(slide, local, index)
         if (!src) return null
         const m = slide.media[index ?? 0]
-        if (this.videos) return this.markPrivate(m, this.videos.frame(src.path, src.time, this.playing && !src.hold, src.rate))
-        return this.markPrivate(m, this.exportVideos!.get(src.path))
+        if (this.videos) return this.markPrivate(m, this.videos.frame(src.path, src.time, this.playing && !src.hold, src.rate), src.time, src.path)
+        return this.markPrivate(m, this.exportVideos!.get(src.path), src.time, src.path)
       },
       text: (spec) => this.texts.get(applyTextStyle(spec, project.settings.text))
     }
@@ -194,17 +199,17 @@ export class Engine {
       const [a, b] = states
       c.target(1, theme.clear)
       theme.background?.(ctx, [a])
-      theme.drawSlide(ctx, a)
+      this.drawSlide(theme, ctx, a)
       c.target(2, theme.clear)
       theme.background?.(ctx, [b])
-      theme.drawSlide(ctx, b)
+      this.drawSlide(theme, ctx, b)
       c.target(0, theme.clear)
       const tr = theme.transition?.(ctx, b) ?? { kind: 'dissolve', dir: [1, 0] as [number, number] }
       this.composite(tr.kind, c.targetTex(1), c.targetTex(2), b.inP, tr.dir, b.slide.id)
     } else {
       c.target(0, theme.clear)
       theme.background?.(ctx, states)
-      for (const s of states) theme.drawSlide(ctx, s)
+      for (const s of states) this.drawSlide(theme, ctx, s)
     }
     if (!theme.ownCaption) for (const s of states) this.caption(ctx, s, theme)
     for (const s of states) {
@@ -217,6 +222,22 @@ export class Engine {
     this.images.tick()
     this.texts.tick()
     this.videos?.sweep()
+  }
+
+  /** Title and chapter slides with an animated style are drawn here instead of by the theme. */
+  private drawSlide(theme: Theme, ctx: Ctx, s: SlideState): void {
+    if (s.slide.template?.id === 'free') return drawCollage(ctx, s, theme)
+    // the show title on the first photo (themes without a title slide) takes the style too
+    const overlay = s.slide.titleOverlay ? titleStyleOf(undefined, ctx.settings) : 'theme'
+    if (overlay !== 'theme') {
+      theme.drawSlide(ctx, { ...s, slide: { ...s.slide, titleOverlay: false } })
+      drawStyledTitle(ctx, s, overlay, theme, true)
+      return
+    }
+    const kind = s.slide.kind
+    const style = kind === 'title' || kind === 'text' ? titleStyleOf(kind === 'text' ? (s.slide.entries[0] as TextEntry) : undefined, ctx.settings) : 'theme'
+    if (style === 'theme') theme.drawSlide(ctx, s)
+    else drawStyledTitle(ctx, s, style, theme)
   }
 
   /** Lower-third caption for themes that don't place captions themselves. */
@@ -236,7 +257,7 @@ export class Engine {
 
   /** Resting cell rectangles of a slide for crop editing, in canvas pixels. */
   editBoxes(slide: TimelineSlide): Box[] {
-    if (!this.project || slide.kind !== 'photos') return []
+    if (!this.project || slide.kind !== 'photos' || slide.template?.id === 'free') return []
     const theme = THEME_IMPL[this.project.settings.theme]
     return theme.boxes?.(this.c.W, this.c.H, slide, this.project.settings) ?? []
   }

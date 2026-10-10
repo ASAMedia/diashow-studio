@@ -20,10 +20,10 @@ import { App } from './App'
 import { PresentView } from './components/Presentation'
 import { playerRef, useStore } from './store'
 import { exportShow, queueExport, runExportWorker } from './engine/exporter'
-import { detectFaces } from './faces'
+import { detectFaces, faceTestApi } from './faces'
 
 // Test hook used by the Playwright end-to-end tests.
-;(window as unknown as { __diashow: unknown }).__diashow = { store: useStore, player: playerRef, exportShow, queueExport, detectFaces }
+;(window as unknown as { __diashow: unknown }).__diashow = { store: useStore, player: playerRef, exportShow, queueExport, detectFaces, faces: faceTestApi }
 
 // A .dshow file opened with the app (double click, or while it is running). Subscribed before
 // the first render so a file passed at launch isn't missed.

@@ -29,7 +29,8 @@ interface State {
   textSel: string | null
   canUndo: boolean
   canRedo: boolean
-  dialog: 'rejects' | 'pack' | 'settings' | 'backups' | 'help' | 'queue' | null
+  /** 'share': photos from phones / video to phones over the Wi-Fi; 'systemcheck': opened from Settings. */
+  dialog: 'rejects' | 'pack' | 'settings' | 'backups' | 'help' | 'queue' | 'share' | 'systemcheck' | 'privacyReview' | null
   /** Export queue, oldest first (kept by the main process). */
   exportJobs: ExportJobInfo[]
   presenting: boolean
@@ -60,10 +61,14 @@ interface State {
   importMedia(paths: string[]): Promise<void>
   addMusic(paths: string[]): Promise<void>
   addText(): void
+  /** Rolling end credits as the last slide. */
+  addCredits(): void
   removeEntries(ids: string[]): void
   setEntry(id: string, patch: Partial<Entry>): void
   /** Changes several entries in one undo step. */
   updateEntries(ids: string[], fn: (e: Entry) => void, key?: string): void
+  /** Plays a song from a chapter's text slide on, or (null) in the show playlist. */
+  assignSong(trackId: string, chapterId: string | null): void
   addFreeText(entryId: string): void
   setFreeText(entryId: string, textId: string, patch: Partial<FreeText>): void
   removeFreeText(entryId: string, textId: string): void
@@ -211,7 +216,10 @@ export const useStore = create<State>((set, get) => ({
   update(fn, key) {
     const cur = get().project
     if (!cur) return
-    const next = structuredClone(cur)
+    // Media items are replaced, never changed in place, so the copy and the undo snapshots share
+    // them: their face data (descriptors) made every edit cost ~40 ms in a big project.
+    const { media, ...rest } = cur
+    const next: Project = { ...structuredClone(rest), media: media.slice() }
     fn(next)
     next.updatedAt = Date.now()
     const now = performance.now()
@@ -373,6 +381,12 @@ export const useStore = create<State>((set, get) => ({
     set({ selection: [entry.id], tab: 'slide' })
   },
 
+  addCredits() {
+    const entry: Entry = { id: uid(), type: 'text', title: t('creditsTitle'), subtitle: t('creditsLines'), titleStyle: 'credits' }
+    get().update((p) => void p.entries.push(entry))
+    set({ selection: [entry.id], tab: 'slide' })
+  },
+
   removeEntries(ids) {
     const drop = new Set(ids)
     get().update((p) => {
@@ -393,6 +407,18 @@ export const useStore = create<State>((set, get) => ({
   updateEntries(ids, fn, key) {
     const want = new Set(ids)
     get().update((p) => p.entries.forEach((e) => want.has(e.id) && fn(e)), key)
+  },
+
+  assignSong(trackId, chapterId) {
+    get().update((p) => {
+      for (const e of p.entries) {
+        if (e.type !== 'text' || !e.music) continue
+        e.music = e.music.filter((id) => id !== trackId)
+        if (!e.music.length) delete e.music
+      }
+      const chapter = p.entries.find((e) => e.id === chapterId)
+      if (chapter?.type === 'text') chapter.music = [...(chapter.music ?? []), trackId]
+    })
   },
 
   addFreeText(entryId) {

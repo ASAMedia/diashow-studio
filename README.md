@@ -14,6 +14,7 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
     - Text slides become white captions at the bottom right of the next slide, and the title sits on the first slide.
     - Unlike Photos, there are no half-empty slides: a lone portrait photo is paired with the next photo.
   - Cropped layouts (Magazine, Origami, Sliding Panels, Classic in fill mode, Retro Film) let you drag each photo or video inside its cell in the preview, zoom it with the mouse wheel and reset it with a double-click. You can also choose the layout per slide.
+  - Free collage: with the "Free" layout, the photos of a slide can be placed by hand. Drag one to move it, drag its corner to resize it (its shape stays) and turn it with the knob. Light themes show them as prints with a white border.
   - Crop or whole picture: "Crop photos to fill" sets the default for the show. Each photo or video can override it with "Crop to fill" or "Whole picture", from the Slide tab or the toggle in its cell in the preview.
     - In Magazine a whole picture sits on the paper; the darker themes put it on a blurred copy of itself.
   - Magazine puts videos into its grids too: several clips play side by side, and the slide lasts as long as the longest clip. Only the first clip is heard unless you switch others on.
@@ -28,6 +29,7 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
   - Day titles from the capture date, or chapters from folder names ("2_Sonntag Unser erster Tag" becomes "Sonntag" with the subtitle "Unser erster Tag").
   - Sort by capture date.
   - Text style for titles and captions: font, size, colour, position and capitals.
+  - Animated titles for the show title and chapter slides: handwriting that writes itself, a typewriter, or a big word rising from a line. Each text slide can also have its own style, including rolling end credits ("Add end credits" in the "⋯" menu).
   - Video trimming: drag the in and out handles over a strip of frames from the clip, then preview the cut. "Videos at most" (Timing tab) cuts long clips down automatically.
   - Slow motion and time lapse per clip (0.25× to 8×). Between 0.5× and 2× the sound plays along with its pitch kept; outside that range the clip is silent.
   - Text boxes anywhere on a slide: drag them in the preview and double-click to type. Each box has its own font, size, colour, rotation, and a shadow, dark band, white card or speech bubble behind it.
@@ -40,12 +42,18 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
   - "Only n+ stars in the show" keeps just the best.
 - **Privacy:** faces can be pixelated, e.g. for pupils without photo consent.
   - In "Pixelate faces…" you click detected faces or drag out any area.
-  - When the editor opens, it searches the photo again with a fine tile grid, so small faces at the back of group photos are found too. For a video, it searches a frame from the middle of the clip, and an area applies to the whole clip.
+  - When the editor opens, it searches the photo again with a fine tile grid, so small faces at the back of group photos are found too.
+  - Videos: the editor shows a frame from the middle of the clip (a slider picks another one). A clicked face is followed through the whole clip; areas you drag out apply to the whole clip.
+  - "Pixelate this person everywhere" (the person button on a face): the face is recognised in every photo and video of the show and pixelated there too. The people list shows each person's matches; a wrong match is corrected with ✕.
+  - "Check faces…" before the export (optional) lists the slides whose detected faces are not pixelated.
   - The pixelation sits on the picture itself, so it follows crops and Ken Burns moves and appears in the preview and the export.
+  - Faces are analysed in the background in Web Workers (photos first, then a frame every 0.5 s of each video), paused while the show plays, exports or presents.
 - **Automatic help:**
   - Offline face detection (MediaPipe BlazeFace, run on the whole picture and on tiles) keeps faces inside crops and gives Ken Burns a target.
   - "Change slides on the beat" puts every slide change on a beat of the music.
   - "Find rejects" lists blurry photos and near-duplicates (difference hash); of each duplicate group the sharpest photo stays.
+    - It also finds the same video clip twice, e.g. the original and a copy forwarded through WhatsApp: same length and matching frames at 10 % and 60 %. The copy with the most pixels and the highest bit rate stays.
+  - "Reduce shake" per clip: shaky phone videos are stabilised in the background (FFmpeg vid.stab, zoomed 6 % so no edges show). The preview and the export then use the steady version.
 - **Export presets:** YouTube 1080p/4K, Instagram Reel 9:16, Instagram 1:1, WhatsApp, TV/projector. Another aspect ratio relays the show.
   - 4K exports first prepare full-resolution versions of videos that only have a 1080p proxy.
 - **Export queue:** exports run in the background, one after another, while you keep editing. The title bar shows the progress.
@@ -62,10 +70,20 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
     - Display images, video sound and proxies run side by side, each on its own resource (CPU, disk, graphics card).
     - Duplicate and sharpness analysis waits until every item is usable.
   - Preview quality (High, Medium, Low) is set in Settings, for slower laptops; exports are not affected.
+  - System check (in Settings) for other PCs, such as a school PC without NVIDIA. It shows:
+    - the graphics card, WebGL and a real test encode with each hardware encoder;
+    - HEVC playback, GPU tone mapping, CPU, memory and free disk space;
+    - a short export benchmark.
+    Every item comes with a plain verdict, and "Copy report" copies a text report.
 - **Projects:**
   - Automatic backups: before a save, the previous version is kept (at most every 10 minutes, the last 20). Restore them with "Restore an older version…" in the "⋯" menu.
   - Missing originals (moved folder, new drive letter) are found again with "Search a folder…" in the banner.
   - Settings show how much cache each part uses, with buttons to remove unused files, 4K versions or video proxies.
+- **Share over Wi-Fi** ("⋯" menu), local network only, no internet:
+  - Collect photos: the laptop shows a QR code. Pupils open a page on their phones, enter their name if they like and upload photos and videos, which go straight into the show (sorted into folders per name).
+  - Hand out the video: offered files (e.g. a finished 720p export from the queue) can be watched and saved on the phones.
+  - The server only runs while the dialog is open and only answers links with a random token.
+  - On first use Windows asks whether to allow network access. On guest Wi-Fi that keeps devices apart, the Windows mobile hotspot helps.
 - **Pack project:** copies the project with all photos, videos and music into one folder for a USB stick or another PC. "Open project…" or a double-click on the .dshow loads it there.
 - **Presentation mode:** the show runs fullscreen on a second display (projector) while the laptop shows the current and next slide, time and controls.
 - **Kiosk mode:** choose a project in Settings, and the app starts straight into it, playing in a loop. The screen stays on while a show plays.
@@ -76,6 +94,10 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
 - **Ken Burns:** set the start and end framing per photo by dragging and zooming a frame.
 - **Music:** your own files (MP3, M4A/AAC, WAV, FLAC, OGG, Opus, ALAC, WMA, AIFF) in a playlist you can reorder. It supports crossfades, fades and repeat.
   - Song sections: drag the start and end of each song over its waveform (scissors button), e.g. to skip a long intro, and listen to the result.
+  - Music per chapter: each song can play in the whole show or from a chapter's text slide on (e.g. its own songs for each day).
+    - With "Fit to music", every chapter lasts as long as its songs.
+    - At the change the old songs fade out while the new ones start.
+    - Beat sync follows each chapter's own songs.
   - "Even out loudness" brings songs and video sound to the same level (−16 LUFS).
   - The audio lane shows the songs' waveforms and beat markers.
 - **Video sound and ducking:** video clips play with their sound, and the music is lowered automatically while a clip with sound plays.
@@ -135,4 +157,4 @@ GitHub Actions (`.github/workflows/ci.yml`) runs the type check, the unit tests 
 
 ## Licence
 
-MIT for the app code. The bundled FFmpeg build is GPL; see `vendor/ffmpeg/LICENSE.txt`. MediaPipe and the BlazeFace model are Apache-2.0; their usage statistics are blocked inside the app. Fonts are under the SIL Open Font License (Inter, Anton, Cinzel, Special Elite, Playfair Display, Barlow Semi Condensed, Nunito Sans, Caveat).
+MIT for the app code. The bundled FFmpeg build is GPL; see `vendor/ffmpeg/LICENSE.txt`. MediaPipe and the BlazeFace model are Apache-2.0; their usage statistics are blocked inside the app. Face recognition uses dlib's face recognition model (public domain, CC0) as converted by face-api.js (MIT), from `@vladmandic/face-api` (MIT), with TensorFlow.js (Apache-2.0). Fonts are under the SIL Open Font License (Inter, Anton, Cinzel, Special Elite, Playfair Display, Barlow Semi Condensed, Nunito Sans, Caveat).

@@ -34,7 +34,9 @@ const api: DiashowApi = {
   onExportProgress: (cb) => subscribe('export:progress', cb),
   setFullscreen: (on) => ipcRenderer.invoke('win:fullscreen', on),
   revealInFolder: (path) => ipcRenderer.invoke('shell:reveal', path),
-  setFaces: (id, faces) => ipcRenderer.invoke('media:faces', id, faces),
+  setFaces: (id, faces, desc) => ipcRenderer.invoke('media:faces', id, faces, desc),
+  setVideoFaces: (id, samples) => ipcRenderer.invoke('media:video-faces', id, samples),
+  videoFrames: (path, times, maxEdge) => ipcRenderer.invoke('media:frames', path, times, maxEdge),
   prepareHires: (ids, maxEdge) => ipcRenderer.invoke('export:hires', ids, maxEdge),
   pickPackDir: () => ipcRenderer.invoke('dialog:pack'),
   packProject: (project, dir) => ipcRenderer.invoke('project:pack', project, dir),
@@ -65,7 +67,15 @@ const api: DiashowApi = {
   workerNext: () => ipcRenderer.invoke('worker:next'),
   segmentStart: (jobId, k, input) => ipcRenderer.invoke('worker:segment-start', jobId, k, input),
   segmentFinish: (jobId, k) => ipcRenderer.invoke('worker:segment-finish', jobId, k),
-  workerFail: (jobId, message) => ipcRenderer.invoke('worker:fail', jobId, message)
+  workerFail: (jobId, message) => ipcRenderer.invoke('worker:fail', jobId, message),
+  stabilizeVideo: (mediaId) => ipcRenderer.invoke('media:stabilize', mediaId),
+  shareControl: (cmd) => ipcRenderer.invoke('share:control', cmd),
+  onShareUpdate: (cb) => subscribe('share:update', cb),
+  onShareFiles: (cb) => subscribe('share:files', cb),
+  systemInfo: () => ipcRenderer.invoke('system:info'),
+  systemEncoderTest: () => ipcRenderer.invoke('system:encoders'),
+  systemBenchMedia: () => ipcRenderer.invoke('system:bench-media'),
+  systemBenchCleanup: () => ipcRenderer.invoke('system:bench-cleanup')
 }
 
 contextBridge.exposeInMainWorld('api', api)

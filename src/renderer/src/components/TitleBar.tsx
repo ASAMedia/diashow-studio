@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CalendarDays, ChevronLeft, Download, Eraser, FolderTree, History, Images, LayoutGrid, Loader2, MonitorPlay, MoreHorizontal, Package, Play, Redo2, ScanSearch, Settings, SortAsc, Undo2 } from 'lucide-react'
+import { CalendarDays, Clapperboard, QrCode, ScanFace, ChevronLeft, Download, Eraser, FolderTree, History, Images, LayoutGrid, Loader2, MonitorPlay, MoreHorizontal, Package, Play, Redo2, ScanSearch, Settings, SortAsc, Undo2 } from 'lucide-react'
 import { useStore } from '../store'
 import { useTimeline } from '../timeline'
 import { fmtTime, t } from '../i18n'
@@ -99,9 +99,18 @@ export function TitleBar() {
             <button onClick={() => useStore.getState().sortByDate()}>
               <SortAsc size={14} /> {t('sortByDate')}
             </button>
+            <button onClick={() => useStore.getState().addCredits()}>
+              <Clapperboard size={14} /> {t('addCredits')}
+            </button>
             <hr />
             <button onClick={() => set({ dialog: 'rejects' })}>
               <ScanSearch size={14} /> {t('rejects')}
+            </button>
+            <button onClick={() => set({ dialog: 'privacyReview' })}>
+              <ScanFace size={14} /> {t('reviewCheck')}
+            </button>
+            <button onClick={() => set({ dialog: 'share' })}>
+              <QrCode size={14} /> {t('shareTitle')}
             </button>
             <button onClick={() => set({ dialog: 'pack' })}>
               <Package size={14} /> {t('pack')}

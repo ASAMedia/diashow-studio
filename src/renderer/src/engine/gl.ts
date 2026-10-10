@@ -121,14 +121,14 @@ uniform int u_tri;
 uniform vec4 u_lk1;  // saturation, contrast, brightness, warmth
 uniform vec4 u_lk2;  // tint, fade, mono, vignette
 uniform int u_privN;       // areas to pixelate (texture uv, x/y/w/h)
-uniform vec4 u_priv[8];
+uniform vec4 u_priv[32];
 uniform vec2 u_texSize;
 out vec4 outColor;
 
 // Coarse blocks inside an ellipse: about 8 across, square in pixels, averaged from a mip level.
 bool privacy(inout vec2 uv, out float lod) {
   lod = 0.0;
-  for (int i = 0; i < 8; i++) {
+  for (int i = 0; i < 32; i++) {
     if (i >= u_privN) break;
     vec4 r = u_priv[i];
     float bw = max(r.z, r.w * u_texSize.y / u_texSize.x) / 8.0;
@@ -498,11 +498,15 @@ export class Compositor {
     this.lookParams = look
   }
 
-  /** Areas of a texture (normalised, top-left origin) drawn pixelated wherever it is used. */
+  /**
+   * Areas of a texture (normalised, top-left origin) drawn pixelated wherever it is used; up to 32
+   * (a group photo with many marked children), the largest first if there are more.
+   */
   markPrivate(tex: Tex, rects: { x: number; y: number; w: number; h: number }[]): void {
-    const a = new Float32Array(32)
-    rects.slice(0, 8).forEach((r, i) => a.set([r.x, r.y, r.w, r.h], i * 4))
-    this.privacy.set(tex.tex, { n: Math.min(8, rects.length), a })
+    const a = new Float32Array(32 * 4)
+    const list = rects.length > 32 ? [...rects].sort((p, q) => q.w * q.h - p.w * p.h).slice(0, 32) : rects
+    list.forEach((r, i) => a.set([r.x, r.y, r.w, r.h], i * 4))
+    this.privacy.set(tex.tex, { n: list.length, a })
   }
 
   clearPrivate(): void {

@@ -15,6 +15,10 @@ import { BackupsDialog, HelpDialog, MissingBanner, SettingsDialog, Tip } from '.
 import { PresenterPanel } from './components/Presentation'
 import { Cull } from './components/Cull'
 import { QueueDialog } from './components/Queue'
+import { PrivacyReviewDialog } from './components/PrivacyReview'
+import { ShareDialog } from './components/ShareDialog'
+import { SystemCheck } from './components/SystemCheck'
+import { watchStabilize } from './stabilize'
 import { timelineOf } from './timeline'
 
 /** Routes dropped files: audio goes to the playlist, everything else into the show. */
@@ -43,6 +47,7 @@ export function App() {
     void useStore.getState().loadProjects()
     const offMedia = wireMediaUpdates()
     const offFaces = startFaceQueue()
+    const offStabilize = watchStabilize()
     void window.api.queueList().then((exportJobs) => useStore.getState().set({ exportJobs })).catch(() => {})
     const offQueue = window.api.onQueueUpdate((exportJobs) => useStore.getState().set({ exportJobs }))
     // kiosk mode: open the chosen show fullscreen in a loop right away
@@ -59,6 +64,7 @@ export function App() {
       offMedia()
       offFaces()
       offQueue()
+      offStabilize()
     }
   }, [])
 
@@ -172,6 +178,9 @@ export function App() {
       {dialog === 'backups' && <BackupsDialog />}
       {dialog === 'help' && <HelpDialog />}
       {dialog === 'queue' && <QueueDialog />}
+      {dialog === 'privacyReview' && <PrivacyReviewDialog />}
+      {dialog === 'share' && <ShareDialog />}
+      {dialog === 'systemcheck' && <SystemCheck />}
       {presenting && <PresenterPanel />}
       {dragging && <div className="window-drop">{t('dropHere')}</div>}
     </div>

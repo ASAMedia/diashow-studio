@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { AspectRatio, EncoderInfo, ExportQuality, Project, VideoCodec } from '@shared/types'
 import { aspectValue } from '@shared/timeline'
 import { queueExport } from '../engine/exporter'
 import { useStore } from '../store'
 import { localeTag, pick, t } from '../i18n'
 import { JobRow } from './Queue'
+import { openFacesInShow } from '@shared/people'
+import { PrivacyReview } from './PrivacyReview'
 
 const HEIGHTS = [720, 1080, 1440, 2160]
 
@@ -50,6 +52,9 @@ export function ExportDialog() {
   const [phase, setPhase] = useState<Phase>('setup')
   const [error, setError] = useState('')
   const [jobId, setJobId] = useState<string | null>(null)
+  // check before export: slides with faces that are not pixelated (optional)
+  const [review, setReview] = useState(false)
+  const openFaces = useMemo(() => openFacesInShow(project).length, [project])
   const job = useStore((s) => s.exportJobs.find((j) => j.id === jobId))
   // beat sync also needs the beats of every song (they are found after the photos are ready)
   const busy =
@@ -95,9 +100,10 @@ export function ExportDialog() {
 
   return (
     <div className="overlay">
-      <div className="dialog">
-        <h2>{t('exportTitle')}</h2>
-        {phase === 'setup' && (
+      <div className={`dialog ${review ? 'wide' : ''}`}>
+        <h2>{review ? t('reviewTitle') : t('exportTitle')}</h2>
+        {phase === 'setup' && review && <PrivacyReview onDone={() => setReview(false)} />}
+        {phase === 'setup' && !review && (
           <>
             <div className="grid">
               <span>{t('preset')}</span>
@@ -179,6 +185,14 @@ export function ExportDialog() {
             {enc && !hwName && <p className="hint">{t('noHardware')}</p>}
             {aspectId !== project.settings.aspect && <p className="hint">{t('aspectRelayout')}</p>}
             {busy && <p className="warn">{t('stillProcessing')}</p>}
+            {openFaces > 0 && (
+              <p className="warn" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ flex: 1 }}>{t('reviewExportHint').replace('{n}', String(openFaces))}</span>
+                <button className="btn small" onClick={() => setReview(true)}>
+                  {t('reviewCheck')}
+                </button>
+              </p>
+            )}
             <div className="actions">
               <button className="btn" onClick={() => set({ exportOpen: false })}>
                 {t('cancel')}

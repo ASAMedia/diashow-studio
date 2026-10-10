@@ -272,3 +272,85 @@ describe('video speed, culling and song sections', () => {
     expect(musicBeatTimes(p, 100)).toEqual([1, 30])
   })
 })
+
+describe('music per chapter', () => {
+  const media = ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => photo(id))
+  const entries: Entry[] = [
+    { id: 'e1', type: 'photo', mediaId: 'a' },
+    { id: 'e2', type: 'photo', mediaId: 'b' },
+    { id: 'e3', type: 'photo', mediaId: 'c' },
+    { id: 'day2', type: 'text', title: 'Montag', music: ['s2'] },
+    { id: 'e4', type: 'photo', mediaId: 'd' },
+    { id: 'e5', type: 'photo', mediaId: 'e' },
+    { id: 'e6', type: 'photo', mediaId: 'f' }
+  ]
+  const s1 = { ...track('s1', 30), beats: [0.5, 1, 1.5, 2] }
+  const s2 = { ...track('s2', 60), beats: [0.25, 10.25] }
+
+  it('fits every chapter to its own songs and plays them from its first slide', () => {
+    const p = project(entries, media, [s1, s2], { audio: { ...DEFAULT_SETTINGS.audio, repeatMusic: false } })
+    const tl = buildTimeline(p)
+    expect(tl.musicSegments.map((s) => s.tracks)).toEqual([['s1'], ['s2']])
+    const day2 = tl.slides.find((s) => s.id === 'day2')!
+    expect(tl.musicSegments[1].start).toBe(day2.start)
+    // the first chapter lasts about as long as its song, the second about as long as its own
+    expect(day2.start).toBeGreaterThan(26)
+    expect(day2.start).toBeLessThan(32)
+    expect(tl.duration - day2.start).toBeGreaterThan(56)
+    expect(tl.duration - day2.start).toBeLessThan(63)
+    const music = buildAudioPlan(p, tl).clips.filter((c) => c.kind === 'music')
+    expect(music.map((c) => c.src)).toEqual([s1.playback, s2.playback])
+    expect(music[1].start).toBe(day2.start)
+    // the first song fades out over the crossfade after the chapter starts (or ends earlier by itself)
+    expect(music[0].start + music[0].duration).toBeCloseTo(Math.min(30, day2.start + DEFAULT_SETTINGS.audio.crossfade), 6)
+    expect(musicBeatTimes(p, tl.duration, tl).filter((b) => b > day2.start)).toEqual([day2.start + 0.25, day2.start + 10.25])
+  })
+
+  it('snaps chapter slides to the beats of their own songs', () => {
+    const beat = (len: number, step: number) => Array.from({ length: Math.floor(len / step) }, (_, i) => +(i * step).toFixed(3))
+    const p = project(entries, media, [{ ...s1, beats: beat(30, 0.5) }, { ...s2, beats: beat(60, 0.7).map((b) => b + 0.1) }], {
+      timing: { mode: 'fitToMusic', customTotal: 0, beatSync: true }
+    })
+    const tl = buildTimeline(p)
+    const start2 = tl.musicSegments[1].start
+    const day2 = tl.slides.find((s) => s.id === 'day2')!
+    // cuts after automatic photo slides of the chapter (the text slide itself keeps its length)
+    for (const s of tl.slides) {
+      if (s.index <= day2.index + 1) continue
+      const cut = s.start + s.transIn / 2 - start2
+      const off = (cut - 0.1) / 0.7
+      expect(Math.abs(off - Math.round(off))).toBeLessThan(0.01)
+    }
+  })
+
+  it('keeps everything in one playlist without chapter songs', () => {
+    const p = project(entries.map((e) => (e.type === 'text' ? { ...e, music: undefined } : e)), media, [s1, s2])
+    const tl = buildTimeline(p)
+    expect(tl.musicSegments).toEqual([{ start: 0, end: tl.duration, tracks: ['s1', 's2'], chapterId: undefined }])
+  })
+})
+
+describe('free collage', () => {
+  const media = [photo('a'), photo('b', 3000, 4000), photo('c')]
+  it('keeps the order, starts from the automatic cells and uses placed items as they are', () => {
+    const entries: Entry[] = [
+      { id: 'e1', type: 'photo', mediaId: 'a', groupBreak: 'force', layout: 'free' },
+      { id: 'e2', type: 'photo', mediaId: 'b', groupBreak: 'join' },
+      { id: 'e3', type: 'photo', mediaId: 'c', groupBreak: 'join', place: { x: 0.1, y: 0.2, w: 0.3, h: 0.3, rot: 12, z: 5 } }
+    ]
+    const tl = buildTimeline(project(entries, media, [], { theme: 'magazine' }))
+    const s = tl.slides[0]
+    expect(s.template?.id).toBe('free')
+    expect(s.entries.map((e) => e.id)).toEqual(['e1', 'e2', 'e3'])
+    expect(s.places).toHaveLength(3)
+    expect(s.places![2]).toEqual({ x: 0.1, y: 0.2, w: 0.3, h: 0.3, rot: 12, z: 5 })
+    for (const p of s.places!.slice(0, 2)) {
+      expect(p.x).toBeGreaterThanOrEqual(0)
+      expect(p.x + p.w).toBeLessThanOrEqual(1)
+      expect(Math.abs(p.rot)).toBeLessThanOrEqual(4)
+    }
+    // the portrait photo keeps its shape: width/height in pixels = 3/4
+    const pb = s.places![1]
+    expect((pb.w * tl.aspect) / pb.h).toBeCloseTo(0.75, 3)
+  })
+})

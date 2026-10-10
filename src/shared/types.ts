@@ -50,6 +50,35 @@ export interface MediaItem {
   hash?: string
   /** Videos with sound: integrated loudness of the audio in LUFS (EBU R128). */
   loudness?: number
+  /** Face descriptors (one vector per face, aligned with `faces`) for recognising the same person. */
+  faceDesc?: number[][]
+  /** Videos: faces found in frames sampled across the clip (t in source seconds). */
+  videoFaces?: VideoFaces[]
+  /** Videos: stabilised version of `playback`, made on request (same timing and size). */
+  stabilized?: string
+  /** Videos: 0..1 while the stabilised version is being made. */
+  stabilizing?: number
+  /** Videos: difference hash of a frame at 60 % of the clip (`hash` is the thumbnail at 10 %), for finding the same clip twice. */
+  hash2?: string
+  /** Videos: bits per second of the original file (size / duration); a re-encode has fewer. */
+  bitrate?: number
+}
+
+/** Faces in one sampled frame of a video. */
+export interface VideoFaces {
+  t: number
+  faces: Rect[]
+  /** Descriptors aligned with `faces`. */
+  desc?: number[][]
+}
+
+/** Someone who must not be recognisable: pixelated wherever the face is recognised. */
+export interface Person {
+  id: string
+  /** Optional label (e.g. a first name); only stored in the project. */
+  name?: string
+  /** Descriptors of the faces marked as this person. */
+  desc: number[][]
 }
 
 export interface MusicTrack {
@@ -98,7 +127,22 @@ interface BaseEntry {
   excluded?: boolean
   /** Culling: 0..5 stars. */
   rating?: number
+  /** Free collage (slide layout 'free'): place of this item on its slide, slide coordinates 0..1, degrees. */
+  place?: CollagePlace
 }
+
+export interface CollagePlace {
+  x: number
+  y: number
+  w: number
+  h: number
+  rot: number
+  /** Stacking order; higher is in front. */
+  z: number
+}
+
+/** Animation of title and chapter slides. */
+export type TitleStyle = 'theme' | 'handwriting' | 'typewriter' | 'bigDate' | 'credits'
 
 /** A text box placed on a slide by the user. */
 export interface FreeText {
@@ -159,6 +203,10 @@ export interface VideoEntry extends BaseEntry {
   speed?: number
   /** Areas made unrecognisable (pixelated), normalised to the picture; fixed for the whole clip. */
   privacy?: Rect[]
+  /** Pixelated areas that follow a face through the clip: keyframes (t in source seconds). */
+  privacyTracks?: { t: number; r: Rect }[][]
+  /** Play the stabilised version of the clip (made in the background). */
+  stabilize?: boolean
 }
 
 export interface TextEntry extends BaseEntry {
@@ -167,6 +215,10 @@ export interface TextEntry extends BaseEntry {
   subtitle?: string
   /** Created by "day titles" / "chapters from folders"; replaced when those run again. */
   auto?: 'day'
+  /** Songs (music ids) for the chapter this slide starts; the show's playlist when undefined. */
+  music?: string[]
+  /** Animation of this slide; the show's title style when undefined. */
+  titleStyle?: TitleStyle
 }
 
 export type Entry = PhotoEntry | VideoEntry | TextEntry
@@ -257,6 +309,8 @@ export interface ProjectSettings {
   text?: TextStyle
   /** Longest stretch of a video that plays (seconds); 0 or undefined = whole clip. */
   maxVideoSeconds?: number
+  /** Animation of title and chapter slides. */
+  titleStyle?: TitleStyle
 }
 
 export const DEFAULT_TEXT_STYLE: TextStyle = { font: 'theme', scale: 1, color: '', position: 'theme', uppercase: 'theme' }
@@ -272,6 +326,8 @@ export interface Project {
   media: MediaItem[]
   music: MusicTrack[]
   settings: ProjectSettings
+  /** People pixelated wherever their face is recognised. */
+  people?: Person[]
 }
 
 export interface ProjectSummary {

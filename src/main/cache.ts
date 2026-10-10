@@ -19,7 +19,8 @@ export function classifyCacheFile(rel: string): CachePart {
   if (parts.length > 1) return parts[0].toLowerCase().startsWith('strip-') ? 'thumbs' : 'other'
   if (/^thumb.*\.jpg$/.test(name)) return 'thumbs'
   if (name === 'display.jpg') return 'display'
-  if (name === 'proxy.mp4' || name === 'live.mp4') return 'proxies'
+  // stab.mp4 (stabilised clip) is made again on request, like a proxy
+  if (name === 'proxy.mp4' || name === 'live.mp4' || name === 'stab.mp4') return 'proxies'
   if (HIRES.test(name)) return 'hires'
   if (name === 'audio.m4a' || name === 'music.m4a') return 'audio'
   return 'other'
@@ -134,7 +135,7 @@ export async function cacheInfo(dir: string, use: CacheUse): Promise<CacheInfo> 
 
 /**
  * Deletes unused media folders, hi-res export proxies, or all proxies (proxy.mp4, live.mp4,
- * proxy_<n>.mp4). Folders of busy items are left alone. Resolves with the ids whose folder was
+ * stab.mp4, proxy_<n>.mp4). Folders of busy items are left alone. Resolves with the ids whose folder was
  * removed or whose playable proxy (proxy.mp4 / live.mp4) is gone, so the caller can forget them.
  */
 export async function cleanCache(dir: string, what: CleanTarget, use: CacheUse): Promise<string[]> {

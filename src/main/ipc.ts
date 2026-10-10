@@ -2,7 +2,7 @@
 import { app, BrowserWindow, dialog, ipcMain, powerSaveBlocker, shell, type IpcMainInvokeEvent } from 'electron'
 import { join } from 'node:path'
 import { AUDIO_EXT, IMAGE_EXT, VIDEO_EXT } from '@shared/formats'
-import type { AppSettings, ExportOptions, ExportProgress, MediaItem, MusicTrack, Project, Rect } from '@shared/types'
+import type { AppSettings, ExportOptions, ExportProgress, MediaItem, MusicTrack, Project, Rect, VideoFaces } from '@shared/types'
 import { createAppSettingsStore } from './appSettings'
 import { directDecodeSupport } from './codecSupport'
 import { resolveFfmpegDir } from './ffmpeg'
@@ -14,6 +14,8 @@ import { importProjectFile, packProject } from './projectFile'
 import { createProjectStore, PROJECT_EXT } from './projects'
 import { cancelActiveExport, startExport, type ExportJob } from './export/encoder'
 import { registerExportQueue } from './export/queueMain'
+import { registerShare } from './share/shareMain'
+import { registerSystemCheck } from './systemCheck'
 
 function broadcast(channel: string, payload: unknown): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -92,10 +94,16 @@ export function registerIpc(): void {
   ipcMain.handle('music:import', (_e, paths: string[]) => service.importMusic(stringList(paths)))
   ipcMain.handle('music:restore', (_e, tracks: MusicTrack[]) => service.restoreMusic(tracks))
   ipcMain.handle('audio:waveform', (_e, path: string, buckets: number) => service.waveform(path, buckets))
-  ipcMain.handle('media:faces', (_e, id: string, faces: Rect[]) => service.setFaces(id, faces))
+  ipcMain.handle('media:faces', (_e, id: string, faces: Rect[], desc?: number[][]) => service.setFaces(id, faces, desc))
+  ipcMain.handle('media:video-faces', (_e, id: string, samples: VideoFaces[]) => service.setVideoFaces(id, samples))
+  ipcMain.handle('media:frames', (_e, path: string, times: number[], maxEdge: number) => service.videoFrames(path, times, maxEdge))
   ipcMain.handle('media:strip', (_e, path: string, count: number, height: number) => service.videoStrip(path, count, height))
   ipcMain.handle('media:relink', (_e, missing: MediaItem[], folder: string) => service.relinkMedia(missing, folder))
   ipcMain.handle('media:prioritize', (_e, ids: string[]) => service.prioritize(stringList(ids)))
+  ipcMain.handle('media:stabilize', (_e, id: string) => service.stabilizeVideo(String(id)))
+  // Sharing over the local network: uploads go to <Documents>/Diashow Studio/Uploads/<project>/<name>
+  registerShare({ uploadsRoot: join(projects.dir, 'Uploads'), broadcast })
+  registerSystemCheck({ ff: service.ffmpeg, cacheDir })
   ipcMain.handle('cache:info', async () => service.cacheInfo(await projects.references()))
   ipcMain.handle('cache:clean', async (_e, what: 'unused' | 'hires' | 'proxies') => service.cleanCache(what, await projects.references()))
 

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { mediaUrl } from '@shared/api'
+import { sameClipGroups } from '@shared/duplicates'
 import type { MediaItem, Project } from '@shared/types'
 import { useStore } from '../store'
 import { t } from '../i18n'
@@ -19,14 +20,22 @@ function hashDistance(a: string, b: string): number {
 export interface Reject {
   entryId: string
   media: MediaItem
-  reason: 'blurry' | 'duplicate'
-  /** Sharpness in %, or the entry number of the photo it duplicates. */
+  /** 'sameClip': a video that is another copy of a clip in the show (e.g. forwarded through a messenger). */
+  reason: 'blurry' | 'duplicate' | 'sameClip'
+  /** Sharpness in %, or the entry number of the photo / clip it duplicates. */
   detail: string
+}
+
+/** Label of a reject in the dialog and the review grid. */
+export function rejectLabel(r: Reject): string {
+  return r.reason === 'blurry' ? `${t('blurry')} ${r.detail}` : `${t(r.reason === 'sameClip' ? 'sameClip' : 'duplicateOf')} ${r.detail}`
 }
 
 /**
  * Blurry photos (sharpness below the threshold) and near-duplicates (difference hashes at most
- * a few bits apart); of every group of duplicates the sharpest photo stays.
+ * a few bits apart); of every group of duplicates the sharpest photo stays. Videos that are the same
+ * clip (length and two frame hashes, see @shared/duplicates) are grouped too; the copy with the
+ * original resolution and bit rate stays.
  */
 // measured on real photos: 0-4 bits apart = same shot / burst, 5-10 = another moment of the scene
 export function findRejects(project: Project, threshold: number, maxDistance = 4): Reject[] {
@@ -60,6 +69,12 @@ export function findRejects(project: Project, threshold: number, maxDistance = 4
     if (out.has(p.e.id) || p.m.sharpness == null || p.m.sharpness >= threshold) continue
     out.set(p.e.id, { entryId: p.e.id, media: p.m, reason: 'blurry', detail: `${Math.round(p.m.sharpness * 100)} %` })
   }
+  const videos = project.entries
+    .map((e, i) => ({ e, i, m: e.type === 'video' ? media.get(e.mediaId) : undefined }))
+    .filter((x): x is { e: (typeof project.entries)[number]; i: number; m: MediaItem } => !!x.m && x.m.status === 'ready')
+  for (const [keep, ...rest] of sameClipGroups(videos.map((v) => v.m))) {
+    for (const i of rest) out.set(videos[i].e.id, { entryId: videos[i].e.id, media: videos[i].m, reason: 'sameClip', detail: `#${videos[keep].i + 1}` })
+  }
   return [...out.values()]
 }
 
@@ -70,7 +85,7 @@ export function RejectsDialog() {
   const rejects = useMemo(() => findRejects(project, threshold), [project, threshold])
   const [unchecked, setUnchecked] = useState<Set<string>>(new Set())
   const chosen = rejects.filter((r) => !unchecked.has(r.entryId))
-  const pending = project.media.filter((m) => m.kind === 'photo' && m.status === 'ready' && m.sharpness == null).length
+  const pending = project.media.filter((m) => m.status === 'ready' && (m.kind === 'photo' ? m.sharpness == null : m.hash == null || m.hash2 == null)).length
   return (
     <div className="overlay">
       <div className="dialog wide">
@@ -80,9 +95,9 @@ export function RejectsDialog() {
           <input type="range" min={0.05} max={0.6} step={0.01} value={threshold} onChange={(e) => setThreshold(Number(e.target.value))} style={{ width: 160 }} />
           <span className="val">{Math.round(threshold * 100)} %</span>
         </div>
-        {pending > 0 && <p className="hint">{t('notAnalysed').replace('{n}', String(pending))}</p>}
+        {pending > 0 && <p className="hint">{t('notAnalysedMedia').replace('{n}', String(pending))}</p>}
         {rejects.length === 0 ? (
-          <p className="hint">{t('noRejects')}</p>
+          <p className="hint">{t('noRejectsMedia')}</p>
         ) : (
           <div className="reject-grid">
             {rejects.map((r) => (
@@ -98,9 +113,7 @@ export function RejectsDialog() {
                     setUnchecked(next)
                   }}
                 />
-                <span className={`reason ${r.reason}`}>
-                  {r.reason === 'blurry' ? t('blurry') : t('duplicateOf')} {r.detail}
-                </span>
+                <span className={`reason ${r.reason}`}>{rejectLabel(r)}</span>
               </label>
             ))}
           </div>

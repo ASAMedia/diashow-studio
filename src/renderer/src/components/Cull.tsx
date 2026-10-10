@@ -6,7 +6,7 @@ import { mediaUrl } from '@shared/api'
 import type { Entry, MediaItem } from '@shared/types'
 import { useStore } from '../store'
 import { fmtTime, t } from '../i18n'
-import { findRejects } from './Dialogs'
+import { findRejects, rejectLabel } from './Dialogs'
 import { prioritize } from '../priority'
 
 type Filter = 'all' | 'in' | 'out' | 'stars' | 'suggest'
@@ -208,7 +208,7 @@ export function Cull() {
                       <EyeOff size={14} />
                     </span>
                   )}
-                  {sug && <span className="sug">{sug.reason === 'blurry' ? t('blurry') : `${t('duplicateOf')} ${sug.detail}`}</span>}
+                  {sug && <span className="sug" title={rejectLabel(sug)}>{sug.reason === 'blurry' ? t('blurry') : rejectLabel(sug)}</span>}
                   <button className="out-toggle" title={it.e.excluded ? t('includeSel') : t('excludeSel')} onClick={(ev) => { ev.stopPropagation(); toggleOut(it) }}>
                     <X size={13} />
                   </button>

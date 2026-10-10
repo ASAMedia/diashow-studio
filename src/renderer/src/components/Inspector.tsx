@@ -2,16 +2,16 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { Clock, LayoutTemplate, Music, Plus, Minus, SlidersHorizontal, Trash2, GripVertical, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Film, Volume2, VolumeX, LogOut, Crop as CropIcon, Maximize, ScanFace, Scissors } from 'lucide-react'
 import { mediaUrl } from '@shared/api'
 import { LOOKS, THEMES, TRANSITIONS, themeMeta } from '@shared/themes'
-import type { AspectRatio, Direction, Entry, LookId, MediaItem, PhotoEntry, TextEntry, TextFont, TextPosition, TextStyle, ThemeId, TransitionId, VideoEntry } from '@shared/types'
+import type { AspectRatio, Direction, Entry, LookId, MediaItem, PhotoEntry, TextEntry, TextFont, TextPosition, TextStyle, ThemeId, TransitionId, VideoEntry, TitleStyle } from '@shared/types'
 import { DEFAULT_TEXT_STYLE } from '@shared/types'
-import { MAX_PHOTO_SECONDS, trackSpan, type TimelineSlide } from '@shared/timeline'
+import { MAX_PHOTO_SECONDS, titleStyleOf, trackSpan, type TimelineSlide } from '@shared/timeline'
 import { templatesFor, type Template } from '@shared/layout'
 import { audibleClips } from '@shared/audioPlan'
 import { mediaAspect } from '@shared/layout'
 import { showsWhole } from '../engine/draw'
 import { playerRef, useStore, type InspectorTab } from '../store'
 import { timelineOf } from '../timeline'
-import { fmtSeconds, fmtTime, localeTag, pick, t } from '../i18n'
+import { fmtSeconds, fmtTime, localeTag, pick, t, type StringKey } from '../i18n'
 import { Check, FONTS, Section, Slider } from './ui'
 import { BatchPanel, FreeTextSection, PrivacySection, SpeedSelect } from './SlideTools'
 import { MusicTrim } from './MusicTrim'
@@ -186,6 +186,13 @@ function ThemesPanel() {
 
 const COLORS: Record<string, string> = { theme: '', white: '#ffffff', black: '#1c1c1c', custom: '#ffd75e' }
 
+const TITLE_STYLES: { id: TitleStyle; label: StringKey }[] = [
+  { id: 'theme', label: 'styleTheme' },
+  { id: 'handwriting', label: 'styleHandwriting' },
+  { id: 'typewriter', label: 'styleTypewriter' },
+  { id: 'bigDate', label: 'styleBigDate' }
+]
+
 function TextStyleSection() {
   const project = useStore((s) => s.project)!
   const setSettings = useStore((s) => s.setSettings)
@@ -195,6 +202,16 @@ function TextStyleSection() {
   return (
     <Section title={t('textStyle')}>
       <div className="stack">
+        <div className="row">
+          <label>{t('titleStyle')}</label>
+          <select value={project.settings.titleStyle ?? 'theme'} onChange={(e) => setSettings({ titleStyle: e.target.value as TitleStyle })}>
+            {TITLE_STYLES.map((s) => (
+              <option key={s.id} value={s.id}>
+                {t(s.label)}
+              </option>
+            ))}
+          </select>
+        </div>
         <div className="row">
           <label>{t('font')}</label>
           <select value={ts.font} onChange={(e) => set({ font: e.target.value as TextFont })}>
@@ -257,6 +274,9 @@ function MusicPanel() {
   const [overIdx, setOverIdx] = useState<number | null>(null)
   const [trimming, setTrimming] = useState<string | null>(null)
   const total = timelineOf(project).musicDuration
+  // text slides can start a chapter with its own songs
+  const chapters = project.entries.filter((e): e is TextEntry => e.type === 'text' && !e.excluded)
+  const chapterOf = new Map(chapters.flatMap((c) => (c.music ?? []).map((id) => [id, c.id] as const)))
   const db = (g: number): string => (g <= 0 ? '−∞ dB' : `${(20 * Math.log10(g)).toFixed(0)} dB`)
 
   return (
@@ -294,16 +314,24 @@ function MusicPanel() {
                   {tr.title}
                   {tr.artist && <span className="ar">{tr.artist}</span>}
                   {tr.status === 'error' && <span className="ar" style={{ color: 'var(--danger)' }}>{tr.error}</span>}
+                  {chapters.length > 0 && (
+                    <select className="chapter-pick" title={t('playsIn')} value={chapterOf.get(tr.id) ?? ''} onChange={(e) => useStore.getState().assignSong(tr.id, e.target.value || null)}>
+                      <option value="">{t('wholeShow')}</option>
+                      {chapters.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {t('fromChapter').replace('{t}', c.title)}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </span>
                 <span className="d">
                   {tr.status === 'ready' ? fmtTime(trackSpan(tr).length) : '…'}
                   {tr.bpm ? <span className="ar">{Math.round(tr.bpm)} BPM</span> : null}
                 </span>
-                {tr.status === 'ready' && (
-                  <button title={t('musicTrim')} className={trimming === tr.id || tr.trimIn != null || tr.trimOut != null ? 'on' : ''} onClick={() => setTrimming(trimming === tr.id ? null : tr.id)}>
-                    <Scissors size={13} />
-                  </button>
-                )}
+                <button title={t('musicTrim')} disabled={tr.status !== 'ready'} className={trimming === tr.id || tr.trimIn != null || tr.trimOut != null ? 'on' : ''} onClick={() => setTrimming(trimming === tr.id ? null : tr.id)}>
+                  <Scissors size={13} />
+                </button>
                 <button title={t('delete')} onClick={() => update((p) => (p.music = p.music.filter((m) => m.id !== tr.id)))}>
                   <Trash2 size={13} />
                 </button>
@@ -318,6 +346,7 @@ function MusicPanel() {
           </button>
           {total > 0 && <span className="val">{fmtTime(total)}</span>}
         </div>
+        {chapterOf.size > 0 && project.settings.timing.mode === 'fitToMusic' && <p className="hint">{t('chapterFit')}</p>}
       </Section>
       <Section title={t('music')}>
         <Slider label={t('musicVolume')} value={a.musicVolume} min={0} max={1} step={0.01} display={`${Math.round(a.musicVolume * 100)} %`} onChange={(v) => setAudio({ musicVolume: v })} />
@@ -461,6 +490,41 @@ function TimingPanel() {
 
 // ---------------------------------------------------------------- Slide
 
+/** Songs that play from this text slide on (a chapter of its own). */
+function ChapterMusic({ entry }: { entry: TextEntry }) {
+  const project = useStore((s) => s.project)!
+  const assign = useStore((s) => s.assignSong)
+  const own = new Set(entry.music ?? [])
+  const mine = project.music.filter((m) => own.has(m.id))
+  const others = project.music.filter((m) => !own.has(m.id))
+  return (
+    <div className="section">
+      <h3>{t('chapterMusic')}</h3>
+      <div className="stack">
+        {mine.map((m) => (
+          <div key={m.id} className="row">
+            <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.title}</span>
+            <button className="btn small ghost icon" title={t('delete')} onClick={() => assign(m.id, null)}>
+              <Trash2 size={12} />
+            </button>
+          </div>
+        ))}
+        {others.length > 0 && (
+          <select value="" onChange={(e) => e.target.value && assign(e.target.value, entry.id)}>
+            <option value="">{t('addSong')}</option>
+            {others.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.title}
+              </option>
+            ))}
+          </select>
+        )}
+        <p className="hint">{t('chapterMusicHint')}</p>
+      </div>
+    </div>
+  )
+}
+
 function MediaInfo({ m }: { m: MediaItem }) {
   return (
     <>
@@ -512,7 +576,8 @@ function LayoutPicker({ slide }: { slide: TimelineSlide }) {
   // the override lives on the slide's first entry in filmstrip order
   const order = new Map(project.entries.map((e, i) => [e.id, i]))
   const first = [...slide.entries].sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))[0]
-  if (options.length < 2 || !first) return null
+  const free = first?.layout === 'free'
+  if ((options.length < 2 && slide.entries.length < 2) || !first) return null
   const mini = (tpl: Template) => (
     <svg viewBox="0 0 160 90">
       {tpl.slots.map((r, i) => (
@@ -526,12 +591,25 @@ function LayoutPicker({ slide }: { slide: TimelineSlide }) {
         <button className={!first.layout ? 'on' : ''} onClick={() => setEntry(first.id, { layout: undefined })}>
           {t('layoutAuto')}
         </button>
+        {slide.entries.length > 1 && (
+          <button className={free ? 'on' : ''} onClick={() => setEntry(first.id, { layout: 'free' })}>
+            {t('layoutFree')}
+          </button>
+        )}
         {options.map((tpl) => (
           <button key={tpl.id} className={first.layout === tpl.id ? 'on' : ''} title={tpl.id} onClick={() => setEntry(first.id, { layout: tpl.id })}>
             {mini(tpl)}
           </button>
         ))}
       </div>
+      {free && (
+        <>
+          <p className="hint">{t('collageHint')}</p>
+          <button className="btn small" onClick={() => useStore.getState().updateEntries(slide.entries.map((e) => e.id), (e) => delete e.place)}>
+            {t('collageReset')}
+          </button>
+        </>
+      )}
     </Section>
   )
 }
@@ -741,7 +819,7 @@ function SlidePanel() {
                       )
                     })()}
                     {e.type !== 'text' && (
-                      <button title={t('privacyEdit')} className={e.privacy?.length ? 'on' : ''} onClick={() => set({ privacyEdit: e.id, kbEdit: null })}>
+                      <button title={t('privacyEdit')} className={e.privacy?.length || (e.type === 'video' && e.privacyTracks?.length) ? 'on' : ''} onClick={() => set({ privacyEdit: e.id, kbEdit: null })}>
                         <ScanFace size={12} />
                       </button>
                     )}
@@ -774,10 +852,28 @@ function SlidePanel() {
       <Section title={t('textSlide')}>
         <div className="stack">
           <input type="text" value={te.title} onChange={(ev) => setEntry(te.id, { title: ev.target.value })} />
-          <input type="text" placeholder={t('subtitleText')} value={te.subtitle ?? ''} onChange={(ev) => setEntry(te.id, { subtitle: ev.target.value || undefined })} />
+          {te.titleStyle === 'credits' ? (
+            <textarea rows={5} placeholder={t('subtitleText')} value={te.subtitle ?? ''} onChange={(ev) => setEntry(te.id, { subtitle: ev.target.value || undefined })} style={{ width: '100%', resize: 'vertical' }} />
+          ) : (
+            <input type="text" placeholder={t('subtitleText')} value={te.subtitle ?? ''} onChange={(ev) => setEntry(te.id, { subtitle: ev.target.value || undefined })} />
+          )}
+          <div className="row">
+            <label>{t('titleStyle')}</label>
+            <select value={te.titleStyle ?? ''} onChange={(ev) => setEntry(te.id, { titleStyle: (ev.target.value || undefined) as TitleStyle | undefined })}>
+              <option value="">{t('styleShow')}</option>
+              {TITLE_STYLES.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {t(s.label)}
+                </option>
+              ))}
+              <option value="credits">{t('styleCredits')}</option>
+            </select>
+          </div>
+          {te.titleStyle === 'credits' && <p className="hint">{t('creditsHint')}</p>}
           <DurationOverride entry={te} />
-          {themeMeta(project.settings.theme).textAsCaption && <p className="hint">{t('captionOnNext')}</p>}
+          {themeMeta(project.settings.theme).textAsCaption && titleStyleOf(te, project.settings) === 'theme' && <p className="hint">{t('captionOnNext')}</p>}
         </div>
+        <ChapterMusic entry={te} />
         {slide && slide.kind === 'text' && <FreeTextSection slide={slide} />}
       </Section>
     )

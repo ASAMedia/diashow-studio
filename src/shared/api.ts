@@ -11,9 +11,12 @@ import type {
   MediaItem,
   MusicTrack,
   Project,
-  ProjectSummary
+  ProjectSummary,
+  VideoFaces
 } from './types'
 import type { ExportJobInfo, ExportTask, NewExportJob, SegmentInput } from './exportQueue'
+import type { ShareCommand, ShareFilesEvent, ShareStatus } from './share'
+import type { BenchMedia, EncoderTest, SystemInfo } from './systemCheck'
 
 export interface DiashowApi {
   platform: string
@@ -58,8 +61,19 @@ export interface DiashowApi {
   setFullscreen(on: boolean): Promise<void>
   revealInFolder(path: string): Promise<void>
 
-  /** Store faces found by the renderer for a photo (persisted with the media cache). */
-  setFaces(id: string, faces: Rect[]): Promise<void>
+  /**
+   * Store faces found by the renderer for a photo (persisted with the media cache), with one
+   * descriptor per face when known (without, older descriptors are dropped).
+   */
+  setFaces(id: string, faces: Rect[], desc?: number[][]): Promise<void>
+  /** Store the faces found in sampled frames of a video (MediaItem.videoFaces). */
+  setVideoFaces(id: string, samples: VideoFaces[]): Promise<void>
+  /**
+   * JPEG frames of a video (path: original or playback) at source times in seconds, ascending, at
+   * most 64 per call, scaled to fit maxEdge, rotation applied and HDR tone-mapped like the proxies.
+   * Aligned with `times`; an empty array where no frame could be read.
+   */
+  videoFrames(path: string, times: number[], maxEdge: number): Promise<Uint8Array[]>
   /**
    * Playable versions of proxied videos at up to maxEdge pixels (e.g. 3840) for sharp 4K
    * exports. Reports ExportProgress with phase 'prepare'. Resolves with media id -> path.
@@ -127,6 +141,29 @@ export interface DiashowApi {
   segmentFinish(jobId: string, k: number): Promise<void>
   /** Gives up on the job (state 'error' with the message); then call workerNext() again. */
   workerFail(jobId: string, message: string): Promise<void>
+
+  /**
+   * Stabilised copy of a video (MediaItem.stabilized); progress and the result arrive through
+   * onMediaUpdate (MediaItem.stabilizing 0..1, then stabilized). Rejects when it fails.
+   */
+  stabilizeVideo(mediaId: string): Promise<void>
+
+  // Sharing over the local network (src/shared/share.ts): upload page for phones, download page
+  /** Starts / stops the server, changes its interface, offers files; resolves with the new status. */
+  shareControl(cmd: ShareCommand): Promise<ShareStatus>
+  /** Status after changes (uploads, downloads, offers), at most 4 times a second. */
+  onShareUpdate(cb: (status: ShareStatus) => void): () => void
+  /** Files that arrived from phones (one event per file). */
+  onShareFiles(cb: (event: ShareFilesEvent) => void): () => void
+
+  // System check (src/shared/systemCheck.ts)
+  systemInfo(): Promise<SystemInfo>
+  /** Encodes 1 s of 1080p with every hardware encoder (and libx264), one after another. */
+  systemEncoderTest(): Promise<EncoderTest[]>
+  /** Generates photos and a clip for the export benchmark in a temp folder. */
+  systemBenchMedia(): Promise<BenchMedia>
+  /** Deletes the benchmark media. */
+  systemBenchCleanup(): Promise<void>
 }
 
 /** URL scheme served by the main process with HTTP Range support (needed for video seeking). */

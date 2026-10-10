@@ -1,6 +1,7 @@
 // Image analysis for "find rejects": a difference hash for near-duplicates and a sharpness score for
 // blurry shots. Both work on a small greyscale copy, so they cost a few milliseconds per photo.
 import sharp from 'sharp'
+import type { Ffmpeg } from '../ffmpeg'
 
 /** Long edge of the greyscale copy the sharpness is measured on. */
 export const ANALYSIS_EDGE = 512
@@ -105,7 +106,7 @@ export function sharpnessFromTiles(values: number[]): number {
 }
 
 /** Greyscale copy of an image file with its long edge scaled to `edge` (never upscaled). */
-async function greyCopy(input: string, edge: number): Promise<{ data: Buffer; width: number; height: number }> {
+async function greyCopy(input: string | Buffer, edge: number): Promise<{ data: Buffer; width: number; height: number }> {
   const { data, info } = await sharp(input, { failOn: 'none', limitInputPixels: 1e9 })
     .resize({ width: edge, height: edge, fit: 'inside', withoutEnlargement: true })
     .greyscale()
@@ -127,8 +128,22 @@ async function hashOfGrey(grey: { data: Buffer; width: number; height: number })
 }
 
 /** dHash of an image file (e.g. a video thumbnail). */
-export async function imageHash(path: string): Promise<string> {
+export async function imageHash(path: string | Buffer): Promise<string> {
   return hashOfGrey(await greyCopy(path, ANALYSIS_EDGE))
+}
+
+/**
+ * dHash of the video frame at `at` seconds of a playable file (rotation-free SDR, e.g. a proxy), from
+ * a small PNG FFmpeg decodes after an exact seek. Same scale as the thumbnail hash.
+ */
+export async function videoFrameHash(ff: Ffmpeg, path: string, at: number, signal?: AbortSignal): Promise<string> {
+  const grab = (t: number): Promise<Buffer> =>
+    ff.capture(['-threads', '2', '-ss', Math.max(0, t).toFixed(3), '-i', path, '-map', '0:v:0', '-frames:v', '1', '-vf', 'scale=360:360:force_original_aspect_ratio=decrease', '-c:v', 'png', '-f', 'image2pipe', '-'], { signal })
+  let png = await grab(at)
+  // past the last frame (odd durations): the first frame
+  if (!png.length) png = await grab(0)
+  if (!png.length) throw new Error('no video frame')
+  return imageHash(png)
 }
 
 /**

@@ -469,7 +469,7 @@ function AudioLane({ tl, width }: { tl: Timeline; width: number }) {
   const videos = plan.clips.filter((c) => c.kind === 'video')
   const tracks = project.music.filter((m) => m.playback && m.status === 'ready').map((m) => ({ path: m.playback!, duration: m.duration }))
   const waves = useWaveforms(tracks)
-  const beats = useMemo(() => musicBeatTimes(project, tl.duration), [project, tl])
+  const beats = useMemo(() => musicBeatTimes(project, tl.duration, tl), [project, tl])
   const maxGain = Math.max(0.01, ...music.map((c) => Math.max(...c.gain.map((g) => g.g))))
   const points = useMemo(() => {
     if (!music.length) return ''
