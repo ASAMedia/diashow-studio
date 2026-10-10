@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { appArgs } from './launch'
+import { appArgs, EXPORT_SIZE, SOFTWARE_GL } from './launch'
 
 const root = resolve(__dirname, '..')
 const mediaDir = join(root, 'test-media')
@@ -20,6 +20,7 @@ function listFiles(dir: string): string[] {
 }
 
 test('import, preview every theme, export', async () => {
+  test.setTimeout((SOFTWARE_GL ? 30 : 10) * 60 * 1000)
   if (!existsSync(mediaDir)) execFileSync('node', ['scripts/make-test-media.mjs'], { cwd: root, stdio: 'inherit' })
   mkdirSync(shots, { recursive: true })
   const dataDir = mkdtempSync(join(tmpdir(), 'diashow-e2e-'))
@@ -200,15 +201,15 @@ test('import, preview every theme, export', async () => {
 
   const out = join(dataDir, 'export.mp4')
   await page.evaluate(
-    async (outPath) => {
+    async ({ outPath, size }) => {
       const d = (window as any).__diashow
       d.store.getState().setTheme('classic')
       d.store.getState().setSettings({ timing: { mode: 'custom', customTotal: 16 } })
       await new Promise((r) => setTimeout(r, 100))
       const project = d.store.getState().project
-      return d.exportShow(project, { outPath, width: 1280, height: 720, fps: 30, codec: 'h264', quality: 'standard', hardware: true }, 'de-DE', () => {}, new AbortController().signal)
+      return d.exportShow(project, { outPath, ...size, fps: 30, codec: 'h264', quality: 'standard', hardware: true }, 'de-DE', () => {}, new AbortController().signal)
     },
-    out
+    { outPath: out, size: EXPORT_SIZE }
   )
   const probe = execFileSync(join(root, 'vendor/ffmpeg/bin/ffprobe.exe'), ['-v', 'error', '-show_entries', 'stream=codec_type,codec_name,width,height:format=duration', '-of', 'compact', out]).toString()
   console.log(probe)

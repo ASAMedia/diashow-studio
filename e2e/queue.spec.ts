@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { launchOptions } from './launch'
+import { EXPORT_SIZE, launchOptions, SOFTWARE_GL } from './launch'
 
 const root = resolve(__dirname, '..')
 const mediaDir = join(root, 'test-media')
@@ -29,7 +29,7 @@ const probe = (file: string): { frames: number; duration: number; audio: boolean
 const jobs = (page: Page): Promise<any[]> => page.evaluate(() => (window as any).__diashow.store.getState().exportJobs)
 
 test('export queue: background jobs one after another, resume after a worker crash', async () => {
-  test.setTimeout(20 * 60 * 1000)
+  test.setTimeout((SOFTWARE_GL ? 40 : 20) * 60 * 1000)
   if (!existsSync(mediaDir)) execFileSync('node', ['scripts/make-test-media.mjs'], { cwd: root, stdio: 'inherit' })
   const dataDir = mkdtempSync(join(tmpdir(), 'diashow-queue-'))
   const app = await electron.launch(launchOptions(root, dataDir))
@@ -66,11 +66,11 @@ test('export queue: background jobs one after another, resume after a worker cra
       },
       { name, w, h, file }
     )
-  const a = join(dataDir, 'a-720p.mp4')
-  const b = join(dataDir, 'b-360p.mp4')
+  const a = join(dataDir, 'a-large.mp4')
+  const b = join(dataDir, 'b-small.mp4')
   const t0 = Date.now()
-  await add('A', 1280, 720, a)
-  await add('B', 640, 360, b)
+  await add('A', EXPORT_SIZE.width, EXPORT_SIZE.height, a)
+  await add('B', EXPORT_SIZE.width / 2, EXPORT_SIZE.height / 2, b)
 
   // the editor stays usable meanwhile: the chip shows progress, the preview plays
   await expect(page.locator('.queue-chip')).toBeVisible({ timeout: 30_000 })
@@ -98,7 +98,7 @@ test('export queue: background jobs one after another, resume after a worker cra
 
   // crash the worker after the first segment: the job comes back and finishes
   const c = join(dataDir, 'c-crash.mp4')
-  await add('C', 1280, 720, c)
+  await add('C', EXPORT_SIZE.width, EXPORT_SIZE.height, c)
   await expect.poll(async () => (await jobs(page)).find((j) => j.name === 'C')?.frame ?? 0, { timeout: 300_000, intervals: [250] }).toBeGreaterThan(30 * 30 + 20)
   const crashed = await app.evaluate(({ BrowserWindow }) => {
     const worker = BrowserWindow.getAllWindows().find((w) => !w.isVisible())

@@ -6,7 +6,7 @@ import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import sharp from 'sharp'
-import { launchOptions } from './launch'
+import { EXPORT_SIZE, launchOptions, SOFTWARE_GL } from './launch'
 
 const root = resolve(__dirname, '..')
 const mediaDir = join(root, 'test-media')
@@ -38,7 +38,7 @@ async function diff(a: Buffer, b: Buffer, box: { x: number; y: number; w: number
 }
 
 test('review grid, batch edits, text boxes, pixelation, speed, song section, export', async () => {
-  test.setTimeout(15 * 60 * 1000)
+  test.setTimeout((SOFTWARE_GL ? 30 : 15) * 60 * 1000)
   if (!existsSync(mediaDir)) execFileSync('node', ['scripts/make-test-media.mjs'], { cwd: root, stdio: 'inherit' })
   const dataDir = mkdtempSync(join(tmpdir(), 'diashow-feat-'))
   const app = await electron.launch(launchOptions(root, dataDir))
@@ -143,10 +143,10 @@ test('review grid, batch edits, text boxes, pixelation, speed, song section, exp
   // ---- export everything (text box, pixelation, slowed videos)
   const out = join(dataDir, 'features.mp4')
   const duration = await state<number>(page, `return d.player.current.tl.duration`)
-  await page.evaluate(async (outPath) => {
+  await page.evaluate(async ({ outPath, size }) => {
     const d = (window as any).__diashow
-    await d.exportShow(d.store.getState().project, { outPath, width: 1280, height: 720, fps: 30, codec: 'h264', quality: 'standard', hardware: true }, 'de-DE', () => {}, new AbortController().signal)
-  }, out)
+    await d.exportShow(d.store.getState().project, { outPath, ...size, fps: 30, codec: 'h264', quality: 'standard', hardware: true }, 'de-DE', () => {}, new AbortController().signal)
+  }, { outPath: out, size: EXPORT_SIZE })
   const probe = execFileSync(ffprobe, ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', out]).toString().trim()
   console.log('export', probe, 's for a', duration.toFixed(2), 's show')
   expect(Math.abs(Number(probe) - duration)).toBeLessThan(0.2)
