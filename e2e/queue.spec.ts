@@ -74,16 +74,16 @@ test('export queue: background jobs one after another, resume after a worker cra
 
   // the editor stays usable meanwhile: the chip shows progress, the preview plays
   await expect(page.locator('.queue-chip')).toBeVisible({ timeout: 30_000 })
-  const played = await page.evaluate(async () => {
+  await page.evaluate(() => {
     const pl = (window as any).__diashow.player.current
     pl.seek(0)
     pl.play()
-    await new Promise((r) => setTimeout(r, 1500))
-    pl.pause()
-    return pl.t
   })
-  expect(played).toBeGreaterThan(1)
-  await page.locator('.queue-chip').click()
+  // a busy machine without a GPU draws few frames, but the clock must keep going
+  await expect.poll(() => page.evaluate(() => (window as any).__diashow.player.current.t), { timeout: 8_000 }).toBeGreaterThan(1)
+  await page.evaluate(() => (window as any).__diashow.player.current.pause())
+  // small exports can be done before a click lands on the chip: open the list directly
+  await page.evaluate(() => (window as any).__diashow.store.getState().set({ dialog: 'queue' }))
   await expect(page.locator('.job')).toHaveCount(2)
   await page.keyboard.press('Escape')
 

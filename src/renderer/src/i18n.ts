@@ -444,6 +444,9 @@ const S = {
   reviewExportHint: ['{n} Folie(n) zeigen Gesichter, die nicht verpixelt sind.', '{n} slide(s) show faces that are not pixelated.'],
   reviewCheck: ['Gesichter prüfen …', 'Check faces…'],
   peopleWrongLast: ['Dieser falsche Treffer ähnelt jedem Vergleichsbild der Person. Die Person ganz entfernen? (Danach ein deutliches Foto von ihr neu markieren.)', 'This wrong match looks like every reference face of the person. Remove the person? (Then mark a clear photo of them again.)'],
+  sharePlacement: ['Neue Fotos', 'New photos'],
+  sharePlaceByTime: ['in ihren Tag einsortieren (nach Aufnahmezeit)', 'sorted into their day (by capture time)'],
+  sharePlaceSelection: ['hinter die ausgewählte Folie', 'after the selected slide'],
 } satisfies Record<string, [string, string]>
 
 export type StringKey = keyof typeof S

@@ -146,3 +146,68 @@ export function resizeSlide(p: Project, slideIds: string[], delta: 1 | -1): void
   const after = p.entries[p.entries.indexOf(next) + 1]
   if (after && after.groupBreak !== 'join') after.groupBreak = 'force'
 }
+
+/**
+ * New entries go where their capture time belongs: among the show's photos and videos in time
+ * order, inside their day's chapter (behind its title slide), or in front of the next day's title.
+ * Undated items, and items newer than everything, go to the end (before closing credits).
+ */
+export function insertByTime(entries: Entry[], fresh: Entry[], media: Map<string, MediaItem>): Entry[] {
+  const time = (e: Entry): number => (e.type === 'text' ? 0 : (media.get(e.mediaId)?.captureTime ?? 0))
+  const out = [...entries]
+  // undated ones last, behind everything that has a date
+  for (const e of [...fresh].sort((a, b) => (time(a) || Infinity) - (time(b) || Infinity))) {
+    const t = time(e)
+    let at = t ? out.findIndex((x) => x.type !== 'text' && time(x) > t) : -1
+    if (at < 0) {
+      at = out.length
+      while (at > 0 && out[at - 1].type === 'text' && (out[at - 1] as TextEntry).titleStyle === 'credits') at--
+    } else {
+      // text slides right before the later item open its chapter: that is this item's chapter only on the same day
+      let k = at
+      while (k > 0 && out[k - 1].type === 'text') k--
+      if (k < at && dayKey(time(out[at])) !== dayKey(t)) at = k
+    }
+    out.splice(at, 0, e)
+  }
+  return out
+}
+
+/** True when the show's day titles were made from capture dates ("Day titles from capture date"). */
+export function hasDateTitles(entries: Entry[], media: Map<string, MediaItem>): boolean {
+  const fmtDate = new Intl.DateTimeFormat(localeTag(), { day: 'numeric', month: 'long', year: 'numeric' })
+  return entries.some((e, i) => {
+    if (e.type !== 'text' || e.auto !== 'day') return false
+    const next = entries.slice(i + 1).find((x) => x.type !== 'text')
+    const m = next ? media.get(next.mediaId) : undefined
+    return !!m?.captureTime && fmtDate.format(m.captureTime) === e.subtitle
+  })
+}
+
+/** Adds a date title in front of every day that starts without one. */
+export function addMissingDayTitles(entries: Entry[], media: Map<string, MediaItem>): Entry[] {
+  const fmtDay = new Intl.DateTimeFormat(localeTag(), { weekday: 'long' })
+  const fmtDate = new Intl.DateTimeFormat(localeTag(), { day: 'numeric', month: 'long', year: 'numeric' })
+  const out: Entry[] = []
+  let last = ''
+  let titled = false
+  for (const e of entries) {
+    if (e.type === 'text') {
+      if (e.auto === 'day') titled = true
+      out.push(e)
+      continue
+    }
+    const m = media.get(e.mediaId)
+    const key = m?.captureTime ? dayKey(m.captureTime) : last
+    if (m?.captureTime && key !== last && !titled) {
+      // in front of the text slides that already lead into this item
+      let at = out.length
+      while (at > 0 && out[at - 1].type === 'text') at--
+      out.splice(at, 0, { id: uid(), type: 'text', auto: 'day', title: fmtDay.format(m.captureTime), subtitle: fmtDate.format(m.captureTime) })
+    }
+    last = key
+    titled = false
+    out.push(e)
+  }
+  return out
+}

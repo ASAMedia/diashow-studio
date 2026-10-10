@@ -60,7 +60,8 @@ interface State {
   sortByDate(): void
   setSettings(patch: Partial<ProjectSettings>): void
   setTheme(theme: ThemeId): void
-  importMedia(paths: string[]): Promise<void>
+  /** New files go behind the selection, or (`byTime`) where their capture time belongs. */
+  importMedia(paths: string[], placement?: 'selection' | 'byTime'): Promise<void>
   addMusic(paths: string[]): Promise<void>
   addText(): void
   /** Rolling end credits as the last slide. */
@@ -265,7 +266,7 @@ export const useStore = create<State>((set, get) => ({
     })
   },
 
-  async importMedia(paths) {
+  async importMedia(paths, placement = 'selection') {
     const items = await window.api.importPaths(paths)
     if (!items.length) return
     const { selection } = get()
@@ -273,6 +274,14 @@ export const useStore = create<State>((set, get) => ({
       const known = new Set(p.media.map((m) => m.id))
       for (const m of items) if (!known.has(m.id)) p.media.push(m)
       const fresh = entriesFor(items)
+      if (placement === 'byTime') {
+        const media = new Map(p.media.map((m) => [m.id, m]))
+        const dated = edits.hasDateTitles(p.entries, media)
+        p.entries = edits.insertByTime(p.entries, fresh, media)
+        // a show with day titles gets one for a day that came in new
+        if (dated) p.entries = edits.addMissingDayTitles(p.entries, media)
+        return
+      }
       const after = selection.length ? p.entries.findIndex((e) => e.id === selection[selection.length - 1]) : -1
       if (after >= 0) p.entries.splice(after + 1, 0, ...fresh)
       else p.entries.push(...fresh)

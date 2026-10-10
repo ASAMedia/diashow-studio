@@ -47,6 +47,10 @@ export function ShareDialog() {
   const [copied, setCopied] = useState(false)
   const [mobileJob, setMobileJob] = useState<string | null>(null)
   const pending = useRef<{ paths: string[]; first: number; timer?: ReturnType<typeof setTimeout> }>({ paths: [], first: 0 })
+  // where arrived files go: into their day by capture time, or behind the selected slide
+  const [placement, setPlacement] = useState<'byTime' | 'selection'>('byTime')
+  const placementRef = useRef(placement)
+  placementRef.current = placement
 
   useEffect(() => {
     let alive = true
@@ -59,7 +63,7 @@ export function ShareDialog() {
       p.timer = undefined
       const paths = p.paths.splice(0)
       p.first = 0
-      if (paths.length && useStore.getState().project) void useStore.getState().importMedia(paths)
+      if (paths.length && useStore.getState().project) void useStore.getState().importMedia(paths, placementRef.current)
     }
     const offFiles = window.api.onShareFiles((ev) => {
       if (useStore.getState().project?.id !== ev.projectId) return
@@ -242,6 +246,13 @@ export function ShareDialog() {
                   <input type="checkbox" checked={!!status?.collecting} onChange={(e) => void control({ type: 'collect', on: e.target.checked })} />
                   <span>{t('shareAccept')}</span>
                 </label>
+                <div className="row">
+                  <label>{t('sharePlacement')}</label>
+                  <select value={placement} onChange={(e) => setPlacement(e.target.value as 'byTime' | 'selection')}>
+                    <option value="byTime">{t('sharePlaceByTime')}</option>
+                    <option value="selection">{t('sharePlaceSelection')}</option>
+                  </select>
+                </div>
                 {limits && (
                   <p className="hint" style={{ marginTop: 0 }}>
                     {t('shareLimits').replace('{p}', size(limits.photo)).replace('{v}', size(limits.video))} {t('shareAutoImport')}

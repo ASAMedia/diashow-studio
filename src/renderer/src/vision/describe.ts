@@ -15,11 +15,27 @@ const tfx = tf as unknown as TfExtra
 let net: Promise<FaceRecognitionNet> | null = null
 export let tfBackend = ''
 
+/**
+ * WebGL emulated on the CPU (no graphics driver: SwiftShader, llvmpipe, Microsoft Basic Render)
+ * runs in the same GPU process as the preview and would stall it; the CPU backend doesn't.
+ */
+function softwareWebGL(): boolean {
+  try {
+    const gl = new OffscreenCanvas(1, 1).getContext('webgl2')
+    if (!gl) return true
+    const renderer = String(gl.getParameter(gl.RENDERER) ?? '')
+    gl.getExtension('WEBGL_lose_context')?.loseContext()
+    return /swiftshader|llvmpipe|softpipe|basic render|software/i.test(renderer)
+  } catch {
+    return true
+  }
+}
+
 /** Loads the recognition model (face_recognition_model.bin, 6.4 MB) from `base`. */
 export function loadRecognizer(base: string): Promise<FaceRecognitionNet> {
   net ??= (async () => {
-    // WebGL through an OffscreenCanvas; the CPU backend is slow but always there
-    if (!(await tfx.setBackend('webgl').catch(() => false))) await tfx.setBackend('cpu')
+    // WebGL through an OffscreenCanvas; the CPU backend is slower but always there
+    if (softwareWebGL() || !(await tfx.setBackend('webgl').catch(() => false))) await tfx.setBackend('cpu')
     await tfx.ready()
     tfBackend = tfx.getBackend()
     const manifest = (await (await fetch(`${base}face_recognition_model-weights_manifest.json`)).json()) as { weights: Parameters<typeof tf.io.decodeWeights>[1] }[]

@@ -3,6 +3,8 @@ import { buildTimeline } from '@shared/timeline'
 import { buildAudioPlan, audibleClips } from '@shared/audioPlan'
 import { DEFAULT_SETTINGS, type Entry, type MediaItem, type Project } from '@shared/types'
 import { showsWhole } from '../src/renderer/src/engine/draw'
+import { addMissingDayTitles, hasDateTitles, insertByTime } from '../src/renderer/src/entryEdits'
+import { localeTag } from '../src/renderer/src/i18n'
 
 // the store saves through window.api; a stub is enough here
 ;(globalThis as unknown as { window: unknown }).window = { api: { saveProject: async () => {} } }
@@ -159,5 +161,44 @@ describe('undo, durations and day titles', () => {
     useStore.setState({ project: project([text('t1'), a, b, c, text('t2'), d, text('end')], media) })
     useStore.getState().sortByDate()
     expect(p().entries.map((e) => e.id)).toEqual(['t2', 'd', 't1', 'a', 'b', 'c', 'end'])
+  })
+})
+
+describe('uploads sorted into their day', () => {
+  const at = (d: number, h: number): number => new Date(2026, 1, d, h).getTime()
+  const media = new Map(
+    [
+      { ...photo('mo1'), captureTime: at(16, 9) },
+      { ...photo('mo2'), captureTime: at(16, 18) },
+      { ...photo('di1'), captureTime: at(17, 9) },
+      { ...photo('new-mo'), captureTime: at(16, 20) },
+      { ...photo('new-di'), captureTime: at(17, 7) },
+      { ...photo('new-mi'), captureTime: at(18, 12) },
+      { ...photo('undated'), captureTime: 0 }
+    ].map((m) => [m.id, m])
+  )
+  const ph = (id: string): Entry => ({ id, type: 'photo', mediaId: id })
+  const title = (id: string, d: number): Entry => ({
+    id, type: 'text', auto: 'day',
+    title: new Intl.DateTimeFormat(localeTag(), { weekday: 'long' }).format(at(d, 9)),
+    subtitle: new Intl.DateTimeFormat(localeTag(), { day: 'numeric', month: 'long', year: 'numeric' }).format(at(d, 9))
+  })
+  const show: Entry[] = [title('tMo', 16), ph('mo1'), ph('mo2'), title('tDi', 17), ph('di1'), { id: 'credits', type: 'text', title: 'Danke', titleStyle: 'credits' }]
+
+  it('puts each item in time order inside its own day, before closing credits', () => {
+    const out = insertByTime(show, [ph('new-di'), ph('new-mo'), ph('undated'), ph('new-mi')], media)
+    expect(out.map((e) => e.id)).toEqual(['tMo', 'mo1', 'mo2', 'new-mo', 'tDi', 'new-di', 'di1', 'new-mi', 'undated', 'credits'])
+  })
+
+  it('adds a date title for a new day when the show has date titles', () => {
+    expect(hasDateTitles(show, media)).toBe(true)
+    expect(hasDateTitles([{ id: 'x', type: 'text', auto: 'day', title: 'Sonntag', subtitle: 'Unser erster Tag' }, ph('mo1')], media)).toBe(false)
+    const out = addMissingDayTitles(insertByTime(show, [ph('new-mi')], media), media)
+    const ids = out.map((e) => e.id)
+    expect(ids.slice(0, 5)).toEqual(['tMo', 'mo1', 'mo2', 'tDi', 'di1'])
+    const added = out[5] as { type: string; auto?: string; subtitle?: string }
+    expect(added).toMatchObject({ type: 'text', auto: 'day' })
+    expect(added.subtitle).toBe(new Intl.DateTimeFormat(localeTag(), { day: 'numeric', month: 'long', year: 'numeric' }).format(at(18, 12)))
+    expect(ids.slice(6)).toEqual(['new-mi', 'credits'])
   })
 })

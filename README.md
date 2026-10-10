@@ -80,7 +80,9 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
   - Missing originals (moved folder, new drive letter) are found again with "Search a folder…" in the banner.
   - Settings show how much cache each part uses, with buttons to remove unused files, 4K versions or video proxies.
 - **Share over Wi-Fi** ("⋯" menu), local network only, no internet:
-  - Collect photos: the laptop shows a QR code. Pupils open a page on their phones, enter their name if they like and upload photos and videos, which go straight into the show (sorted into folders per name).
+  - Collect photos: the laptop shows a QR code. Pupils open a page on their phones, enter their name if they like and upload photos and videos.
+    - Files are stored in `Documents\Diashow Studio\Uploads\<project>\<name>\`.
+    - In the show they are sorted into their day by capture time. A show with day titles gets a new title for a day that wasn't there yet. They can also go after the selected slide instead.
   - Hand out the video: offered files (e.g. a finished 720p export from the queue) can be watched and saved on the phones.
   - The server only runs while the dialog is open and only answers links with a random token.
   - On first use Windows asks whether to allow network access. On guest Wi-Fi that keeps devices apart, the Windows mobile hotspot helps.

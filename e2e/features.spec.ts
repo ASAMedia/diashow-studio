@@ -37,6 +37,41 @@ async function diff(a: Buffer, b: Buffer, box: { x: number; y: number; w: number
   return { inside: inS / Math.max(1, inN), outside: outS / Math.max(1, outN) }
 }
 
+/** Bounding box (fractions) of the pixels that differ between two screenshots, and their share. */
+async function changedArea(a: Buffer, b: Buffer): Promise<{ x: number; y: number; w: number; h: number; share: number }> {
+  const [ra, rb] = await Promise.all([a, b].map((x) => sharp(x).removeAlpha().raw().toBuffer({ resolveWithObject: true })))
+  const { width, height } = ra.info
+  let x0 = width, y0 = height, x1 = -1, y1 = -1, n = 0
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 3
+      const d = Math.abs(ra.data[i] - rb.data[i]) + Math.abs(ra.data[i + 1] - rb.data[i + 1]) + Math.abs(ra.data[i + 2] - rb.data[i + 2])
+      if (d < 6) continue
+      n++
+      x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y)
+    }
+  }
+  return n ? { x: x0 / width, y: y0 / height, w: (x1 - x0 + 1) / width, h: (y1 - y0 + 1) / height, share: n / (width * height) } : { x: 0, y: 0, w: 0, h: 0, share: 0 }
+}
+
+/**
+ * A screenshot of the preview once it stopped changing: full-size photos loaded, fades done, the
+ * mouse away (hover outlines). Slow machines (CI without a GPU) need this before comparing.
+ */
+async function settledShot(page: Page): Promise<Buffer> {
+  const frame = page.locator('.frame')
+  await page.mouse.move(1, 1)
+  await page.waitForFunction(() => (window as any).__diashow.player.current.engine.missing === 0, null, { timeout: 60_000 })
+  let last = await frame.screenshot()
+  for (let i = 0; i < 40; i++) {
+    await page.waitForTimeout(250)
+    const next = await frame.screenshot()
+    if (next.equals(last)) return next
+    last = next
+  }
+  return last
+}
+
 test('review grid, batch edits, text boxes, pixelation, speed, song section, export', async () => {
   test.setTimeout((SOFTWARE_GL ? 30 : 15) * 60 * 1000)
   if (!existsSync(mediaDir)) execFileSync('node', ['scripts/make-test-media.mjs'], { cwd: root, stdio: 'inherit' })
@@ -98,9 +133,7 @@ test('review grid, batch edits, text boxes, pixelation, speed, song section, exp
   // ---- a free text box on the first photo slide, dragged in the preview
   const photoSlide = await state<{ ids: string[]; start: number; transIn: number }>(page, `const sl = d.player.current.tl.slides.find((x) => x.kind === 'photos'); return { ids: sl.entries.map((e) => e.id), start: sl.start, transIn: sl.transIn }`)
   await state(page, `s.select(${JSON.stringify(photoSlide.ids)}); s.set({ tab: 'slide' })`)
-  await page.waitForTimeout(400)
-  const frame = page.locator('.frame')
-  const plain = await frame.screenshot()
+  const plain = await settledShot(page)
   await page.locator('.inspector button', { hasText: /Textfeld hinzufügen|Add text box/ }).click()
   await expect(page.locator('.free-text')).toHaveCount(1)
   const fbox = (await page.locator('.free-text').boundingBox())!
@@ -111,20 +144,24 @@ test('review grid, batch edits, text boxes, pixelation, speed, song section, exp
   const ft = await state<{ x: number; y: number }>(page, `const ft = s.project.entries.flatMap((e) => e.texts ?? [])[0]; return { x: ft.x, y: ft.y }`)
   expect(ft.x).toBeLessThan(0.45)
   expect(ft.y).toBeGreaterThan(0.55)
-  await page.waitForTimeout(300)
-  const withText = await frame.screenshot()
+  // no selection outline in the pictures that are compared
+  await state(page, `s.set({ textSel: null })`)
+  const withText = await settledShot(page)
   const textDiff = await diff(plain, withText, { x: ft.x - 0.12, y: ft.y - 0.08, w: 0.24, h: 0.16 })
   console.log('text box: change inside/outside', textDiff)
   expect(textDiff.inside).toBeGreaterThan(8)
 
   // ---- pixelate an area of that photo (set directly), editor opens and closes
   await state(page, `s.set({ textSel: null }); s.updateEntries([${JSON.stringify(photoSlide.ids[0])}], (e) => (e.privacy = [{ x: 0.55, y: 0.15, w: 0.3, h: 0.35 }]))`)
-  await page.waitForTimeout(400)
-  const pixelated = await frame.screenshot()
-  const privDiff = await diff(withText, pixelated, { x: 0.55, y: 0.15, w: 0.3, h: 0.35 })
-  console.log('pixelation: change inside/outside', privDiff)
-  expect(privDiff.inside).toBeGreaterThan(5)
-  expect(privDiff.outside).toBeLessThan(privDiff.inside / 5)
+  const pixelated = await settledShot(page)
+  // The area is set on the picture and the photo is cropped to fill the slide, so where it lands
+  // on screen depends on the crop: check that only one compact patch in the upper right changed.
+  const patch = await changedArea(withText, pixelated)
+  console.log('pixelation: changed patch', patch)
+  expect(patch.share).toBeGreaterThan(0.02)
+  expect(patch.w * patch.h).toBeLessThan(0.45)
+  expect(patch.x + patch.w / 2).toBeGreaterThan(0.5)
+  expect(patch.y + patch.h / 2).toBeLessThan(0.6)
   await page.locator('.inspector button', { hasText: /Gesichter verpixeln|Pixelate faces/ }).first().click()
   await expect(page.locator('.privacy-edit')).toBeVisible()
   await expect(page.locator('.privacy-face.on')).toHaveCount(1)

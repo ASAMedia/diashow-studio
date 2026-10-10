@@ -166,10 +166,11 @@ test('import, preview every theme, export', async () => {
   expect(await slideIds()).toEqual(after)
 
   // presentation: a second window plays the show, Esc in the editor ends it
-  const presentWin = app.waitForEvent('window')
   await page.evaluate(() => (window as any).__diashow.store.getState().set({ presenting: true }))
-  const pw = await presentWin
-  await pw.waitForFunction(() => location.hash === '#present' && !!document.querySelector('canvas'))
+  // the show window by its address (other windows, e.g. the export worker, may open too); slow without a GPU
+  await expect.poll(() => app.windows().some((w) => w.url().includes('#present')), { timeout: 60_000 }).toBe(true)
+  const pw = app.windows().find((w) => w.url().includes('#present'))!
+  await pw.waitForFunction(() => !!document.querySelector('canvas'), null, { timeout: 60_000 })
   await page.waitForTimeout(2500)
   const presenterTime = await page.locator('.presenter .val').innerText()
   console.log('presenter shows', presenterTime)
