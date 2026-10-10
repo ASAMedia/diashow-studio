@@ -169,19 +169,6 @@ export function drawMedia(ctx: Ctx, tex: Tex | null, aspect: number, box: Box, o
 }
 
 /**
- * Cover when the aspect ratios are close; otherwise contain over a blurred, darkened copy
- * (portrait phone videos in a 16:9 show). Keeps a rotation pivot consistent across both quads.
- */
-export function drawFitted(ctx: Ctx, tex: Tex | null, aspect: number, box: Box, o: MediaDrawOpts = {}, tolerance = 0.22): Box {
-  if (!tex || Math.abs(Math.log(aspect / (box.w / box.h))) < tolerance) return drawMedia(ctx, tex, aspect, box, { ...o, fit: 'cover' })
-  drawMedia(ctx, tex, aspect, box, { ...o, fit: 'cover', blur: 5, shade: Math.max(o.shade ?? 0, 0.68), zoom: 1.12 })
-  const inner = containBox(aspect, box)
-  const pv = o.pivot ?? [0.5, 0.5]
-  const pivot: [number, number] = [(box.x + pv[0] * box.w - inner.x) / inner.w, (box.y + pv[1] * box.h - inner.y) / inner.h]
-  return drawMedia(ctx, tex, aspect, inner, { ...o, fit: 'cover', pivot })
-}
-
-/**
  * Whether an entry is shown whole (fitted into its cell) instead of cropped. Photos follow
  * their own choice or the project's "crop to fill"; videos without a choice are cropped only
  * when their shape is close to the cell's.

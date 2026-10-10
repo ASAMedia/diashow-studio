@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs'
 import { setPriority } from 'node:os'
 import { join } from 'node:path'
 import type { EncoderInfo } from '@shared/types'
+import { abortError } from './abort'
 
 const EXE = process.platform === 'win32' ? '.exe' : ''
 
@@ -110,12 +111,6 @@ export function summarizeStderr(stderr: string): string {
     .filter((l) => l && !/^(Fontconfig|\[out#|Conversion failed|Error opening output files)/i.test(l))
   const last = lines[lines.length - 1] ?? ''
   return last.length > 200 ? last.slice(0, 200) + '…' : last
-}
-
-function abortError(): Error {
-  const e = new Error('cancelled')
-  e.name = 'AbortError'
-  return e
 }
 
 /** Encoder detection result per FFmpeg binary, shared by all Ffmpeg instances. */

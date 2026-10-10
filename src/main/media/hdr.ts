@@ -102,8 +102,3 @@ async function detect(ff: Ffmpeg): Promise<GpuTonemap | null> {
     await Promise.all([plain, clip, raw].map((f) => rm(f, { force: true })))
   }
 }
-
-/** For tests: forget cached detection results. */
-export function resetGpuTonemapCache(): void {
-  cache.clear()
-}

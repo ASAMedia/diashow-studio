@@ -6,6 +6,7 @@
 // read one FFmpeg process each, seeking with -ss before -i. Processes run below normal priority:
 // this is background work.
 import { constants, setPriority } from 'node:os'
+import { abortError } from '../abort'
 import type { Ffmpeg } from '../ffmpeg'
 import { fitEven, TONEMAP_CHAIN } from './video'
 import { analyzeVideo, type VideoInfo } from './videoInfo'
@@ -69,12 +70,6 @@ function filters(info: VideoInfo, maxEdge: number, select?: string): string {
   if (info.hdr) parts.push(TONEMAP_CHAIN)
   parts.push('setsar=1', 'scale=out_range=pc,format=yuvj420p')
   return parts.join(',')
-}
-
-function abortError(): Error {
-  const err = new Error('cancelled')
-  err.name = 'AbortError'
-  return err
 }
 
 /** Runs FFmpeg below normal priority and returns its stdout. */

@@ -1,6 +1,7 @@
 // Small building blocks shared by the inspector panels.
 import type { ReactNode } from 'react'
-import type { TextFont } from '@shared/types'
+import type { TextFont, TitleStyle } from '@shared/types'
+import type { StringKey } from '../i18n'
 
 export function Section(props: { title: string; children: ReactNode }) {
   return (
@@ -41,4 +42,11 @@ export const FONTS: { id: TextFont; label: string; family: string }[] = [
   { id: 'editorial', label: 'Playfair Display', family: 'Playfair Display' },
   { id: 'type', label: 'Special Elite', family: 'Special Elite' },
   { id: 'hand', label: 'Caveat', family: 'Caveat' }
+]
+
+export const TITLE_STYLES: { id: TitleStyle; label: StringKey }[] = [
+  { id: 'theme', label: 'styleTheme' },
+  { id: 'handwriting', label: 'styleHandwriting' },
+  { id: 'typewriter', label: 'styleTypewriter' },
+  { id: 'bigDate', label: 'styleBigDate' }
 ]

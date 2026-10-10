@@ -204,12 +204,6 @@ export function canCopyAudio(probe: ProbeResult, info: VideoInfo): boolean {
   return s.codec_name === 'aac' && /^lc$/i.test(s.profile ?? '') && (s.channels ?? 0) >= 1 && (s.channels ?? 0) <= 2 && rate >= 8000 && rate <= 96000
 }
 
-/** Why the original can't be played as is ('container', 'rotation', 'hdr', …), or null (playbackPlan 'direct'). */
-export function proxyReason(path: string, probe: ProbeResult, info: VideoInfo, decode: DirectDecode = {}): string | null {
-  const plan = playbackPlan(path, probe, info, decode)
-  return plan.kind === 'direct' ? null : plan.reason
-}
-
 /** True when Chromium can play the original file as is (playbackPlan 'direct'). */
 export function isDirectPlayable(path: string, probe: ProbeResult, info: VideoInfo, decode: DirectDecode = {}): boolean {
   return playbackPlan(path, probe, info, decode).kind === 'direct'

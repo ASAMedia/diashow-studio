@@ -458,10 +458,6 @@ export function t(key: StringKey): string {
   return S[key][lang]
 }
 
-export function isGerman(): boolean {
-  return lang === 0
-}
-
 export function localeTag(): string {
   return lang === 0 ? 'de-DE' : 'en-US'
 }

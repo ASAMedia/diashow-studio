@@ -2,95 +2,34 @@
 // worker window in segments of 30 s, so they run one after another in the background and continue
 // after a crash or a restart from the last finished segment.
 //
-// Per job folder: job.json (the NewExportJob snapshot + state), mix.wav (the audio plan, mixed once
-// at the first start while the worker renders), and seg-NNNNN.h264 / .hevc, one elementary stream
-// per finished segment, each starting with an IDR picture. Raw segments ('yuv' / 'rgba' frames) are
-// encoded by FFmpeg with the same arguments as a regular export; encoded segments ('h264' / 'hevc'
-// from WebCodecs) are stored as they come. After the last segment the streams are joined in order
-// and muxed with mix.wav like a regular WebCodecs export (AnnexBToTs → FFmpeg stream copy → MP4).
+// The job folders are described in jobStore.ts, the segments in segments.ts. After the last segment
+// the streams are joined in order and muxed with mix.wav (assemble.ts).
 //
 // Window management and IPC live in queueMain.ts.
-import type { ChildProcess } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { once } from 'node:events'
-import { createReadStream, createWriteStream, existsSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
-import { mkdir, readdir, rename, rm } from 'node:fs/promises'
-import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path'
-import { finished } from 'node:stream/promises'
-import type { ExportJobInfo, ExportJobRequest, ExportJobState, ExportTask, NewExportJob, SegmentInput } from '@shared/exportQueue'
-import type { AudioPlan, AudioPlanClip, EncoderInfo, ExportQuality, Project, VideoCodec } from '@shared/types'
-import { Ffmpeg, summarizeStderr } from '../ffmpeg'
-import { videoStream } from '../media/videoInfo'
-import { AnnexBFrameCounter, AnnexBToTs } from './annexb'
+import { existsSync } from 'node:fs'
+import { mkdir, rename, rm } from 'node:fs/promises'
+import { join, resolve } from 'node:path'
+import type { ExportJobInfo, ExportJobState, ExportTask } from '@shared/exportQueue'
+import type { EncoderInfo } from '@shared/types'
+import { abortError } from '../abort'
+import { Ffmpeg } from '../ffmpeg'
+import { joinSegments } from './assemble'
 import { mixAudioPlan } from './audioMix'
-import { AUDIO_OUT_ARGS, copyVideoArgs, encoderArgs, pickEncoder, rawInputArgs, rawVideoFilter } from './encoder'
+import { pickEncoder } from './encoder'
+import {
+  CLIPS_DIR, currentFrame, deleteWorkFiles, loadJobs, makeJob, mixPath, partialOutputPath, remaining, saveJob, segmentCount, segmentLength,
+  segmentPath, type Job, type JobFile, type Phase
+} from './jobStore'
+import { openChunkSegment, openRawSegment } from './segments'
+import { validateId, validateInput, validateNewJob } from './validate'
+
+export { partialOutputPath } from './jobStore'
 
 /** Seconds of video per segment: what a crash can cost at most. */
 export const SEGMENT_SECONDS = 30
-const JOB_FILE = 'job.json'
-const MIX_FILE = 'mix.wav'
-const CLIPS_DIR = 'clips'
-const ID_RE = /^[0-9a-z]{6,12}-[0-9a-f]{8}$/
-const OUT_EXT = /\.(mp4|m4v|mov)$/i
-const QUALITIES: readonly ExportQuality[] = ['standard', 'high', 'max']
-const INPUTS: readonly SegmentInput[] = ['yuv', 'rgba', 'h264', 'hevc']
 /** States in which a job still holds (or will produce) work files. */
 const OPEN_STATES: readonly ExportJobState[] = ['queued', 'running', 'paused', 'error']
-
-// ------------------------------------------------------------------ stored jobs
-
-interface JobFile {
-  version: 1
-  id: string
-  name: string
-  request: ExportJobRequest
-  state: ExportJobState
-  totalFrames: number
-  segmentFrames: number
-  /** Finished segments, ascending. */
-  segments: number[]
-  /** Fixed by the first finished segment: all segments of a job use the same input and encoder. */
-  input?: SegmentInput
-  /** FFmpeg encoder of raw segments, 'webcodecs' for encoded ones. */
-  encoder?: string
-  error?: string
-  createdAt: number
-  startedAt?: number
-  finishedAt?: number
-  project: Project
-  audio: AudioPlan
-}
-
-type Phase = NonNullable<ExportJobInfo['phase']>
-
-interface Job {
-  file: JobFile
-  dir: string
-  /** "project" and "audio" of job.json, serialized once. */
-  snapshotJson: string
-  phase?: Phase
-  /** The worker has this job's task. */
-  attached: boolean
-  /** Automatic retries after the worker window crashed or hung. */
-  retries: number
-  segment: Segment | null
-  mixing: Promise<void> | null
-  mixAbort: AbortController | null
-  assembling: Promise<void> | null
-  assemblyAbort: AbortController | null
-  prepareAbort: AbortController | null
-  /** (time, frame) samples of the last seconds for the fps average. */
-  samples: Array<{ t: number; frame: number }>
-  lastActivity: number
-}
-
-const segmentName = (k: number, codec: VideoCodec): string => `seg-${String(k).padStart(5, '0')}.${codec}`
-
-/** Temp name of the MP4 next to the output, renamed over it once complete. */
-export function partialOutputPath(outPath: string, jobId: string): string {
-  const ext = extname(outPath)
-  return join(dirname(outPath), `${basename(outPath, ext)}.part-${jobId}${ext}`)
-}
 
 function samePath(a: string, b: string): boolean {
   const x = resolve(a)
@@ -101,311 +40,6 @@ function samePath(a: string, b: string): boolean {
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
-
-// ------------------------------------------------------------------ validation (data from the renderer)
-
-const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
-const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
-
-function validateRequest(raw: unknown): ExportJobRequest {
-  if (!isObject(raw)) throw new Error('export request missing')
-  const { outPath, width, height, fps, codec, quality, hardware, locale, hires } = raw
-  if (typeof outPath !== 'string' || !outPath || outPath.length > 1000 || outPath.includes('\0') || !isAbsolute(outPath)) {
-    throw new Error('the output must be an absolute file path')
-  }
-  if (!OUT_EXT.test(outPath)) throw new Error('the output must be an .mp4, .m4v or .mov file')
-  const out = resolve(outPath)
-  let folder = false
-  try {
-    folder = statSync(dirname(out)).isDirectory()
-  } catch {
-    // missing
-  }
-  if (!folder) throw new Error(`the folder ${dirname(out)} does not exist`)
-  for (const [key, v] of [['width', width], ['height', height]] as const) {
-    if (!(Number.isInteger(v) && (v as number) >= 16 && (v as number) <= 8192)) throw new Error(`invalid ${key}`)
-  }
-  if (!(finite(fps) && fps >= 1 && fps <= 240)) throw new Error('invalid frame rate')
-  if (codec !== 'h264' && codec !== 'hevc') throw new Error('invalid codec')
-  if (!QUALITIES.includes(quality as ExportQuality)) throw new Error('invalid quality')
-  if (typeof locale !== 'string' || !/^[A-Za-z0-9-]{1,35}$/.test(locale)) throw new Error('invalid locale')
-  if (hires !== undefined && typeof hires !== 'boolean') throw new Error('invalid hires flag')
-  return {
-    outPath: out,
-    width: width as number,
-    height: height as number,
-    fps,
-    codec,
-    quality: quality as ExportQuality,
-    hardware: hardware === true,
-    locale,
-    ...(hires !== undefined ? { hires } : {})
-  }
-}
-
-function validateClip(raw: unknown, i: number): AudioPlanClip {
-  if (!isObject(raw)) throw new Error(`audio clip ${i} invalid`)
-  const { id, kind, src, start, offset, duration, gain } = raw
-  const rate = (raw as { rate?: unknown }).rate
-  if (typeof id !== 'string' || id.length > 200) throw new Error(`audio clip ${i}: invalid id`)
-  if (kind !== 'music' && kind !== 'video') throw new Error(`audio clip ${i}: invalid kind`)
-  // FFmpeg reads it: a local file only, never a URL or protocol
-  if (typeof src !== 'string' || !src || src.length > 2000 || src.includes('\0') || !isAbsolute(src)) throw new Error(`audio clip ${i}: invalid source`)
-  for (const [key, v] of [['start', start], ['offset', offset], ['duration', duration]] as const) {
-    if (!(finite(v) && v >= 0)) throw new Error(`audio clip ${i}: invalid ${key}`)
-  }
-  if (!Array.isArray(gain) || gain.length > 100_000) throw new Error(`audio clip ${i}: invalid gain`)
-  const points = gain.map((p) => {
-    if (!isObject(p) || !finite(p.t) || !finite(p.g) || p.g < 0) throw new Error(`audio clip ${i}: invalid gain point`)
-    return { t: p.t, g: p.g }
-  })
-  if (rate !== undefined && !(finite(rate) && rate > 0 && rate <= 100)) throw new Error(`audio clip ${i}: invalid rate`)
-  const clip: AudioPlanClip = { id, kind, src, start: start as number, offset: offset as number, duration: duration as number, gain: points }
-  if (rate !== undefined) (clip as AudioPlanClip & { rate?: number }).rate = rate
-  return clip
-}
-
-function validateAudio(raw: unknown): AudioPlan {
-  if (!isObject(raw)) throw new Error('audio plan missing')
-  const { duration, clips } = raw
-  if (!(finite(duration) && duration > 0 && duration <= 24 * 3600)) throw new Error('invalid show duration')
-  if (!Array.isArray(clips) || clips.length > 10_000) throw new Error('invalid audio clips')
-  return { duration, clips: clips.map(validateClip) }
-}
-
-/** Checks a job coming from the renderer; returns a clean copy. */
-export function validateNewJob(raw: unknown): NewExportJob {
-  if (!isObject(raw)) throw new Error('invalid export job')
-  const name = typeof raw.name === 'string' ? raw.name.trim().slice(0, 200) : ''
-  if (!name) throw new Error('the export job needs a name')
-  const project = raw.project
-  if (!isObject(project) || typeof project.id !== 'string' || !Array.isArray(project.media) || !Array.isArray(project.entries) || !isObject(project.settings)) {
-    throw new Error('the export job needs a project')
-  }
-  return { name, project: project as unknown as Project, request: validateRequest(raw.request), audio: validateAudio(raw.audio) }
-}
-
-function validateId(id: unknown): string {
-  if (typeof id !== 'string' || !ID_RE.test(id)) throw new Error('invalid export job id')
-  return id
-}
-
-function validateInput(input: unknown): SegmentInput {
-  if (!INPUTS.includes(input as SegmentInput)) throw new Error(`unknown segment input: ${String(input)}`)
-  return input as SegmentInput
-}
-
-// ------------------------------------------------------------------ segments
-
-interface Segment {
-  readonly k: number
-  readonly input: SegmentInput
-  readonly encoder: string
-  readonly expected: number
-  /** Frames taken (raw input) or counted in the stream (encoded input). */
-  readonly frames: number
-  /** One raw frame or the next bytes of the stream. The synchronous part queues the data in order. */
-  write(data: Uint8Array): Promise<void>
-  /** Validates the segment and renames it to its final name. Deletes the temp file on failure. */
-  finish(): Promise<void>
-  /** Stops it and deletes the temp file. */
-  abort(): Promise<void>
-}
-
-/** Frame count and first picture type of an Annex B file. */
-async function countFile(path: string, codec: VideoCodec): Promise<AnnexBFrameCounter> {
-  const counter = new AnnexBFrameCounter(codec)
-  for await (const chunk of createReadStream(path, { highWaterMark: 1 << 20 })) counter.push(chunk as Buffer)
-  counter.end()
-  return counter
-}
-
-function checkStream(counter: AnnexBFrameCounter, k: number, expected: number): void {
-  if (counter.frames !== expected) throw new Error(`segment ${k} has ${counter.frames} frames, expected ${expected}`)
-  if (!counter.startsWithIdr) throw new Error(`segment ${k} does not start with an IDR picture (start each segment with a new encoder)`)
-}
-
-interface RawSegmentOptions {
-  k: number
-  input: 'yuv' | 'rgba'
-  width: number
-  height: number
-  fps: number
-  codec: VideoCodec
-  quality: ExportQuality
-  encoder: string
-  expected: number
-  tmp: string
-  final: string
-}
-
-/** FFmpeg encodes raw frames like a regular export, but video only, into an elementary stream. */
-function openRawSegment(ff: Ffmpeg, o: RawSegmentOptions): Segment {
-  const frameBytes = o.input === 'yuv' ? (o.width * o.height * 3) / 2 : o.width * o.height * 4
-  const video = encoderArgs(o.encoder, o.codec, o.quality, o.fps)
-  // the hvc1 tag belongs to the MP4 made at the end, not to the raw stream
-  const tag = video.indexOf('-tag:v')
-  if (tag >= 0) video.splice(tag, 2)
-  const args = [
-    '-loglevel', 'error', '-y',
-    ...rawInputArgs(o.input, o.width, o.height, o.fps),
-    '-map', '0:v:0',
-    '-vf', rawVideoFilter(o.input, o.width, o.height),
-    ...video,
-    '-f', o.codec, o.tmp
-  ]
-  const proc = ff.spawn(args, 'pipe')
-  let stderr = ''
-  proc.stderr!.on('data', (c: Buffer) => {
-    stderr += c.toString('utf8')
-    if (stderr.length > 16_000) stderr = stderr.slice(-8_000)
-  })
-  proc.stdout!.resume()
-  // EPIPE when FFmpeg dies mid-write is reported through the exit code instead
-  proc.stdin!.on('error', () => {})
-  const exited = new Promise<number | null>((done) => {
-    proc.on('close', (code) => done(code))
-    proc.on('error', () => done(-1))
-  })
-  let frames = 0
-  let state: 'open' | 'finishing' | 'aborted' | 'done' = 'open'
-  const failure = (): Error => new Error(summarizeStderr(stderr) || 'encoder stopped unexpectedly')
-  // writers waiting for FFmpeg share one wait (the renderer keeps several frames in flight)
-  let waiting: Promise<'drain' | 'gone'> | null = null
-  const writable = (): Promise<'drain' | 'gone'> =>
-    (waiting ??= Promise.race([
-      once(proc.stdin!, 'drain').then(() => 'drain' as const, () => 'gone' as const),
-      exited.then(() => 'gone' as const)
-    ]).finally(() => {
-      waiting = null
-    }))
-  const discard = async (): Promise<void> => {
-    proc.kill('SIGKILL')
-    await exited
-    await rm(o.tmp, { force: true, maxRetries: 5, retryDelay: 100 })
-  }
-
-  return {
-    k: o.k,
-    input: o.input,
-    encoder: o.encoder,
-    expected: o.expected,
-    get frames() {
-      return frames
-    },
-    async write(data) {
-      if (state !== 'open') throw new Error(state === 'aborted' ? 'segment discarded' : 'segment is closed')
-      if (data.byteLength !== frameBytes) {
-        throw new Error(`frame has ${data.byteLength} bytes, expected ${frameBytes} (${o.width}x${o.height} ${o.input === 'yuv' ? 'I420' : 'RGBA'})`)
-      }
-      if (frames >= o.expected) throw new Error(`segment ${o.k} already has its ${o.expected} frames`)
-      if (proc.exitCode !== null) throw failure()
-      frames++
-      const stdin = proc.stdin!
-      if (!stdin.write(Buffer.from(data.buffer, data.byteOffset, data.byteLength))) {
-        if ((await writable()) === 'gone') {
-          // FFmpeg's own message is complete once it exited
-          await exited
-          if ((state as string) === 'aborted') throw new Error('segment discarded')
-          if (state === 'open') throw failure()
-        }
-      }
-    },
-    async finish() {
-      if (state !== 'open') throw new Error('segment is closed')
-      state = 'finishing'
-      try {
-        if (frames !== o.expected) throw new Error(`segment ${o.k} got ${frames} frames, expected ${o.expected}`)
-        proc.stdin!.end()
-        const code = await exited
-        if ((state as string) === 'aborted') throw new Error('segment discarded')
-        if (code !== 0) throw failure()
-        checkStream(await countFile(o.tmp, o.codec), o.k, o.expected)
-        await rename(o.tmp, o.final)
-        state = 'done'
-      } catch (err) {
-        if ((state as string) !== 'aborted') {
-          state = 'aborted'
-          await discard()
-        }
-        throw err
-      }
-    },
-    async abort() {
-      if (state === 'aborted' || state === 'done') return
-      state = 'aborted'
-      await discard()
-    }
-  }
-}
-
-/** Encoded input: the bytes are stored as they come; frames are counted from the stream. */
-function openChunkSegment(o: { k: number; codec: VideoCodec; expected: number; tmp: string; final: string }): Segment {
-  const out = createWriteStream(o.tmp)
-  let failed: Error | null = null
-  out.on('error', (e) => (failed ??= e))
-  const counter = new AnnexBFrameCounter(o.codec)
-  let state: 'open' | 'finishing' | 'aborted' | 'done' = 'open'
-  let waiting: Promise<unknown> | null = null
-  const writable = (): Promise<unknown> =>
-    (waiting ??= Promise.race([once(out, 'drain'), once(out, 'close')]).finally(() => {
-      waiting = null
-    }))
-  const discard = async (): Promise<void> => {
-    out.destroy()
-    await finished(out).catch(() => {})
-    await rm(o.tmp, { force: true, maxRetries: 5, retryDelay: 100 })
-  }
-
-  return {
-    k: o.k,
-    input: o.codec,
-    encoder: 'webcodecs',
-    expected: o.expected,
-    get frames() {
-      return counter.frames
-    },
-    async write(data) {
-      if (state !== 'open') throw new Error(state === 'aborted' ? 'segment discarded' : 'segment is closed')
-      if (failed) throw failed
-      if (!data.byteLength) return
-      counter.push(data)
-      if (counter.frames > o.expected) throw new Error(`segment ${o.k} got more than its ${o.expected} frames`)
-      if (!out.write(data)) {
-        await writable().catch(() => {})
-        if (failed) throw failed
-        if ((state as string) === 'aborted') throw new Error('segment discarded')
-      }
-    },
-    async finish() {
-      if (state !== 'open') throw new Error('segment is closed')
-      state = 'finishing'
-      try {
-        counter.end()
-        out.end()
-        await finished(out)
-        if (failed) throw failed
-        if ((state as string) === 'aborted') throw new Error('segment discarded')
-        checkStream(counter, o.k, o.expected)
-        await rename(o.tmp, o.final)
-        state = 'done'
-      } catch (err) {
-        if ((state as string) !== 'aborted') {
-          state = 'aborted'
-          await discard()
-        }
-        throw err
-      }
-    },
-    async abort() {
-      if (state === 'aborted' || state === 'done') return
-      state = 'aborted'
-      await discard()
-    }
-  }
-}
-
-// ------------------------------------------------------------------ helpers
 
 /** Calls fn at most every `ms` (first call right away, the last one is never lost). */
 export function throttle(fn: () => void, ms: number): { (): void; cancel(): void } {
@@ -427,29 +61,6 @@ export function throttle(fn: () => void, ms: number): { (): void; cancel(): void
     timer = null
   }
   return call
-}
-
-function abortError(): Error {
-  const e = new Error('cancelled')
-  e.name = 'AbortError'
-  return e
-}
-
-/** rename that retries a moment when the target is busy (Explorer preview, virus scanner). */
-async function replaceFile(from: string, to: string): Promise<void> {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      await rename(from, to)
-      return
-    } catch (err) {
-      const code = (err as NodeJS.ErrnoException).code
-      if (attempt < 10 && (code === 'EPERM' || code === 'EBUSY' || code === 'EACCES')) {
-        await new Promise((r) => setTimeout(r, 300))
-        continue
-      }
-      throw new Error(`could not replace ${to} (${code ?? errorMessage(err)}); is it open in another program?`)
-    }
-  }
 }
 
 // ------------------------------------------------------------------ the queue
@@ -539,94 +150,12 @@ export async function openExportQueue(opts: ExportQueueOptions): Promise<ExportQ
     }
   }
 
-  // ---- job files
-
-  const segmentCount = (job: Job): number => Math.ceil(job.file.totalFrames / job.file.segmentFrames)
-  const segmentLength = (job: Job, k: number): number =>
-    Math.min(job.file.totalFrames, (k + 1) * job.file.segmentFrames) - k * job.file.segmentFrames
-  const segmentPath = (job: Job, k: number): string => join(job.dir, segmentName(k, job.file.request.codec))
-  const remaining = (job: Job): number[] => {
-    const done = new Set(job.file.segments)
-    const out: number[] = []
-    for (let k = 0; k < segmentCount(job); k++) if (!done.has(k)) out.push(k)
-    return out
-  }
-  const doneFrames = (job: Job): number => job.file.segments.reduce((n, k) => n + segmentLength(job, k), 0)
-  const currentFrame = (job: Job): number => (job.file.state === 'done' ? job.file.totalFrames : doneFrames(job) + (job.segment?.frames ?? 0))
-
-  /** Writes job.json atomically (synchronously, so it also holds when the app quits right after). */
-  const save = (job: Job): void => {
-    const { project: _p, audio: _a, ...state } = job.file
-    const json = JSON.stringify(state)
-    const tmp = join(job.dir, `${JOB_FILE}.tmp`)
-    writeFileSync(tmp, `${json.slice(0, -1)},${job.snapshotJson}}`)
-    renameSync(tmp, join(job.dir, JOB_FILE))
-  }
-
-  const makeJob = (file: JobFile, dir: string): Job => ({
-    file,
-    dir,
-    snapshotJson: `"project":${JSON.stringify(file.project)},"audio":${JSON.stringify(file.audio)}`,
-    attached: false,
-    retries: 0,
-    segment: null,
-    mixing: null,
-    mixAbort: null,
-    assembling: null,
-    assemblyAbort: null,
-    prepareAbort: null,
-    samples: [],
-    lastActivity: Date.now()
-  })
-
-  /** Deletes everything but job.json (and, unless `keepParts`, the finished segments and mix.wav). */
-  const deleteWorkFiles = async (job: Job, keepParts: boolean): Promise<void> => {
-    const keep = new Set([JOB_FILE])
-    if (keepParts) {
-      keep.add(MIX_FILE)
-      for (const k of job.file.segments) keep.add(segmentName(k, job.file.request.codec))
-    }
-    let names: string[] = []
-    try {
-      names = await readdir(job.dir)
-    } catch {
-      return
-    }
-    await Promise.all(names.filter((n) => !keep.has(n)).map((n) => rm(join(job.dir, n), { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })))
-    await rm(partialOutputPath(job.file.request.outPath, job.file.id), { force: true, maxRetries: 5, retryDelay: 100 })
-  }
-
   // ---- load what is on disk
 
   await mkdir(root, { recursive: true })
-  for (const name of readdirSync(root)) {
-    if (!ID_RE.test(name)) continue
-    const dir = join(root, name)
-    let file: JobFile
-    try {
-      file = JSON.parse(readFileSync(join(dir, JOB_FILE), 'utf8')) as JobFile
-    } catch {
-      continue
-    }
-    if (file.version !== 1 || file.id !== name || !isObject(file.request) || !(file.totalFrames > 0) || !(file.segmentFrames > 0) || !finite(file.createdAt)) continue
-    const job = makeJob(file, dir)
-    let dirty = false
-    // only segments whose file is there count
-    const listed = Array.isArray(file.segments) ? file.segments : []
-    file.segments = [...new Set(listed)]
-      .filter((k) => Number.isInteger(k) && k >= 0 && k < segmentCount(job) && existsSync(segmentPath(job, k)))
-      .sort((a, b) => a - b)
-    if (file.segments.length !== listed.length) dirty = true
-    if (file.state === 'running') {
-      // the app stopped while it ran (crash, power loss): it continues when the user says so
-      file.state = 'paused'
-      dirty = true
-    }
-    lastCreated = Math.max(lastCreated, file.createdAt)
-    jobs.set(name, job)
-    if (dirty) save(job)
-    // temp files, unlisted segments, a partial output and the decoded audio clips of an interrupted run
-    await deleteWorkFiles(job, file.state !== 'cancelled' && file.state !== 'done')
+  for (const job of await loadJobs(root)) {
+    lastCreated = Math.max(lastCreated, job.file.createdAt)
+    jobs.set(job.file.id, job)
   }
 
   // ---- state
@@ -710,7 +239,7 @@ export async function openExportQueue(opts: ExportQueueOptions): Promise<ExportQ
     job.file.finishedAt = Date.now()
     job.phase = undefined
     stopped = `export job failed: ${job.file.error}`
-    save(job)
+    saveJob(job)
     changed()
     await stopWork(job)
     changed()
@@ -718,14 +247,12 @@ export async function openExportQueue(opts: ExportQueueOptions): Promise<ExportQ
 
   // ---- audio
 
-  const mixPath = (job: Job): string => join(job.dir, MIX_FILE)
-
   /** Mixes the audio plan once (reused on resume). Resolves when mix.wav is there. */
   const ensureMix = (job: Job): Promise<void> => {
     if (existsSync(mixPath(job))) return Promise.resolve()
     if (job.mixing) return job.mixing
     const ctrl = new AbortController()
-    const tmp = join(job.dir, `${MIX_FILE}.tmp`)
+    const tmp = `${mixPath(job)}.tmp`
     const clips = join(job.dir, CLIPS_DIR)
     let run: Promise<void> | undefined
     run = (async (): Promise<void> => {
@@ -762,93 +289,28 @@ export async function openExportQueue(opts: ExportQueueOptions): Promise<ExportQ
     job.attached = false
     changed()
     const { request, totalFrames } = job.file
-    const out = request.outPath
-    const partial = partialOutputPath(out, job.file.id)
-    let child: ChildProcess | null = null
-    let exited: Promise<number | null> = Promise.resolve(null)
-    const check = (): void => {
-      if (ctrl.signal.aborted) throw abortError()
-    }
+    const partial = partialOutputPath(request.outPath, job.file.id)
     try {
       await ensureMix(job)
-      check()
-      for (let k = 0; k < segmentCount(job); k++) if (!existsSync(segmentPath(job, k))) throw new Error(`segment ${k} is missing`)
-      if (!existsSync(dirname(out))) throw new Error(`the folder ${dirname(out)} does not exist`)
-      const proc = ff.spawn(
-        [
-          '-loglevel', 'error', '-y',
-          // MPEG-TS made by AnnexBToTs: the joined stream with pts/dts per frame
-          '-f', 'mpegts', '-i', 'pipe:0',
-          '-i', mixPath(job),
-          '-map', '0:v:0', '-map', '1:a:0',
-          ...copyVideoArgs(request.codec),
-          ...AUDIO_OUT_ARGS,
-          '-movflags', '+faststart',
-          partial
-        ],
-        'pipe'
-      )
-      child = proc
-      let stderr = ''
-      proc.stderr!.on('data', (c: Buffer) => {
-        stderr += c.toString('utf8')
-        if (stderr.length > 16_000) stderr = stderr.slice(-8_000)
+      if (ctrl.signal.aborted) throw abortError()
+      await joinSegments(ff, {
+        segments: Array.from({ length: segmentCount(job) }, (_, k) => segmentPath(job, k)),
+        audio: mixPath(job),
+        codec: request.codec,
+        fps: request.fps,
+        totalFrames,
+        partial,
+        out: request.outPath,
+        signal: ctrl.signal
       })
-      proc.stdout!.resume()
-      proc.stdin!.on('error', () => {})
-      exited = new Promise((done) => {
-        proc.on('close', (code) => done(code))
-        proc.on('error', () => done(-1))
-      })
-      const stop = (): void => {
-        proc.kill('SIGKILL')
-      }
-      ctrl.signal.addEventListener('abort', stop, { once: true })
-      const failure = (): Error => new Error(summarizeStderr(stderr) || 'FFmpeg stopped unexpectedly')
-      const packets: Uint8Array[] = []
-      const flush = async (): Promise<void> => {
-        if (!packets.length) return
-        if (proc.exitCode !== null) throw failure()
-        if (!proc.stdin!.write(Buffer.concat(packets.splice(0)))) {
-          const r = await Promise.race([once(proc.stdin!, 'drain').then(() => 'drain', () => 'gone'), exited.then(() => 'gone')])
-          check()
-          if (r === 'gone') {
-            await exited
-            throw failure()
-          }
-        }
-      }
-      const muxer = new AnnexBToTs(request.codec, request.fps, (p) => packets.push(p))
-      for (let k = 0; k < segmentCount(job); k++) {
-        for await (const chunk of createReadStream(segmentPath(job, k), { highWaterMark: 1 << 20 })) {
-          check()
-          muxer.push(chunk as Buffer)
-          await flush()
-        }
-      }
-      muxer.end()
-      await flush()
-      if (muxer.frames !== totalFrames) throw new Error(`the joined video has ${muxer.frames} frames, expected ${totalFrames}`)
-      proc.stdin!.end()
-      const code = await exited
-      check()
-      if (code !== 0) throw failure()
-      const probe = await ff.probe(partial, ctrl.signal)
-      const frames = Number(videoStream(probe)?.nb_frames)
-      if (frames !== totalFrames) throw new Error(`the MP4 has ${frames} frames, expected ${totalFrames}`)
-      if (!probe.streams.some((s) => s.codec_type === 'audio')) throw new Error('the MP4 has no sound')
-      check()
-      await replaceFile(partial, out)
       job.file.state = 'done'
       job.file.finishedAt = Date.now()
       delete job.file.error
       job.phase = undefined
-      save(job)
+      saveJob(job)
       await deleteWorkFiles(job, false)
       changed()
     } catch (err) {
-      child?.kill('SIGKILL')
-      await exited
       await rm(partial, { force: true, maxRetries: 5, retryDelay: 100 })
       if (ctrl.signal.aborted || job.file.state !== 'running') return
       // the parts stay: "Continue" tries the joining again
@@ -856,7 +318,7 @@ export async function openExportQueue(opts: ExportQueueOptions): Promise<ExportQ
       job.file.error = `Joining the parts failed: ${errorMessage(err)}`.slice(0, 1000)
       job.file.finishedAt = Date.now()
       job.phase = undefined
-      save(job)
+      saveJob(job)
       changed()
     } finally {
       if (job.assemblyAbort === ctrl) job.assemblyAbort = null
@@ -919,7 +381,7 @@ export async function openExportQueue(opts: ExportQueueOptions): Promise<ExportQ
         job.file.startedAt ??= Date.now()
         delete job.file.finishedAt
         delete job.file.error
-        save(job)
+        saveJob(job)
       }
       if (!remaining(job).length) {
         // all parts are there (e.g. the joining failed or was interrupted before)
@@ -964,7 +426,7 @@ export async function openExportQueue(opts: ExportQueueOptions): Promise<ExportQ
         audio: job.audio
       }
       const entry = makeJob(file, dir)
-      save(entry)
+      saveJob(entry)
       jobs.set(id, entry)
       changed()
       return info(entry)
@@ -979,7 +441,7 @@ export async function openExportQueue(opts: ExportQueueOptions): Promise<ExportQ
       job.phase = undefined
       job.file.segments = []
       stopped = 'export job cancelled'
-      save(job)
+      saveJob(job)
       changed()
       await stopWork(job)
       await deleteWorkFiles(job, false)
@@ -1004,7 +466,7 @@ export async function openExportQueue(opts: ExportQueueOptions): Promise<ExportQ
       delete job.file.error
       delete job.file.finishedAt
       job.retries = 0
-      save(job)
+      saveJob(job)
       changed()
     },
 
@@ -1068,7 +530,7 @@ export async function openExportQueue(opts: ExportQueueOptions): Promise<ExportQ
       job.file.encoder ??= segment.encoder
       // progress again: a later crash gets its own retry
       job.retries = 0
-      save(job)
+      saveJob(job)
       touch(job)
       changed()
       if (!remaining(job).length) void startAssembly(job)
@@ -1170,7 +632,7 @@ export async function openExportQueue(opts: ExportQueueOptions): Promise<ExportQ
       job.file.state = 'paused'
       job.phase = undefined
       stopped = 'export job paused'
-      save(job)
+      saveJob(job)
       changed()
       await stopWork(job)
       // keep the parts, drop temp files and a partial output
@@ -1187,4 +649,3 @@ export async function openExportQueue(opts: ExportQueueOptions): Promise<ExportQ
   }
   return queue
 }
-

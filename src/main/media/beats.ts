@@ -2,6 +2,7 @@
 // placement by dynamic programming (D. Ellis, "Beat Tracking by Dynamic Programming", 2007).
 // Pure JS. The envelope is computed while FFmpeg streams PCM, one pipe chunk (64 KB, ~3 ms of FFTs)
 // per macrotask; the final tempo + DP stage is O(frames · period), ~20 ms for a 4-minute track.
+import { abortError } from '../abort'
 import { FfmpegError, summarizeStderr, type Ffmpeg } from '../ffmpeg'
 
 export const BEAT_SR = 22050
@@ -400,10 +401,4 @@ export async function detectBeatsInFile(ff: Ffmpeg, path: string, signal?: Abort
     if (child.exitCode === null) child.kill()
   }
   return beatsFromEnvelope(onset.finish())
-}
-
-function abortError(): Error {
-  const e = new Error('cancelled')
-  e.name = 'AbortError'
-  return e
 }

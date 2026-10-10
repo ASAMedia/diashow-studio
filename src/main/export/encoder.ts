@@ -96,10 +96,6 @@ export const AUDIO_OUT_ARGS = ['-c:a', 'aac', '-b:a', '256k', '-ar', '48000']
 
 let active: { cancel: () => Promise<void> } | null = null
 
-export function isExporting(): boolean {
-  return active !== null
-}
-
 /** Cancels the running export (also while the audio is still being mixed). */
 export async function cancelActiveExport(): Promise<void> {
   await active?.cancel()

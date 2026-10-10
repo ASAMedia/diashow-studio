@@ -245,22 +245,6 @@ export async function videoThumb(ff: Ffmpeg, src: string, info: VideoInfo, out: 
   await rename(tmp, out)
 }
 
-/** First decodable audio stream → AAC 192k, 48 kHz stereo (multichannel downmixed). */
-export async function extractAudio(ff: Ffmpeg, src: string, info: VideoInfo, out: string, signal?: AbortSignal): Promise<void> {
-  if (info.audioIndex === null) throw new Error('no audio')
-  const tmp = `${out}.part.m4a`
-  try {
-    await ff.run(
-      ['-i', src, '-map', `0:a:${info.audioIndex}`, '-vn', '-sn', '-dn', '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2', '-map_metadata', '-1', '-movflags', '+faststart', '-f', 'mp4', tmp],
-      { signal }
-    )
-    await rename(tmp, out)
-  } catch (err) {
-    await rm(tmp, { force: true })
-    throw err
-  }
-}
-
 /**
  * The video's sound for the preview and the export mixer (first decodable audio stream → .m4a), and
  * its integrated loudness (EBU R128) from the same FFmpeg run, so the file is read and decoded once.

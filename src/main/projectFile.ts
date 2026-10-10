@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { copyFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, join, resolve, sep } from 'node:path'
 import type { ExportProgress, MediaItem, MusicTrack, Project } from '@shared/types'
+import { abortError } from './abort'
 import { mediaId } from './media/scan'
 import { PROJECT_EXT, type ProjectStore } from './projects'
 
@@ -134,12 +135,6 @@ export async function packProject(project: Project, dir: string, opts: PackOptio
     await rm(root, { recursive: true, force: true, maxRetries: 3 }).catch(() => {})
     throw err
   }
-}
-
-function abortError(): Error {
-  const e = new Error('cancelled')
-  e.name = 'AbortError'
-  return e
 }
 
 function toAbsolute(base: string, p: string): string {

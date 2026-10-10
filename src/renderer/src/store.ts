@@ -1,12 +1,14 @@
 import { create } from 'zustand'
 import type {
-  Entry, FreeText, MediaItem, MusicTrack, Project, ProjectSettings, ProjectSummary, TextEntry, ThemeId
+  Entry, FreeText, MediaItem, MusicTrack, Project, ProjectSettings, ProjectSummary, ThemeId
 } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import type { ExportJobInfo } from '@shared/exportQueue'
 import { themeMeta } from '@shared/themes'
-import { localeTag, t } from './i18n'
+import { t } from './i18n'
 import type { Player } from './engine/player'
+import * as edits from './entryEdits'
+import { entriesFor, uid } from './entryEdits'
 
 export type InspectorTab = 'themes' | 'music' | 'timing' | 'slide'
 
@@ -90,8 +92,6 @@ function scheduleSave(p: Project): void {
   saveTimer = setTimeout(() => void window.api.saveProject(p), 600)
 }
 
-const uid = (): string => crypto.randomUUID()
-
 // Undo history. Snapshots are whole projects (cheap to keep: media items are shared data);
 // restoring keeps the current processing state of media and music.
 const history = { past: [] as Project[], future: [] as Project[], key: '' as string | undefined, at: 0 }
@@ -116,28 +116,6 @@ function withCurrentMedia(snapshot: Project, current: Project): Project {
 /** Fields of a song the user sets in the editor; processing updates from the main process keep them. */
 function keepTrim(update: MusicTrack, cur: MusicTrack | undefined): MusicTrack {
   return cur && (cur.trimIn != null || cur.trimOut != null) ? { ...update, trimIn: cur.trimIn, trimOut: cur.trimOut } : update
-}
-
-const dayKey = (time: number): string => {
-  const d = new Date(time)
-  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
-}
-
-/** "2_Sonntag Unser erster Tag" -> title "Sonntag", subtitle "Unser erster Tag". */
-export function titleFromFolder(name: string): { title: string; subtitle?: string } {
-  const clean = name.replace(/^[\d\s._-]+/, '').trim() || name
-  const [first, ...rest] = clean.split(/\s+/)
-  return rest.length ? { title: first, subtitle: rest.join(' ') } : { title: first }
-}
-
-/** Folder of a file with forward slashes, e.g. "D:/Ski/2_Sonntag". */
-const folderPath = (path: string): string => {
-  const parts = path.split(/[\\/]/)
-  return parts.slice(0, -1).join('/')
-}
-
-function entriesFor(items: MediaItem[]): Entry[] {
-  return items.map((m) => (m.kind === 'video' ? { id: uid(), type: 'video', mediaId: m.id } : { id: uid(), type: 'photo', mediaId: m.id }))
 }
 
 export const useStore = create<State>((set, get) => ({
@@ -269,54 +247,7 @@ export const useStore = create<State>((set, get) => ({
   },
 
   insertDayTitles(mode) {
-    const fmtDay = new Intl.DateTimeFormat(localeTag(), { weekday: 'long' })
-    const fmtDate = new Intl.DateTimeFormat(localeTag(), { day: 'numeric', month: 'long', year: 'numeric' })
-    get().update((p) => {
-      const media = new Map(p.media.map((m) => [m.id, m]))
-      const kept = p.entries.filter((e) => !(e.type === 'text' && e.auto === 'day'))
-      let entries = kept
-      let skip = new Set<string>()
-      if (mode === 'folder') {
-        // Chapters follow the folders, not the capture times (those can disagree, e.g. for
-        // files from messengers). Text slides stay with the photo after them.
-        const blocks: Entry[][] = []
-        let pending: Entry[] = []
-        for (const e of kept) {
-          if (e.type === 'text') pending.push(e)
-          else {
-            blocks.push([...pending, e])
-            pending = []
-          }
-        }
-        const folder = (b: Entry[]): string => {
-          const e = b[b.length - 1]
-          return e.type === 'text' ? '' : folderPath(media.get(e.mediaId)?.path ?? '')
-        }
-        const order = new Map(blocks.map((b, i) => [b, i]))
-        blocks.sort((a, b) => folder(a).localeCompare(folder(b), undefined, { numeric: true }) || order.get(a)! - order.get(b)!)
-        entries = [...blocks.flat(), ...pending]
-        // the imported top folder (it holds other folders) gets no chapter of its own
-        const folders = new Set(blocks.map(folder))
-        skip = new Set([...folders].filter((f) => [...folders].some((g) => g !== f && g.startsWith(`${f}/`))))
-      }
-      const out: Entry[] = []
-      let last = ''
-      for (const e of entries) {
-        if (e.type !== 'text') {
-          const m = media.get(e.mediaId)
-          const key = m ? (mode === 'date' ? dayKey(m.captureTime) : folderPath(m.path)) : ''
-          if (m && key && key !== last) {
-            last = key
-            if (!skip.has(key)) {
-              const text = mode === 'date' ? { title: fmtDay.format(m.captureTime), subtitle: fmtDate.format(m.captureTime) } : titleFromFolder(key.split('/').pop()!)
-              out.push({ id: uid(), type: 'text', auto: 'day', ...text } as TextEntry)
-            }
-          }
-        }
-        out.push(e)
-      }
-      p.entries = out
-    })
+    get().update((p) => edits.insertDayTitles(p, mode))
   },
 
   removeAutoTitles() {
@@ -324,22 +255,7 @@ export const useStore = create<State>((set, get) => ({
   },
 
   sortByDate() {
-    get().update((p) => {
-      const media = new Map(p.media.map((m) => [m.id, m]))
-      const time = (e: Entry): number => (e.type === 'text' ? Number.NaN : (media.get(e.mediaId)?.captureTime ?? 0))
-      // text slides keep their place relative to the following photo
-      const blocks: Entry[][] = []
-      let pending: Entry[] = []
-      for (const e of p.entries) {
-        if (e.type === 'text') pending.push(e)
-        else {
-          blocks.push([...pending, e])
-          pending = []
-        }
-      }
-      blocks.sort((a, b) => time(a[a.length - 1]) - time(b[b.length - 1]))
-      p.entries = [...blocks.flat(), ...pending]
-    })
+    get().update((p) => edits.sortByDate(p))
   },
 
   setTheme(theme) {
@@ -447,60 +363,19 @@ export const useStore = create<State>((set, get) => ({
   },
 
   mergeEntries(ids) {
-    const want = new Set(ids)
-    get().update((p) => {
-      const block = p.entries.filter((e) => want.has(e.id) && e.type !== 'text')
-      if (block.length < 2) return
-      const firstIdx = p.entries.indexOf(block[0])
-      const moving = new Set(block)
-      const rest = p.entries.filter((e) => !moving.has(e))
-      const at = p.entries.slice(0, firstIdx).filter((e) => !moving.has(e)).length
-      rest.splice(at, 0, ...block)
-      block.forEach((e, i) => (e.groupBreak = i === 0 ? 'force' : 'join'))
-      const after = rest[at + block.length]
-      if (after) after.groupBreak = 'force'
-      p.entries = rest
-    })
+    get().update((p) => edits.mergeEntries(p, ids))
   },
 
   splitSlide(ids) {
-    const want = new Set(ids)
-    get().update((p) => p.entries.forEach((e) => want.has(e.id) && (e.groupBreak = 'force')))
+    get().update((p) => edits.splitSlide(p, ids))
   },
 
   releaseEntry(slideIds, id) {
-    const want = new Set(slideIds)
-    get().update((p) => {
-      const slide = p.entries.filter((e) => want.has(e.id))
-      const e = p.entries.find((x) => x.id === id)
-      const keep = slide.filter((x) => x.id !== id)
-      if (!e || keep.length === 0) return
-      p.entries = p.entries.filter((x) => x !== e)
-      const at = p.entries.indexOf(keep[keep.length - 1]) + 1
-      p.entries.splice(at, 0, e)
-      e.groupBreak = 'force'
-      if (keep[0].groupBreak === 'join') keep[0].groupBreak = 'force'
-      const next = p.entries[at + 1]
-      if (next) next.groupBreak = 'force'
-    })
+    get().update((p) => edits.releaseEntry(p, slideIds, id))
   },
 
   resizeSlide(slideIds, delta) {
-    const want = new Set(slideIds)
-    get().update((p) => {
-      const slide = p.entries.filter((e) => want.has(e.id))
-      if (!slide.length) return
-      const last = slide[slide.length - 1]
-      if (delta < 0) {
-        if (slide.length > 1) last.groupBreak = 'force'
-        return
-      }
-      const next = p.entries[p.entries.indexOf(last) + 1]
-      if (!next || next.type === 'text') return
-      next.groupBreak = 'join'
-      const after = p.entries[p.entries.indexOf(next) + 1]
-      if (after && after.groupBreak !== 'join') after.groupBreak = 'force'
-    })
+    get().update((p) => edits.resizeSlide(p, slideIds, delta))
   },
 
   select(ids) {

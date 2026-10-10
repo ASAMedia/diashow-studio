@@ -276,7 +276,9 @@ describe('cache and restore', () => {
     const restorer = createMediaService({ ffmpegDir: FFMPEG_DIR, cacheDir, onUpdate: (i) => seen.push(i) })
     try {
       const gone: MediaItem = { ...intact, id: 'deadbeefdeadbeef', path: join(TEST_MEDIA, 'misc', 'does-not-exist.jpg') }
-      const [a, b, c] = await restorer.restoreMedia([intact, damaged, gone])
+      // a malformed entry (e.g. from a hand-edited project file) is skipped, the rest restores
+      const [a, b, c, ...rest] = await restorer.restoreMedia([intact, null as unknown as MediaItem, damaged, gone, { id: 42 } as unknown as MediaItem])
+      expect(rest).toHaveLength(0)
       // processing only starts after the call returned (the IPC reply precedes media:update events)
       expect(seen).toHaveLength(0)
       expect(a.status).toBe('ready')

@@ -152,4 +152,12 @@ describe('undo, durations and day titles', () => {
     useStore.getState().removeAutoTitles()
     expect(p().entries.some((e) => e.type === 'text')).toBe(false)
   })
+
+  it('sorts by capture date, text slides staying with the photo after them', () => {
+    const text = (id: string): Entry => ({ id, type: 'text', title: id })
+    const [a, b, c, d] = entries()
+    useStore.setState({ project: project([text('t1'), a, b, c, text('t2'), d, text('end')], media) })
+    useStore.getState().sortByDate()
+    expect(p().entries.map((e) => e.id)).toEqual(['t2', 'd', 't1', 'a', 'b', 'c', 'end'])
+  })
 })
