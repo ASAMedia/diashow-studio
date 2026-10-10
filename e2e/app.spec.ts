@@ -170,7 +170,8 @@ test('import, preview every theme, export', async () => {
   // the show window by its address (other windows, e.g. the export worker, may open too); slow without a GPU
   await expect.poll(() => app.windows().some((w) => w.url().includes('#present')), { timeout: 60_000 }).toBe(true)
   const pw = app.windows().find((w) => w.url().includes('#present'))!
-  await pw.waitForFunction(() => !!document.querySelector('canvas'), null, { timeout: 60_000 })
+  // polled by time: the default (animation frames) stalls while the window is still hidden
+  await pw.waitForFunction(() => !!document.querySelector('canvas'), null, { timeout: 60_000, polling: 250 })
   await page.waitForTimeout(2500)
   const presenterTime = await page.locator('.presenter .val').innerText()
   console.log('presenter shows', presenterTime)

@@ -83,7 +83,7 @@ test('presentation: presenter controls drive the show window', async () => {
     await expect(page.locator('.presenter')).toBeVisible()
     await expect.poll(() => showWindows(app).length, { timeout: 60_000 }).toBe(1)
     const show = showWindows(app)[0]
-    await show.waitForFunction(() => !!document.querySelector('canvas'), null, { timeout: 60_000 })
+    await show.waitForFunction(() => !!document.querySelector('canvas'), null, { timeout: 60_000, polling: 250 })
     lap('show window open')
     // the show starts by itself
     await expect.poll(async () => (await showState(page)).t, { timeout: 60_000 }).toBeGreaterThan(0.5)
@@ -148,7 +148,7 @@ test('presentation: presenter controls drive the show window', async () => {
     await expect(page.locator('.presenter')).toBeVisible()
     await expect.poll(() => showWindows(app).length, { timeout: 60_000 }).toBe(1)
     const again = showWindows(app)[0]
-    await again.waitForFunction(() => !!document.querySelector('canvas'), null, { timeout: 60_000 })
+    await again.waitForFunction(() => !!document.querySelector('canvas'), null, { timeout: 60_000, polling: 250 })
     // it reports, so its keys are wired up
     await showState(page)
     // the window closes on the key down already, so there is no page left for the key up

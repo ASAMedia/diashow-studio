@@ -73,13 +73,20 @@ export function startPresentation(owner: BrowserWindow | undefined): void {
   win.on('page-title-updated', (e) => e.preventDefault())
   presentation = win
   denyPopups(win)
-  win.once('ready-to-show', () => {
-    if (win.isDestroyed()) return
+  let shown = false
+  const show = (): void => {
+    clearTimeout(fallback)
+    if (shown || win.isDestroyed()) return
+    shown = true
     if (other) win.setBounds(other.bounds)
     win.show()
     // Fullscreen only once the window sits on the target display, or Windows picks the current one
     if (other) win.setFullScreen(true)
-  })
+  }
+  // The first frame can take long without a graphics card (software WebGL); a hidden window gets no
+  // animation frames, so it would wait even longer. Show it (black) after a few seconds at the latest.
+  const fallback = setTimeout(show, 4000)
+  win.once('ready-to-show', show)
   const closeWithOwner = (): void => {
     if (!win.isDestroyed()) win.close()
   }
