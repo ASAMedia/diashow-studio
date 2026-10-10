@@ -3,12 +3,14 @@
 // when it was opened. DiagnosticsHost puts the notices and the dialog into the window and logs export
 // and import failures.
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Info, Wrench, X } from 'lucide-react'
+import { AlertTriangle, Info, Loader2, Wrench, X } from 'lucide-react'
 import type { DamagedProject, ProjectRef, ProjectReportEvent, RepairPlan, RepairReport } from '@shared/diagnostics'
 import { useStore } from '../store'
 import { localeTag, t, type StringKey } from '../i18n'
 import { ErrorNotices, ErrorText, notifyError, openRepair, useNotices } from '../errors'
 import { logEvent } from '../diagnostics'
+import { Modal } from './Modal'
+import { Section } from './ui'
 
 const REPORT_TEXT: Record<RepairReport['changes'][number]['code'], StringKey> = {
   truncated: 'repTruncated',
@@ -58,9 +60,9 @@ export function DamagedProjects() {
     <div className="damaged-projects" data-testid="damaged-projects">
       {list.map((d) => (
         <div key={d.id} className="damaged-project">
-          <AlertTriangle size={16} className="notice-icon" />
+          <AlertTriangle size={16} className="notice-icon" aria-hidden />
           <div className="grow">
-            <b>{d.name || d.id}</b>
+            <b title={d.name || d.id}>{d.name || d.id}</b>
             <span className="hint">
               {d.reason === 'too-new' ? t('damagedTooNew') : t('damagedHint')} · {fmtDate(d.modifiedAt)}
             </span>
@@ -110,78 +112,79 @@ export function RepairDialog({ target }: { target: ProjectRef }) {
 
   const usable = plan?.backups.filter((b) => !b.damaged) ?? []
   return (
-    <div className="overlay">
-      <div className="dialog wide repair-dialog" data-testid="repair-dialog">
-        <div className="row" style={{ marginBottom: 8 }}>
-          <h2 style={{ margin: 0, flex: 1 }}>{t('repairTitle')}</h2>
-          <button className="btn ghost icon" title={t('close')} onClick={close}>
-            <X size={16} />
-          </button>
-        </div>
-        <p className="hint" style={{ marginTop: 0 }}>
-          {t('repairIntro')}
+    <Modal
+      title={t('repairTitle')}
+      onClose={close}
+      className="wide repair-dialog"
+      testId="repair-dialog"
+      actions={
+        <button className="btn" onClick={close}>
+          {t('cancel')}
+        </button>
+      }
+    >
+      <p className="hint lead">{t('repairIntro')}</p>
+      {!plan && !error && (
+        <p className="hint busy-line" role="status">
+          <Loader2 size={13} className="spin" aria-hidden /> {t('loading')}
         </p>
-        {!plan && !error && <p className="hint">…</p>}
-        {plan && (
-          <>
-            <div className="section">
-              <h3>{t('repairSalvage')}</h3>
-              {plan.salvage ? (
-                <>
-                  <p>
-                    <b>{plan.salvage.name}</b> –{' '}
+      )}
+      {plan && (
+        <>
+          <Section title={t('repairSalvage')}>
+            {plan.salvage ? (
+              <>
+                <p className="repair-name">
+                  <b>{plan.salvage.name}</b>
+                  <span>
                     {t('repairCounts')
                       .replace('{s}', String(plan.salvage.slides))
                       .replace('{m}', String(plan.salvage.media))
                       .replace('{t}', String(plan.salvage.music))}
-                  </p>
-                  {plan.salvage.report.changes.length > 0 && (
-                    <ul className="hint repair-report">
-                      {reportLines(plan.salvage.report).map((l) => (
-                        <li key={l}>{l}</li>
-                      ))}
-                    </ul>
-                  )}
+                  </span>
+                </p>
+                {plan.salvage.report.changes.length > 0 && (
+                  <ul className="repair-report">
+                    {reportLines(plan.salvage.report).map((l) => (
+                      <li key={l}>{l}</li>
+                    ))}
+                  </ul>
+                )}
+                <div className="row" style={{ marginTop: 10 }}>
                   <button className="btn primary" disabled={busy} onClick={() => void run({ kind: 'salvage' })} data-testid="repair-salvage">
                     {t('repairUseSalvage')}
                   </button>
-                </>
-              ) : (
-                <p className="hint">{t('repairNothing')}</p>
-              )}
-            </div>
-            {'id' in target && (
-              <div className="section">
-                <h3>{t('repairBackups')}</h3>
-                {plan.backups.length === 0 ? (
-                  <p className="hint">{t('noBackups')}</p>
-                ) : (
-                  <div className="stack" style={{ maxHeight: '32vh', overflowY: 'auto' }}>
-                    {plan.backups.map((b) => (
-                      <div key={b.file} className="row backup">
-                        <span style={{ flex: 1 }}>{fmtDate(b.savedAt)}</span>
-                        <span className="val">{b.damaged ? t('repairBackupDamaged') : `${b.slideCount} ${t('entries')}`}</span>
-                        <button className="btn small" disabled={busy || !!b.damaged} onClick={() => void run({ kind: 'backup', file: b.file })}>
-                          {t('restore')}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {usable.length > 0 && plan.salvage && <p className="hint">{t('repairCompare')}</p>}
-              </div>
+                </div>
+              </>
+            ) : (
+              <p className="empty-note">{t('repairNothing')}</p>
             )}
-            <p className="hint">{t('repairKept')}</p>
-          </>
-        )}
-        {error !== null && <ErrorText err={error} context="project" />}
-        <div className="actions">
-          <button className="btn" onClick={close}>
-            {t('close')}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Section>
+          {'id' in target && (
+            <Section title={t('repairBackups')}>
+              {plan.backups.length === 0 ? (
+                <p className="empty-note">{t('noBackups')}</p>
+              ) : (
+                <div className="stack">
+                  {plan.backups.map((b) => (
+                    <div key={b.file} className="row backup">
+                      <span className="when">{fmtDate(b.savedAt)}</span>
+                      <span className="val">{b.damaged ? t('repairBackupDamaged') : `${b.slideCount} ${t('entries')}`}</span>
+                      <button className="btn small" disabled={busy || !!b.damaged} onClick={() => void run({ kind: 'backup', file: b.file })}>
+                        {t('restore')}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {usable.length > 0 && plan.salvage && <p className="hint">{t('repairCompare')}</p>}
+            </Section>
+          )}
+          <p className="hint">{t('repairKept')}</p>
+        </>
+      )}
+      {error !== null && <ErrorText err={error} context="project" />}
+    </Modal>
   )
 }
 
@@ -189,8 +192,8 @@ export function RepairDialog({ target }: { target: ProjectRef }) {
 function ReportNotice({ event, onClose }: { event: ProjectReportEvent; onClose: () => void }) {
   const set = useStore((s) => s.set)
   return (
-    <div className="notice info" data-testid="project-report">
-      <Info size={16} className="notice-icon" />
+    <div className="notice info" data-testid="project-report" role="status">
+      <Info size={16} className="notice-icon" aria-hidden />
       <div className="notice-body">
         <b>{event.source === 'repair' ? t('repReportRepaired') : t('repReportTitle')}</b>
         <ul className="repair-report">
@@ -210,7 +213,7 @@ function ReportNotice({ event, onClose }: { event: ProjectReportEvent; onClose: 
           </button>
         )}
       </div>
-      <button className="btn ghost icon small" title={t('close')} onClick={onClose}>
+      <button className="btn ghost icon small" title={t('close')} aria-label={t('close')} onClick={onClose}>
         <X size={14} />
       </button>
     </div>

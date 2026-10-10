@@ -2,7 +2,7 @@
 
 All notable changes to Diashow Studio. Versions follow [Semantic Versioning](https://semver.org). The release workflow publishes the section of a version as its release notes.
 
-## [1.0.0]
+## [1.0.0] - 2026-10-11
 
 The first public version: photo and video slideshows for Windows, modelled on the slideshow feature of macOS Photos. German and English, works offline.
 
@@ -18,6 +18,9 @@ The first public version: photo and video slideshows for Windows, modelled on th
 - A three-step assistant on first start: photos or a folder, a theme and music, then play or export.
 - A built-in handbook (F1) in German and English, with a searchable table of contents.
 - "Play a folder" shows a slideshow straight away.
+- Light or dark UI (Settings → Appearance; System follows Windows). The preview and fullscreen stay dark.
+- Full keyboard use: focus ring, Esc and Tab in dialogs and menus, arrow keys in the filmstrip and the inspector; UI animations stay off when Windows' "Animation effects" are off.
+- A new app icon.
 
 **Themes and looks**
 
@@ -62,4 +65,5 @@ The first public version: photo and video slideshows for Windows, modelled on th
 
 - Projects are checked when they open: broken parts are repaired or dropped with a notice, the old file stays as a backup. A damaged project (e.g. after a power loss) can be repaired from the home screen: rescue what is readable or take a backup. Projects from a newer version are refused with a hint to update.
 - Sharing also works on networks with public addresses (eduroam), with a warning to give the link only to the class.
+- A project made elsewhere that points to network shares (`\\host\share`) opens those files only after you allow it, because Windows would sign in to that host with your account.
 - Sandboxed windows, a strict content security policy, no internet access from the app's pages, IPC and file access limited to what the app needs, Electron fuses on the packaged exe.

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { detectGpuTonemap, pickVulkanDevice, type GpuTonemap } from '../src/main/media/hdr'
-import { gpuEligible, gpuVideoFilter, transcodeProxy } from '../src/main/media/video'
+import { gpuEligible, gpuVideoFilter, TONEMAP_CHAIN, transcodeProxy } from '../src/main/media/video'
 import { analyzeVideo, rotationOf, videoStream, type VideoInfo } from '../src/main/media/videoInfo'
 import { ff } from './helpers/media'
 
@@ -52,11 +52,10 @@ describe('GPU tone mapping', () => {
     expect(pickVulkanDevice('no vulkan')).toBeNull()
   })
 
-  it('builds one libplacebo pass with rotation, scaling and the tone curve per transfer', () => {
+  it('builds one libplacebo pass with rotation and scaling, the tone curve on the GPU for PQ and on the CPU for HLG', () => {
     const info = { width: 1080, height: 1920, rotation: 90, hdr: 'hlg', interlaced: false } as VideoInfo
     const vf = gpuVideoFilter(info, 1920, { device: 1, decode: 'vulkan' }, { fps: 29.97 })
-    expect(vf).toMatch(/^fps=30000\/1001,libplacebo=w=1080:h=1920:rotate=90:tonemapping=hable:/)
-    expect(vf).toMatch(/format=yuv420p,setsar=1$/)
+    expect(vf).toBe(`fps=30000/1001,libplacebo=w=1080:h=1920:rotate=90:apply_dolbyvision=0:range=tv:format=yuv420p10le,${TONEMAP_CHAIN},setsar=1`)
     expect(gpuVideoFilter({ ...info, hdr: 'pq' }, 960, { device: 0, decode: 'cuda' })).toMatch(/^hwupload,libplacebo=w=540:h=960:rotate=90:tonemapping=reinhard/)
     expect(gpuEligible({ ...info, interlaced: true })).toBe(false)
     expect(gpuEligible({ ...info, hdr: false })).toBe(false)
@@ -96,8 +95,9 @@ describe('GPU tone mapping', () => {
           bias[i % 3] += b[f][i] - a[f][i]
         }
         const n = a[f].length
-        // a wrong orientation or a broken tone curve is off by 40+; the curves differ by a few levels
-        expect(mad / n, `${name} frame ${f} mean |diff|`).toBeLessThan(10)
+        // a wrong orientation or a broken tone curve is off by 40+; HLG gets the CPU curve after the GPU
+        // pass, PQ libplacebo's Reinhard, which differs by a few levels
+        expect(mad / n, `${name} frame ${f} mean |diff|`).toBeLessThan(name === 'hlg.mov' ? 3 : 10)
         for (const c of bias) expect(Math.abs(c / (n / 3)), `${name} frame ${f} channel bias`).toBeLessThan(8)
       }
     })

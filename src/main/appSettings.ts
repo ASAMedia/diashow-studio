@@ -2,6 +2,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { AppSettings } from '@shared/types'
+import { validHost } from '@shared/netPaths'
 
 const MAX_BYTES = 256 * 1024
 
@@ -35,6 +36,10 @@ export function sanitizeAppSettings(value: unknown): AppSettings {
   const kiosk = copy.kioskProjectId
   if (kiosk !== undefined && kiosk !== null && !(typeof kiosk === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(kiosk))) delete copy.kioskProjectId
   sanitizeUpdateFields(copy)
+  if (copy.trustedHosts !== undefined) {
+    const hosts = Array.isArray(copy.trustedHosts) ? copy.trustedHosts.filter(validHost).map((h) => h.toLowerCase()) : []
+    copy.trustedHosts = [...new Set(hosts)].slice(0, 200)
+  }
   return copy as AppSettings
 }
 

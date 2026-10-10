@@ -6,7 +6,7 @@ import type { LookId, TextFont, TextPosition, TextStyle, ThemeId, TitleStyle } f
 import { DEFAULT_TEXT_STYLE } from '@shared/types'
 import { useStore } from '../store'
 import { pick, t } from '../i18n'
-import { Check, FONTS, Section, Slider, TITLE_STYLES } from './ui'
+import { Check, Field, FONTS, Section, Seg, Slider, TITLE_STYLES } from './ui'
 
 export function ThemeThumb({ id, thumbs }: { id: ThemeId; thumbs: string[] }) {
   const img = (i: number, style: CSSProperties): ReactNode =>
@@ -112,9 +112,9 @@ export function ThemesPanel() {
   return (
     <>
       <Section title={t('themes')}>
-        <div className="themes">
+        <div className="themes" role="group" aria-label={t('themes')}>
           {THEMES.map((th) => (
-            <button key={th.id} className={`theme-card ${st.theme === th.id ? 'on' : ''}`} title={pick(th.description)} onClick={() => setTheme(th.id)}>
+            <button key={th.id} className={`theme-card ${st.theme === th.id ? 'on' : ''}`} aria-pressed={st.theme === th.id} title={pick(th.description)} onClick={() => setTheme(th.id)}>
               <ThemeThumb id={th.id} thumbs={thumbs} />
               <span>{pick(th.name)}</span>
             </button>
@@ -122,7 +122,7 @@ export function ThemesPanel() {
         </div>
       </Section>
       <Section title={t('look')}>
-        <select style={{ width: '100%' }} value={st.look} onChange={(e) => setSettings({ look: e.target.value as LookId })}>
+        <select style={{ width: '100%' }} aria-label={t('look')} value={st.look} onChange={(e) => setSettings({ look: e.target.value as LookId })}>
           {LOOKS.map((l) => (
             <option key={l.id} value={l.id}>
               {pick(l.name)}
@@ -136,8 +136,8 @@ export function ThemesPanel() {
         </Check>
         {st.showTitle && (
           <div className="stack" style={{ marginTop: 6 }}>
-            <input type="text" placeholder={project.name} value={st.titleText ?? ''} onChange={(e) => setSettings({ titleText: e.target.value || undefined })} />
-            <input type="text" placeholder={t('subtitleText')} value={st.subtitleText ?? ''} onChange={(e) => setSettings({ subtitleText: e.target.value || undefined })} />
+            <input type="text" aria-label={t('titleText')} placeholder={project.name} value={st.titleText ?? ''} onChange={(e) => setSettings({ titleText: e.target.value || undefined })} />
+            <input type="text" aria-label={t('subtitleText')} placeholder={t('subtitleText')} value={st.subtitleText ?? ''} onChange={(e) => setSettings({ subtitleText: e.target.value || undefined })} />
           </div>
         )}
       </Section>
@@ -157,8 +157,7 @@ function TextStyleSection() {
   return (
     <Section title={t('textStyle')}>
       <div className="stack">
-        <div className="row">
-          <label>{t('titleStyle')}</label>
+        <Field label={t('titleStyle')}>
           <select value={project.settings.titleStyle ?? 'theme'} onChange={(e) => setSettings({ titleStyle: e.target.value as TitleStyle })}>
             {TITLE_STYLES.map((s) => (
               <option key={s.id} value={s.id}>
@@ -166,9 +165,8 @@ function TextStyleSection() {
               </option>
             ))}
           </select>
-        </div>
-        <div className="row">
-          <label>{t('font')}</label>
+        </Field>
+        <Field label={t('font')}>
           <select value={ts.font} onChange={(e) => set({ font: e.target.value as TextFont })}>
             <option value="theme">{t('themeDefault')}</option>
             {FONTS.map((f) => (
@@ -177,22 +175,20 @@ function TextStyleSection() {
               </option>
             ))}
           </select>
-        </div>
+        </Field>
         <Slider label={t('textSize')} value={ts.scale} min={0.6} max={1.8} step={0.05} display={`${Math.round(ts.scale * 100)} %`} onChange={(v) => set({ scale: v })} />
-        <div className="row">
-          <label>{t('textColor')}</label>
+        <Field
+          label={t('textColor')}
+          extra={colorMode === 'custom' && <input type="color" className="color-pick" aria-label={t('customColor')} value={ts.color} onChange={(e) => set({ color: e.target.value })} />}
+        >
           <select value={colorMode} onChange={(e) => set({ color: COLORS[e.target.value] ?? '' })}>
             <option value="theme">{t('themeDefault')}</option>
             <option value="white">{t('white')}</option>
             <option value="black">{t('black')}</option>
             <option value="custom">{t('customColor')}</option>
           </select>
-          {colorMode === 'custom' && (
-            <input type="color" value={ts.color} onChange={(e) => set({ color: e.target.value })} style={{ width: 32, height: 26, padding: 0, border: 'none', background: 'none' }} />
-          )}
-        </div>
-        <div className="row">
-          <label>{t('textPosition')}</label>
+        </Field>
+        <Field label={t('textPosition')}>
           <select value={ts.position} onChange={(e) => set({ position: e.target.value as TextPosition })}>
             <option value="theme">{t('themeDefault')}</option>
             <option value="bottom-left">{t('posBL')}</option>
@@ -201,16 +197,19 @@ function TextStyleSection() {
             <option value="top-left">{t('posTL')}</option>
             <option value="center">{t('posC')}</option>
           </select>
-        </div>
-        <div className="row">
-          <label>{t('uppercase')}</label>
-          <div className="seg">
-            {(['theme', 'on', 'off'] as const).map((v) => (
-              <button key={v} className={ts.uppercase === v ? 'on' : ''} onClick={() => set({ uppercase: v })}>
-                {v === 'theme' ? t('themeDefault') : v === 'on' ? t('on') : t('off')}
-              </button>
-            ))}
-          </div>
+        </Field>
+        <div className="row stacked">
+          <span className="label">{t('uppercase')}</span>
+          <Seg
+            label={t('uppercase')}
+            value={ts.uppercase}
+            options={[
+              { id: 'theme', label: t('themeDefault') },
+              { id: 'on', label: t('on') },
+              { id: 'off', label: t('off') }
+            ]}
+            onChange={(v) => set({ uppercase: v })}
+          />
         </div>
       </div>
     </Section>

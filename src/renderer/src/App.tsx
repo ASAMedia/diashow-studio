@@ -24,6 +24,8 @@ import { Wizard } from './components/Wizard'
 import { DiagnosticsHost } from './components/ProjectRepair'
 import { watchStabilize } from './stabilize'
 import { timelineOf } from './timeline'
+import { keyForFocus, modalOpen } from './keys'
+import { NetworkBanner } from './components/NetworkBanner'
 
 /** Routes dropped files: audio goes to the playlist, everything else into the show. */
 export async function handleDroppedPaths(paths: string[]): Promise<void> {
@@ -110,19 +112,20 @@ export function App() {
 
   useEffect(() => {
     const key = (e: KeyboardEvent): void => {
-      const target = e.target as HTMLElement
-      if (target.closest('input, textarea, select')) return
       const s = useStore.getState()
+      // F1 works everywhere, also while typing
       if (e.key === 'F1') {
         e.preventDefault()
         s.set({ dialog: s.dialog === 'handbook' ? null : 'handbook' })
         return
       }
+      // typing in a field, or Space/Enter on a button reached with the keyboard
+      if (keyForFocus(e)) return
       if (e.key === 'Escape' && s.dialog) {
         s.set({ dialog: null })
         return
       }
-      if (s.view !== 'editor' || s.fullscreen || s.exportOpen || s.presenting || s.dialog) return
+      if (s.view !== 'editor' || s.fullscreen || s.exportOpen || s.presenting || s.dialog || modalOpen()) return
       if (e.key === 'Escape' && (s.privacyEdit || s.textSel)) {
         s.set({ privacyEdit: null, textSel: null })
         return
@@ -165,6 +168,7 @@ export function App() {
         <div className="editor">
           <div className="notices">
             <MissingBanner />
+            <NetworkBanner />
             <Tip id="editor">{t('onboardEditor')}</Tip>
           </div>
           <div className="workspace">

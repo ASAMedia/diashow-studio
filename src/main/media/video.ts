@@ -18,15 +18,11 @@ export const TONEMAP_CHAIN =
   'zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p'
 
 /**
- * libplacebo settings that reproduce TONEMAP_CHAIN on the GPU. Tuned on grey ramps and real phone
- * clips: HLG within ~4/255 mean difference; for PQ, Reinhard follows the CPU curve up to ~600 nits
- * and then rolls highlights off where the CPU chain clips them. Dolby Vision RPUs are ignored like
- * on the CPU (iPhone profile 8.4 is HLG-compatible).
+ * libplacebo settings for PQ: Reinhard follows the CPU curve up to ~600 nits and then rolls
+ * highlights off where the CPU chain clips them. Dolby Vision RPUs are ignored like on the CPU
+ * (iPhone profile 8.4 is HLG-compatible).
  */
-const GPU_TONEMAP: Record<'hlg' | 'pq', string> = {
-  hlg: 'tonemapping=hable:peak_detect=0:gamut_mode=clip:gamma=1.25:saturation=1.05',
-  pq: 'tonemapping=reinhard:peak_detect=0:gamut_mode=clip'
-}
+const GPU_TONEMAP_PQ = 'tonemapping=reinhard:peak_detect=0:gamut_mode=clip'
 
 /** Input options for the GPU path: Vulkan device (+ hardware decoding into it). */
 export function gpuInputArgs(gpu: GpuTonemap): string[] {
@@ -41,19 +37,24 @@ export function gpuInputArgs(gpu: GpuTonemap): string[] {
 }
 
 /**
- * GPU version of videoFilter: scaling, rotation and (HDR) tone mapping in one libplacebo pass, 8-bit
- * 4:2:0 limited range out (HDR: BT.709; SDR keeps its colour space, like the CPU chain). Frames the
- * decoder could not keep on the GPU (unsupported profile) arrive in system memory and are uploaded
- * by libplacebo itself.
+ * GPU version of videoFilter: scaling, rotation and (PQ) tone mapping in one libplacebo pass, 8-bit
+ * 4:2:0 limited range out (HDR: BT.709; SDR keeps its colour space, like the CPU chain). HLG leaves
+ * the GPU scaled and rotated but still HLG (10-bit) and gets the CPU tone curve at proxy size: the
+ * same picture as the CPU chain (libplacebo's own curve lightens coloured areas by ~10/255, as of
+ * libplacebo in FFmpeg 9.0.2), as fast as the GPU-only pass and half the CPU time of the CPU chain
+ * (6 s of noisy 4K HLG: 3.1 s, 21 s CPU vs 3.0 s, 40 s CPU). Frames the decoder could not keep on
+ * the GPU (unsupported profile) arrive in system memory and are uploaded by libplacebo itself.
  */
 export function gpuVideoFilter(info: VideoInfo, maxEdge: number, gpu: GpuTonemap, opts: { fps?: number; shaderCache?: boolean } = {}): string {
   const [w, h] = fitEven(info.width, info.height, maxEdge)
   const parts: string[] = []
   if (opts.fps) parts.push(`fps=${fpsRational(opts.fps)}`)
   if (gpu.decode === 'cuda') parts.push('hwupload')
-  const tone = info.hdr ? `${GPU_TONEMAP[info.hdr]}:apply_dolbyvision=0:colorspace=bt709:color_primaries=bt709:color_trc=bt709:` : ''
+  const tone = info.hdr === 'pq' ? `${GPU_TONEMAP_PQ}:apply_dolbyvision=0:colorspace=bt709:color_primaries=bt709:color_trc=bt709:` : info.hdr ? 'apply_dolbyvision=0:' : ''
+  const format = info.hdr === 'hlg' ? 'yuv420p10le' : 'yuv420p'
   // shader_cache is a file name prefix relative to FFmpeg's working directory (no path escaping needed)
-  parts.push(`libplacebo=w=${w}:h=${h}:rotate=${info.rotation}:${tone}range=tv:format=yuv420p` + (opts.shaderCache ? ':shader_cache=pl' : ''))
+  parts.push(`libplacebo=w=${w}:h=${h}:rotate=${info.rotation}:${tone}range=tv:format=${format}` + (opts.shaderCache ? ':shader_cache=pl' : ''))
+  if (info.hdr === 'hlg') parts.push(TONEMAP_CHAIN)
   parts.push('setsar=1')
   return parts.join(',')
 }

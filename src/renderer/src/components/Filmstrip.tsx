@@ -11,6 +11,8 @@ import { fmtTime, t } from '../i18n'
 import { friendly } from '../errors'
 import { AudioLane } from './AudioLane'
 import { CARD, GAP, STEP, timeToX } from './stripScale'
+import { Menu, MenuItem, MenuSeparator } from './Menu'
+import { reducedMotion } from '../appearance'
 
 interface Menu {
   x: number
@@ -38,13 +40,6 @@ export function Filmstrip() {
   const manualUntil = useRef(0)
   const sel = new Set(selection)
   const width = Math.max(tl.slides.length * STEP + CARD, 200)
-
-  useEffect(() => {
-    if (!menu) return
-    const close = (): void => setMenu(null)
-    window.addEventListener('pointerdown', close)
-    return () => window.removeEventListener('pointerdown', close)
-  }, [menu])
 
   const moveSlide = (from: number, to: number): void => {
     const src = tl.slides[from]
@@ -142,11 +137,57 @@ export function Filmstrip() {
   const visibleIds = tl.slides.slice(first, last + 1).flatMap((s) => s.media.map((m) => m.id)).join(',')
   useEffect(() => prioritize('filmstrip', visibleIds ? visibleIds.split(',') : []), [visibleIds])
 
+  // The filmstrip is one stop in the tab order: the selected card (or the first). Focus a card by index,
+  // scrolling it into the rendered part first.
+  const tabIndexAt = Math.max(0, tl.slides.findIndex((sl) => sl.entries.some((e) => sel.has(e.id))))
+  const focusCard = (index: number, tries = 6): void => {
+    const el = scrollRef.current
+    if (el) {
+      const x = index * STEP
+      if (x < el.scrollLeft || x + CARD > el.scrollLeft + el.clientWidth - 32) el.scrollLeft = Math.max(0, x - el.clientWidth / 2)
+    }
+    // right away when the card is rendered (quick key presses go to the new card), else after a frame
+    const card = document.querySelector<HTMLElement>(`.card[data-index="${index}"]`)
+    if (card) card.focus()
+    else if (tries > 0) requestAnimationFrame(() => focusCard(index, tries - 1))
+  }
+
+  // keyboard on a focused card: Enter selects (Ctrl/Shift as with the mouse), the arrow keys (after
+  // Tab, not after a click) go to the next card and select it, the menu key opens its menu, Alt+arrows
+  // move the slide
+  const cardKey = (s: TimelineSlide, e: React.KeyboardEvent<HTMLDivElement>): void => {
+    const nav = e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Home' || e.key === 'End'
+    if (nav && !e.altKey && !e.ctrlKey && e.currentTarget.matches(':focus-visible')) {
+      e.preventDefault()
+      e.stopPropagation()
+      const to = e.key === 'Home' ? 0 : e.key === 'End' ? tl.slides.length - 1 : s.index + (e.key === 'ArrowLeft' ? -1 : 1)
+      const next = tl.slides[to]
+      if (!next) return
+      clickSlide(next, e as unknown as React.MouseEvent)
+      focusCard(to)
+    } else if (e.key === 'Enter' && !e.altKey) {
+      e.preventDefault()
+      clickSlide(s, e as unknown as React.MouseEvent)
+    } else if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
+      e.preventDefault()
+      const r = e.currentTarget.getBoundingClientRect()
+      if (s.kind !== 'title' && !s.entries.some((x) => sel.has(x.id))) select(s.entries.map((x) => x.id))
+      setMenu({ x: r.left + 8, y: r.top - 8, slide: s })
+    } else if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && s.kind !== 'title') {
+      e.preventDefault()
+      e.stopPropagation()
+      const to = e.key === 'ArrowLeft' ? s.index - 1 : s.index + 2
+      if (to < 0 || to > tl.slides.length || tl.slides[to - (e.key === 'ArrowLeft' ? 0 : 1)]?.kind === 'title') return
+      moveSlide(s.index, to)
+      focusCard(e.key === 'ArrowLeft' ? s.index - 1 : s.index + 1)
+    }
+  }
+
   return (
-    <div className="strip">
+    <section className="strip" aria-label={t('filmstrip')}>
       {excluded > 0 && (
-        <button className="excluded-chip" title={t('cull')} onClick={() => useStore.getState().set({ view: 'cull' })}>
-          <EyeOff size={11} /> {t('excludedCount').replace('{n}', String(excluded))}
+        <button className="excluded-chip" title={t('cullTitle')} onClick={() => useStore.getState().set({ view: 'cull' })}>
+          <EyeOff size={12} aria-hidden /> {t('excludedCount').replace('{n}', String(excluded))}
         </button>
       )}
       <div
@@ -182,6 +223,7 @@ export function Filmstrip() {
               <SlideCard
                 key={s.id}
                 slide={s}
+                tabbable={s.index === tabIndexAt}
                 selected={s.entries.some((e) => sel.has(e.id))}
                 captionSelected={!!s.captionEntryId && sel.has(s.captionEntryId)}
                 onCaption={() => {
@@ -192,6 +234,7 @@ export function Filmstrip() {
                 mergeTarget={mergeAt === s.index}
                 onDuration={(sec) => useStore.getState().setSlideDuration(s.entries.map((e) => e.id), sec)}
                 onClick={(e) => clickSlide(s, e)}
+                onKeyDown={(e) => cardKey(s, e)}
                 onMenu={(e) => {
                   e.preventDefault()
                   if (s.kind !== 'title' && !s.entries.some((x) => sel.has(x.id))) select(s.entries.map((x) => x.id))
@@ -210,87 +253,97 @@ export function Filmstrip() {
               />
             ))}
             {last < n - 1 && <div style={{ flex: '0 0 auto', width: (n - 1 - last) * STEP - GAP }} />}
-            <div className="card add" title={t('addMedia')} onClick={(e) => setMenu({ x: e.clientX, y: e.clientY - 120, add: true })}>
+            <button
+              className="card add"
+              title={t('addToShow')}
+              aria-label={t('addToShow')}
+              aria-haspopup="menu"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                const r = e.currentTarget.getBoundingClientRect()
+                setMenu({ x: r.left, y: r.top - 120, add: true })
+              }}
+            >
               <Plus size={20} />
-            </div>
+            </button>
           </div>
           {dropAt != null && <div className="drop-indicator" style={{ left: dropAt * STEP - GAP / 2 - 1 }} />}
           <AudioLane tl={tl} width={width} />
           <Playhead tl={tl} scrollRef={scrollRef} manualUntil={manualUntil} />
         </div>
       </div>
-      {menu && (
-        <div className="menu" style={{ left: menu.x, top: Math.max(8, menu.y - (menu.add ? 0 : 10)) }} onPointerDown={(e) => e.stopPropagation()}>
+      {menu && (menu.add || (menu.slide && menu.slide.kind !== 'title')) && (
+        <Menu label={menu.add ? t('addToShow') : t('slideMenu')} onClose={() => setMenu(null)} style={{ left: menu.x, top: Math.max(8, menu.y - (menu.add ? 0 : 10)) }}>
           {menu.add && (
             <>
-              <button onClick={async () => { setMenu(null); await useStore.getState().importMedia(await window.api.pickMedia()) }}>
-                <ImagePlus size={14} /> {t('addMedia')}
-              </button>
-              <button onClick={async () => { setMenu(null); await useStore.getState().importMedia(await window.api.pickFolder()) }}>
-                <FolderPlus size={14} /> {t('addFolder')}
-              </button>
-              <button onClick={() => { setMenu(null); useStore.getState().addText() }}>
-                <Type size={14} /> {t('addText')}
-              </button>
+              <MenuItem icon={<ImagePlus size={15} />} onSelect={async () => useStore.getState().importMedia(await window.api.pickMedia())}>
+                {t('addMedia')}
+              </MenuItem>
+              <MenuItem icon={<FolderPlus size={15} />} onSelect={async () => useStore.getState().importMedia(await window.api.pickFolder())}>
+                {t('addFolder')}
+              </MenuItem>
+              <MenuItem icon={<Type size={15} />} onSelect={() => useStore.getState().addText()}>
+                {t('addText')}
+              </MenuItem>
             </>
           )}
           {menu.slide && menu.slide.kind !== 'title' && (
             <>
-              <button onClick={() => { setMenu(null); useStore.getState().addText() }}>
-                <Type size={14} /> {t('addText')}
-              </button>
+              <MenuItem icon={<Type size={15} />} onSelect={() => useStore.getState().addText()}>
+                {t('addText')}
+              </MenuItem>
               {selectedSlides.length > 1 && maxPer > 1 && selectedSlides.reduce((n, x) => n + x.entries.length, 0) <= maxPer && (
-                <button onClick={() => {
-                  useStore.getState().mergeEntries(selectedSlides.flatMap((x) => x.entries.map((e) => e.id)))
-                  setMenu(null)
-                }}>
-                  <Merge size={14} /> {t('merge')}
-                </button>
+                <MenuItem icon={<Merge size={15} />} onSelect={() => useStore.getState().mergeEntries(selectedSlides.flatMap((x) => x.entries.map((e) => e.id)))}>
+                  {t('merge')}
+                </MenuItem>
               )}
               {menu.slide.entries.length > 1 && (
-                <button onClick={() => {
-                  useStore.getState().splitSlide(menu.slide!.entries.map((e) => e.id))
-                  setMenu(null)
-                }}>
-                  <Split size={14} /> {t('split')}
-                </button>
+                <MenuItem icon={<Split size={15} />} onSelect={() => useStore.getState().splitSlide(menu.slide!.entries.map((e) => e.id))}>
+                  {t('split')}
+                </MenuItem>
               )}
               {menu.slide.kind !== 'text' && maxPer > 1 && menu.slide.index > 0 && ['photos', 'video'].includes(tl.slides[menu.slide.index - 1]?.kind) && (
-                <button onClick={() => {
-                  const prev = tl.slides[menu.slide!.index - 1]
-                  useStore.getState().mergeEntries([...prev.entries, ...menu.slide!.entries].map((e) => e.id))
-                  setMenu(null)
-                }}>
-                  <Merge size={14} /> {t('joinPrev')}
-                </button>
+                <MenuItem
+                  icon={<Merge size={15} />}
+                  onSelect={() => {
+                    const prev = tl.slides[menu.slide!.index - 1]
+                    useStore.getState().mergeEntries([...prev.entries, ...menu.slide!.entries].map((e) => e.id))
+                  }}
+                >
+                  {t('joinPrev')}
+                </MenuItem>
               )}
-              <button onClick={() => {
-                const ids = (selectedSlides.length ? selectedSlides : [menu.slide!]).flatMap((x) => x.entries.map((y) => y.id))
-                useStore.getState().updateEntries(ids, (x) => (x.excluded = true))
-                select([])
-                setMenu(null)
-              }}>
-                <EyeOff size={14} /> {t('excludeSel')}
-              </button>
+              <MenuItem
+                icon={<EyeOff size={15} />}
+                onSelect={() => {
+                  const ids = (selectedSlides.length ? selectedSlides : [menu.slide!]).flatMap((x) => x.entries.map((y) => y.id))
+                  useStore.getState().updateEntries(ids, (x) => (x.excluded = true))
+                  select([])
+                }}
+              >
+                {t('excludeSel')}
+              </MenuItem>
               {menu.slide.kind === 'photos' && themeMeta(project.settings.theme).kenBurns && (
-                <button onClick={() => { setMenu(null); useStore.getState().set({ tab: 'slide', kbEdit: 'start' }) }}>
-                  <Move size={14} /> {t('kbEdit')}
-                </button>
+                <MenuItem icon={<Move size={15} />} onSelect={() => useStore.getState().set({ tab: 'slide', kbEdit: 'start' })}>
+                  {t('kbEdit')}
+                </MenuItem>
               )}
-              <hr />
-              <button onClick={() => { setMenu(null); useStore.getState().removeEntries(menu.slide!.entries.map((e) => e.id)) }}>
-                <Trash2 size={14} /> {t('delete')}
-              </button>
+              <MenuSeparator />
+              <MenuItem icon={<Trash2 size={15} />} onSelect={() => useStore.getState().removeEntries(menu.slide!.entries.map((e) => e.id))}>
+                {t('deleteSlide')}
+              </MenuItem>
             </>
           )}
-        </div>
+        </Menu>
       )}
-    </div>
+    </section>
   )
 }
 
 function SlideCard(props: {
   slide: TimelineSlide
+  /** The card the Tab key reaches (one per filmstrip). */
+  tabbable: boolean
   selected: boolean
   captionSelected: boolean
   onCaption: () => void
@@ -299,6 +352,7 @@ function SlideCard(props: {
   /** Drag on the right edge sets the slide's time; undefined = automatic again. */
   onDuration: (seconds: number | undefined) => void
   onClick: (e: React.MouseEvent) => void
+  onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void
   onMenu: (e: React.MouseEvent) => void
   onDragStart: () => void
   onDragEnd: () => void
@@ -309,9 +363,18 @@ function SlideCard(props: {
   const failed = s.media.find((m) => m.status === 'error')
   const ve = s.kind === 'video' ? (s.entries[0] as VideoEntry) : null
   const gridVideos = s.kind === 'photos' ? s.entries.filter((e) => e.type === 'video').length : 0
+  const name = s.kind === 'text' || s.kind === 'title' ? s.title?.text : s.media.map((m) => m.name).join(', ')
   return (
     <div
       className={`card ${props.selected ? 'selected' : ''} ${props.captionSelected ? 'cap-selected' : ''} ${props.dragging ? 'dragging' : ''} ${props.mergeTarget ? 'merge-target' : ''}`}
+      role="button"
+      tabIndex={props.tabbable ? 0 : -1}
+      aria-pressed={props.selected}
+      data-keys="app"
+      data-index={s.index}
+      aria-label={`${t('slide')} ${s.index + 1}: ${name || (s.kind === 'title' ? t('title') : t('textSlide'))}${failed ? ` – ${failed.error === 'missing' ? t('missing') : t('errUnreadable')}` : ''}`}
+      data-entry={s.entries[0]?.id}
+      onKeyDown={props.onKeyDown}
       draggable={s.kind !== 'title'}
       onDragStart={(e) => {
         e.dataTransfer.effectAllowed = 'move'
@@ -321,17 +384,17 @@ function SlideCard(props: {
       onDragEnd={props.onDragEnd}
       onClick={props.onClick}
       onContextMenu={props.onMenu}
-      title={s.kind === 'text' || s.kind === 'title' ? s.title?.text : s.media.map((m) => m.name).join(', ')}
+      title={name}
     >
       {s.kind === 'title' || s.kind === 'text' ? (
         <div className="text-card">T</div>
       ) : (
         <div className="tiles">
-          {s.media.map((m, i) => (m.thumb ? <img key={i} src={mediaUrl(m.thumb)} alt="" draggable={false} loading="lazy" decoding="async" /> : <div key={i} style={{ flex: 1, background: '#2b2b2f' }} />))}
+          {s.media.map((m, i) => (m.thumb ? <img key={i} src={mediaUrl(m.thumb)} alt="" draggable={false} loading="lazy" decoding="async" /> : <div key={i} className="empty" />))}
         </div>
       )}
-      <div className="badges">
-        <span style={{ display: 'flex', gap: 4 }}>
+      <div className="badges" aria-hidden>
+        <span>
           {s.kind === 'video' && (
             <span className="badge">
               <Film size={10} /> {fmtTime(s.duration)}
@@ -344,7 +407,7 @@ function SlideCard(props: {
           )}
           {m0?.live && <span className="badge">LIVE</span>}
         </span>
-        <span style={{ display: 'flex', gap: 4 }}>
+        <span>
           {s.customDuration && (
             <span className="badge">
               <Clock size={10} />
@@ -354,25 +417,29 @@ function SlideCard(props: {
         </span>
       </div>
       {s.captionEntryId && (
-        <span
+        <button
           className="cap-badge"
-          title={s.caption?.text}
+          tabIndex={-1}
+          title={`${t('captionSlide')}: ${s.caption?.text ?? ''}`}
+          aria-label={`${t('captionSlide')}: ${s.caption?.text ?? ''}`}
           onClick={(e) => {
             e.stopPropagation()
             props.onCaption()
           }}
         >
           T
-        </span>
+        </button>
       )}
       {(s.kind === 'photos' || s.kind === 'text' || s.kind === 'video') && <DurationHandle slide={s} onDuration={props.onDuration} />}
       {busy && <div className="progress" style={{ width: `${Math.round((busy.progress ?? 0.05) * 100)}%` }} />}
       {failed && (
-        <div className="err" title={friendly(failed.error ?? '', 'import').text}>
+        <div className="err" title={friendly(failed.error ?? '', 'import').text} aria-hidden>
           {failed.error === 'missing' ? t('missing') : failed.format}
         </div>
       )}
-      <span className="num">{s.index + 1}</span>
+      <span className="num" aria-hidden>
+        {s.index + 1}
+      </span>
     </div>
   )
 }
@@ -428,7 +495,7 @@ function Playhead({ tl, scrollRef, manualUntil }: { tl: Timeline; scrollRef: Rea
     if (!el || performance.now() < manualUntil.current) return
     const px = x + 16
     if (px < el.scrollLeft + 40 || px > el.scrollLeft + el.clientWidth - 80) {
-      el.scrollTo({ left: Math.max(0, px - el.clientWidth * 0.25), behavior: playing ? 'smooth' : 'auto' })
+      el.scrollTo({ left: Math.max(0, px - el.clientWidth * 0.25), behavior: playing && !reducedMotion() ? 'smooth' : 'auto' })
     }
   }, [x, playing, scrollRef, manualUntil])
   return <div className="playhead" style={{ left: x - 1 }} />

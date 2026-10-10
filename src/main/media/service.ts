@@ -54,6 +54,8 @@ export interface MediaServiceConfig {
   rawDecoder?: RawDecoding
   /** Make proxies on the GPU when available: HDR tone mapping, and SDR sources the GPU decodes (default true). */
   hdrGpu?: boolean
+  /** Whether a path from a saved project may be opened (network shares the user hasn't trusted may not); default all. */
+  allowPath?: (path: string) => boolean
 }
 
 /** What saved projects use (ProjectStore.references()). */

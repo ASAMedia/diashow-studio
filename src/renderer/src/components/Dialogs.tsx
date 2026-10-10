@@ -2,8 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { mediaUrl } from '@shared/api'
 import { sameClipGroups } from '@shared/duplicates'
 import type { MediaItem, Project } from '@shared/types'
+import { Loader2 } from 'lucide-react'
 import { useStore } from '../store'
 import { t } from '../i18n'
+import { ErrorText } from '../errors'
+import { Modal } from './Modal'
+import { Slider } from './ui'
 
 // ---------------------------------------------------------------- rejects
 
@@ -86,40 +90,15 @@ export function RejectsDialog() {
   const [unchecked, setUnchecked] = useState<Set<string>>(new Set())
   const chosen = rejects.filter((r) => !unchecked.has(r.entryId))
   const pending = project.media.filter((m) => m.status === 'ready' && (m.kind === 'photo' ? m.sharpness == null : m.hash == null || m.hash2 == null)).length
+  const close = (): void => set({ dialog: null })
   return (
-    <div className="overlay">
-      <div className="dialog wide">
-        <h2>{t('rejectsTitle')}</h2>
-        <div className="row">
-          <label>{t('blurThreshold')}</label>
-          <input type="range" min={0.05} max={0.6} step={0.01} value={threshold} onChange={(e) => setThreshold(Number(e.target.value))} style={{ width: 160 }} />
-          <span className="val">{Math.round(threshold * 100)} %</span>
-        </div>
-        {pending > 0 && <p className="hint">{t('notAnalysedMedia').replace('{n}', String(pending))}</p>}
-        {rejects.length === 0 ? (
-          <p className="hint">{t('noRejectsMedia')}</p>
-        ) : (
-          <div className="reject-grid">
-            {rejects.map((r) => (
-              <label key={r.entryId} className={`reject ${unchecked.has(r.entryId) ? 'off' : ''}`} title={r.media.name}>
-                {r.media.thumb && <img src={mediaUrl(r.media.thumb)} alt="" loading="lazy" />}
-                <input
-                  type="checkbox"
-                  checked={!unchecked.has(r.entryId)}
-                  onChange={(e) => {
-                    const next = new Set(unchecked)
-                    if (e.target.checked) next.delete(r.entryId)
-                    else next.add(r.entryId)
-                    setUnchecked(next)
-                  }}
-                />
-                <span className={`reason ${r.reason}`}>{rejectLabel(r)}</span>
-              </label>
-            ))}
-          </div>
-        )}
-        <div className="actions">
-          <button className="btn" onClick={() => set({ dialog: null })}>
+    <Modal
+      title={t('rejectsTitle')}
+      onClose={close}
+      className="wide"
+      actions={
+        <>
+          <button className="btn" onClick={close}>
             {t('cancel')}
           </button>
           <button
@@ -127,14 +106,41 @@ export function RejectsDialog() {
             disabled={!chosen.length}
             onClick={() => {
               useStore.getState().removeEntries(chosen.map((r) => r.entryId))
-              set({ dialog: null })
+              close()
             }}
           >
             {t('removeN').replace('{n}', String(chosen.length))}
           </button>
+        </>
+      }
+    >
+      <p className="hint lead">{t('rejectsIntro')}</p>
+      <Slider label={t('blurThreshold')} value={threshold} min={0.05} max={0.6} step={0.01} display={`${Math.round(threshold * 100)} %`} onChange={setThreshold} />
+      {pending > 0 && <p className="hint">{t('notAnalysedMedia').replace('{n}', String(pending))}</p>}
+      {rejects.length === 0 ? (
+        <p className="empty-note">{t('noRejectsMedia')}</p>
+      ) : (
+        <div className="reject-grid">
+          {rejects.map((r) => (
+            <label key={r.entryId} className={`reject ${unchecked.has(r.entryId) ? 'off' : ''}`} title={`${r.media.name} · ${rejectLabel(r)}`}>
+              {r.media.thumb && <img src={mediaUrl(r.media.thumb)} alt="" loading="lazy" />}
+              <input
+                type="checkbox"
+                aria-label={`${r.media.name}: ${rejectLabel(r)}`}
+                checked={!unchecked.has(r.entryId)}
+                onChange={(e) => {
+                  const next = new Set(unchecked)
+                  if (e.target.checked) next.delete(r.entryId)
+                  else next.add(r.entryId)
+                  setUnchecked(next)
+                }}
+              />
+              <span className={`reason ${r.reason}`}>{rejectLabel(r)}</span>
+            </label>
+          ))}
         </div>
-      </div>
-    </div>
+      )}
+    </Modal>
   )
 }
 
@@ -173,21 +179,13 @@ export function PackDialog() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  const close = phase === 'running' ? undefined : (): void => set({ dialog: null })
   return (
-    <div className="overlay">
-      <div className="dialog">
-        <h2>{t('packTitle')}</h2>
-        {phase === 'running' && <p>{t('packing')} {message}</p>}
-        {phase === 'done' && (
-          <>
-            <p>{t('packDone')}</p>
-            <p className="hint" style={{ wordBreak: 'break-all' }}>
-              {result}
-            </p>
-          </>
-        )}
-        {phase === 'error' && <p className="error">{result}</p>}
-        <div className="actions">
+    <Modal
+      title={t('packTitle')}
+      onClose={close}
+      actions={
+        <>
           {phase === 'done' && (
             <button className="btn" onClick={() => void window.api.revealInFolder(result)}>
               {t('showInFolder')}
@@ -196,8 +194,21 @@ export function PackDialog() {
           <button className="btn primary" disabled={phase === 'running'} onClick={() => set({ dialog: null })}>
             {t('close')}
           </button>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      {phase === 'running' && (
+        <p className="busy-line" role="status">
+          <Loader2 size={14} className="spin" aria-hidden /> {t('packing')} <span className="ellipsis">{message}</span>
+        </p>
+      )}
+      {phase === 'done' && (
+        <>
+          <p>{t('packDone')}</p>
+          <p className="hint path">{result}</p>
+        </>
+      )}
+      {phase === 'error' && <ErrorText err={result} context="save" />}
+    </Modal>
   )
 }

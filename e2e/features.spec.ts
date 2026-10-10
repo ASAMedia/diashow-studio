@@ -170,7 +170,8 @@ test('review grid, batch edits, text boxes, pixelation, speed, song section, exp
 
   // ---- song section: only 1 s..4 s of the first song
   await page.locator('.rail button').nth(1).click()
-  await page.locator('.track button[title]').first().click()
+  // the scissors of the first song (the song section)
+  await page.locator('.track button[aria-expanded]').first().click()
   await expect(page.locator('.music-trim .bars span').first()).toBeVisible()
   await state(page, `s.update((p) => { p.music[0].trimIn = 1; p.music[0].trimOut = 4 })`)
   const plan = await state<{ offset: number; duration: number }>(page, `const c = d.player.current.plan.clips.find((x) => x.kind === 'music'); return { offset: c.offset, duration: c.duration }`)

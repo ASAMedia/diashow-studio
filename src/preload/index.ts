@@ -58,6 +58,7 @@ const api: DiashowApi = {
   getAppSettings: () => ipcRenderer.invoke('app:settings-get'),
   setAppSettings: (s) => ipcRenderer.invoke('app:settings-set', s),
   keepAwake: (on) => ipcRenderer.invoke('app:keep-awake', on),
+  trustNetworkHosts: (hosts) => ipcRenderer.invoke('net:trust-hosts', hosts),
   queueAdd: (job) => ipcRenderer.invoke('queue:add', job),
   queueList: () => ipcRenderer.invoke('queue:list'),
   queueCancel: (id) => ipcRenderer.invoke('queue:cancel', id),

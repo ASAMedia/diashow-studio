@@ -8,6 +8,7 @@ import { registerIpc } from './ipc'
 import { denyPopups, loadRenderer, rendererWebPreferences } from './presentation'
 import { registerMediaProtocol } from './protocol'
 import { hardenApp } from './security'
+import { APP_ICON } from './appIcon'
 
 // Tests (and portable setups) can keep all data in one folder instead of AppData/Documents.
 if (process.env.DIASHOW_DATA_DIR) {
@@ -63,8 +64,10 @@ function createWindow(): BrowserWindow {
     show: false,
     backgroundColor: '#1c1c1e',
     title: 'Diashow Studio',
+    icon: APP_ICON,
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#00000000', symbolColor: '#a0a0a8', height: 40 },
+    // the Windows caption buttons: a grey that reads on the dark and on the light theme (3:1 and more)
+    titleBarOverlay: { color: '#00000000', symbolColor: '#85858e', height: 40 },
     webPreferences: rendererWebPreferences()
   })
   win.once('ready-to-show', () => win.show())

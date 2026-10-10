@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- Diashow Studio: two stacked photos, the front one with a play triangle. Drawn for 24 px and up;
+       icon-small.svg is the same picture on a 16 px grid. scripts/make-icon.mjs turns both into icon.ico. -->
+  <defs>
+    <linearGradient id="front" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4d9fff"/>
+      <stop offset="1" stop-color="#2f7fe0"/>
+    </linearGradient>
+    <linearGradient id="back" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#b7d8ff"/>
+      <stop offset="1" stop-color="#8dbdf6"/>
+    </linearGradient>
+  </defs>
+  <g transform="rotate(10 158 81)">
+    <rect x="82" y="22" width="152" height="118" rx="20" fill="url(#back)" stroke="#2f7fe0" stroke-width="6"/>
+    <circle cx="200" cy="52" r="13" fill="#ffffff"/>
+    <path d="M96 98 L134 58 L160 84 L178 68 L222 108 L222 130 L96 130 Z" fill="#6aa8f2"/>
+  </g>
+  <rect x="18" y="78" width="200" height="156" rx="24" fill="url(#front)" stroke="#1f63bd" stroke-width="4"/>
+  <path d="M98 122 L98 190 L156 156 Z" fill="#ffffff" stroke="#ffffff" stroke-width="16" stroke-linejoin="round"/>
+</svg>

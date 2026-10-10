@@ -15,7 +15,7 @@ Am schnellsten geht es mit dem **Assistenten**: Er öffnet sich beim ersten Star
 Andere Wege zur neuen Diashow:
 
 - Fotos, Videos oder Ordner einfach ins Fenster ziehen.
-- **Neues Projekt** wählt Dateien aus; **Ordner abspielen** zeigt einen Ordner sofort als Diashow.
+- **Neue Diashow** wählt Dateien aus; **Ordner abspielen** zeigt einen Ordner sofort als Diashow.
 - **Projekt öffnen…** lädt eine `.dshow`-Datei, z. B. ein gepacktes Projekt von einem anderen PC.
 
 Projekte werden automatisch gespeichert, in `Dokumente\Diashow Studio`. Neue Fotos werden im Hintergrund vorbereitet; du kannst sofort weiterarbeiten.
@@ -34,7 +34,7 @@ Der Editor hat drei Bereiche: die **Vorschau** in der Mitte, rechts die Reiter *
 - **Ausschnitt:** im Vorschaubild ziehen verschiebt das Foto, das Mausrad zoomt, Doppelklick setzt zurück.
 - **Texte:** **Text hinzufügen** erzeugt eine Textfolie. Im Reiter **Folie** fügst du Textfelder auf ein Foto ein.
 - **Kapitel:** im Menü **⋯** gibt es **Tagestitel aus Aufnahmedatum** und **Kapitel aus Ordnernamen**, außerdem **Nach Aufnahmedatum sortieren** und **Abspann hinzufügen**.
-- **Videos:** im Reiter **Folie** zuschneiden, Tempo ändern (Zeitlupe/Zeitraffer) und **Verwacklung beruhigen**.
+- **Videos:** im Reiter **Folie** kürzen, Tempo ändern (Zeitlupe/Zeitraffer) und **Verwacklung beruhigen**.
 - **Rückgängig:** [[Strg+Z]], wiederholen mit [[Strg+Y]].
 
 > Tipp: Mit [[Leertaste]] spielst du die Vorschau ab, mit [[←]] und [[→]] springst du von Folie zu Folie.
@@ -67,10 +67,10 @@ Im Reiter **Musik** fügst du eigene Musikdateien hinzu (MP3, M4A, WAV, FLAC und
 
 ![Sichten: aussortieren und bewerten](cull.jpg)
 
-- [[X]] nimmt ein Bild aus der Show (es bleibt im Projekt) und holt es zurück.
+- [[X]] nimmt ein Bild aus der Diashow (es bleibt im Projekt) und holt es zurück.
 - [[1]] bis [[5]] vergibt Sterne, [[Leertaste]] zeigt das Bild groß.
-- Filter zeigen z. B. nur **Ausgeblendet**, nur Bilder mit Sternen oder **Unscharf & Doppelte**.
-- **Nur ab 3 ★ in die Show** (oder eine andere Zahl) behält nur die besten.
+- Filter zeigen z. B. nur **Herausgenommen**, nur Bilder mit Sternen oder **Unscharf & Doppelte**.
+- **Nur ab 3 ★ in die Diashow** (oder eine andere Zahl) behält nur die besten.
 - **Ausschuss prüfen…** im Menü **⋯** findet unscharfe Fotos und Doppelte, auch dasselbe Video zweimal (z. B. aus WhatsApp).
 
 ## Datenschutz: Gesichter verpixeln {#privacy}
@@ -125,17 +125,35 @@ Für Schülerinnen und Schüler ohne Fotoerlaubnis kannst du Gesichter verpixeln
 - **Projekt packen…** kopiert das Projekt mit allen Fotos, Videos und Musik in einen Ordner, z. B. für einen USB-Stick. Am anderen PC öffnest du die `.dshow`-Datei.
 - Wurden Originale verschoben (anderer Ordner, neuer Laufwerksbuchstabe), findet **Ordner durchsuchen…** im gelben Hinweis sie wieder.
 
+### Beschädigte Projekte reparieren
+
+Wurde eine Projektdatei beim Speichern unterbrochen (z. B. durch einen Stromausfall), steht sie auf der Startseite rot umrandet mit **Reparieren…**. Der Dialog bietet zwei Wege:
+
+- **Aus der Datei retten:** Alles, was noch lesbar ist, wird übernommen. Eine Liste sagt, was fehlte oder repariert wurde.
+- **Automatische Sicherungen:** eine ältere, vollständige Fassung öffnen.
+
+Die beschädigte Datei bleibt in jedem Fall erhalten. Kleinere Schäden behebt die App beim Öffnen selbst und zeigt dann, was sich geändert hat.
+
 ## Einstellungen und Systemcheck {#settings}
 
 Die **Einstellungen** öffnest du mit dem Zahnrad oben rechts (oder im Menü **⋯**).
 
 ![Die Einstellungen](settings.jpg)
 
+- **Erscheinungsbild:** System, Hell oder Dunkel (siehe unten).
 - **Vorschauqualität:** Hoch, Mittel oder Niedrig für langsamere Laptops. Exporte sind davon nicht betroffen.
 - **Speicher:** zeigt, wie viel Platz Vorschaubilder und Video-Fassungen belegen, und räumt auf.
 - **Endlos-/Kioskmodus:** siehe [Vorführen](#present).
 - **Updates:** Auf Wunsch fragt die App einmal am Tag bei GitHub nach einer neuen Version und zeigt dann einen Hinweis. Installiert wird nichts automatisch.
-- Der **Systemcheck** prüft einen fremden PC (z. B. im Computerraum): Grafikkarte, Video-Encoder, Speicher, und einen kurzen Export-Test. **Bericht kopieren** kopiert alles als Text.
+- **Fehlersuche:** Der **Systemcheck** prüft einen fremden PC (z. B. im Computerraum): Grafikkarte, Video-Encoder, Speicher und einen kurzen Export-Test. **Bericht kopieren** kopiert alles als Text. Dazu kommt das **Diagnosepaket** (siehe unten).
+
+### Hell oder dunkel
+
+Unter **Erscheinungsbild** wählst du **System**, **Hell** oder **Dunkel**. **System** folgt dem App-Modus von Windows (Einstellungen → Personalisierung → Farben). Die Vorschau, der Vollbild-Player und die große Ansicht beim Sichten bleiben immer dunkel, damit die Fotos gut wirken.
+
+### Diagnosepaket
+
+Klappt etwas nicht, hilft ein **Diagnosepaket** der Person, die dir hilft: **Einstellungen → Fehlersuche → Diagnosepaket erstellen…**. Vor dem Speichern siehst du jede Datei des Pakets; ein Klick zeigt ihren Inhalt. Enthalten sind Fehlerprotokoll, Systemcheck, Einstellungen, Versionen und vom geöffneten Projekt nur Anzahlen, Formate und Größen – keine Fotos, Videos, Namen oder Gesichtsdaten. **Speichern…** legt eine ZIP-Datei ab, die du per E-Mail schicken kannst.
 
 ## Tastenkürzel {#shortcuts}
 
@@ -148,18 +166,35 @@ Die **Einstellungen** öffnest du mit dem Zahnrad oben rechts (oder im Menü **�
 | [[Alt+Enter]] | Vollbild abspielen |
 | [[Esc]] | Vollbild, Präsentation oder Dialog beenden |
 | [[F1]] | Dieses Handbuch |
+| [[Alt+←]] / [[Alt+→]] | Folie im Filmstreifen verschieben |
+| [[Umschalt+F10]] | Menü der Folie öffnen |
 
 [Alle Tastenkürzel und Maus-Tipps](app:shortcuts)
+
+## Mit der Tastatur bedienen {#keyboard}
+
+Alles in Diashow Studio geht auch ohne Maus:
+
+- [[Tab]] und [[Umschalt+Tab]] springen von Bedienelement zu Bedienelement; das aktive ist blau umrandet. [[Leertaste]] oder [[Enter]] drücken einen Knopf.
+- In der rechten Leiste wechseln [[↑]] und [[↓]] zwischen den Reitern **Themen**, **Musik**, **Dauer** und **Folie**.
+- Der Filmstreifen ist ein einziger Halt für [[Tab]]: Dort gehen [[←]] und [[→]] von Folie zu Folie und wählen sie aus ([[Umschalt]] wählt einen Bereich), [[Alt+←]] / [[Alt+→]] verschieben die Folie, [[Umschalt+F10]] öffnet ihr Menü.
+- Menüs bedienst du mit den Pfeiltasten und [[Enter]]; [[Esc]] schließt sie.
+- [[Esc]] schließt jeden Dialog; danach steht der Fokus wieder dort, wo du vorher warst.
+- Bei Songs verschieben [[↑]] und [[↓]] auf der Nummer den Song in der Liste. Die Griffe zum Kürzen von Videos und Songs bewegen sich mit [[←]] und [[→]], mit [[Umschalt]] in größeren Schritten.
+- Solange du in ein Textfeld schreibst, reagieren die Tastenkürzel nicht.
+
+> Ist in Windows „Animationseffekte“ ausgeschaltet, verzichtet auch die App auf Bewegungen in der Oberfläche. Die Diashow selbst läuft unverändert.
 
 ## Wenn etwas nicht klappt {#trouble}
 
 - **Windows warnt beim Installieren** („Der Computer wurde durch Windows geschützt“): **Weitere Informationen** und **Trotzdem ausführen** wählen. Die App ist nicht kostenpflichtig signiert.
 - **Die Vorschau ruckelt:** in den Einstellungen die **Vorschauqualität** senken. Der Export wird dadurch nicht schlechter.
-- **Ein Video bleibt bei „wird optimiert“:** Manche Handy-Videos (HEVC, HDR) werden erst umgewandelt. Das dauert, ist aber einmalig.
+- **Ein Video bleibt „in Vorbereitung“:** Manche Handy-Videos (HEVC, HDR) werden erst umgewandelt. Das dauert, ist aber einmalig.
 - **Der Export ist sehr langsam:** im [Systemcheck](#settings) nachsehen, ob ein Hardware-Encoder gefunden wird. Ohne Grafikkarte hilft eine kleinere Auflösung (720p).
 - **Dateien fehlen:** Originale wurden verschoben – im gelben Hinweis **Ordner durchsuchen…** wählen.
+- **Dateien auf einem Netzlaufwerk bleiben gesperrt:** Ein Projekt von einem anderen PC verweist auf Freigaben wie `\\server\fotos`. Weil sich Windows dort mit deinem Konto anmeldet, fragt die App oben im Editor erst nach. Wähle **Zugriff erlauben** nur, wenn du dem Projekt vertraust; Freigaben, aus denen du selbst importierst, gelten automatisch als vertrauenswürdig.
 - **Handys erreichen den Laptop nicht:** Laptop und Handys müssen im selben WLAN sein; die Windows-Firewall muss die App zulassen. Sonst den mobilen Hotspot von Windows nutzen.
-- **Etwas anderes:** Im [Systemcheck](#settings) **Bericht kopieren** und mit einer Beschreibung an die Person schicken, die dir hilft.
+- **Etwas anderes:** Unter **Einstellungen → Fehlersuche** ein [Diagnosepaket](#settings) erstellen und mit einer Beschreibung an die Person schicken, die dir hilft.
 
 ## Über, Lizenzen und Updates {#about}
 

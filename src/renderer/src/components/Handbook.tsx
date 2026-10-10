@@ -9,6 +9,7 @@ import { Blocks, matches, parseHandbook, searchWords, type Chapter, type InlineC
 import { useStore } from '../store'
 import { localeTag, t } from '../i18n'
 import { openWizard } from './Wizard'
+import { Modal, useDialogTitleId } from './Modal'
 import './help.css'
 
 let cache: { lang: 'de' | 'en'; chapters: Chapter[] } | null = null
@@ -78,68 +79,77 @@ export function HandbookDialog() {
 
   const close = (): void => set({ dialog: null })
   return (
-    <div className="overlay" onClick={close}>
-      <div className="dialog hb" data-testid="handbook" onClick={(e) => e.stopPropagation()}>
-        <aside className="hb-side">
-          <div className="hb-head">
-            <BookOpen size={17} /> {t('handbook')}
-          </div>
-          <div className="hb-search">
-            <Search size={14} />
-            <input
-              type="text"
-              autoFocus
-              placeholder={t('handbookSearch')}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  e.stopPropagation()
-                  if (query) setQuery('')
-                  else close()
-                } else if (e.key === 'F1') {
-                  e.preventDefault()
-                  close()
-                } else if (e.key === 'Enter' && shown[0]) scrollTo(shown[0].id)
-              }}
-            />
-          </div>
-          <nav className="hb-toc">
-            {shown.map((c) => (
-              <button key={c.id} className={c.id === active ? 'on' : ''} onClick={() => scrollTo(c.id)}>
-                <span className="n">{chapters.indexOf(c) + 1}</span>
-                <span>{c.title}</span>
-              </button>
-            ))}
-            {!shown.length && <div className="empty">{t('handbookNoHits')}</div>}
-          </nav>
-          <div className="hb-foot">
-            <button className="btn ghost small" onClick={startWizard}>
-              <Wand2 size={14} /> {t('wizardOpen')}
+    <Modal bare onClose={close} backdropClose className="hb" testId="handbook">
+      <aside className="hb-side">
+        <HandbookHead />
+        <div className="hb-search">
+          <Search size={14} aria-hidden />
+          <input
+            type="search"
+            autoFocus
+            aria-label={t('handbookSearch')}
+            placeholder={t('handbookSearch')}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.stopPropagation()
+                e.preventDefault()
+                if (query) setQuery('')
+                else close()
+              } else if (e.key === 'F1') {
+                e.preventDefault()
+                e.stopPropagation()
+                close()
+              } else if (e.key === 'Enter' && shown[0]) scrollTo(shown[0].id)
+            }}
+          />
+        </div>
+        <nav className="hb-toc" aria-label={t('handbookToc')}>
+          {shown.map((c) => (
+            <button key={c.id} className={c.id === active ? 'on' : ''} aria-current={c.id === active ? 'true' : undefined} onClick={() => scrollTo(c.id)}>
+              <span className="n">{chapters.indexOf(c) + 1}</span>
+              <span>{c.title}</span>
             </button>
-            <button className="btn ghost small" onClick={() => set({ dialog: 'help' })}>
-              <Keyboard size={14} /> {t('shortcuts')}
-            </button>
-            <button className="btn ghost small" onClick={() => set({ dialog: 'about' })}>
-              <Info size={14} /> {t('about')}
-            </button>
-          </div>
-        </aside>
-        <div className="hb-main">
-          <button className="btn ghost icon hb-close" title={t('close')} onClick={close}>
-            <X size={16} />
+          ))}
+          {!shown.length && <div className="empty">{t('handbookNoHits')}</div>}
+        </nav>
+        <div className="hb-foot">
+          <button className="btn ghost small" onClick={startWizard}>
+            <Wand2 size={15} /> {t('wizardOpen')}
           </button>
-          <div className="hb-body" ref={body}>
-            {shown.map((c) => (
-              <section key={c.id} data-chapter={c.id} id={`hb-${c.id}`}>
-                <h2>{c.title}</h2>
-                <Blocks blocks={c.blocks} ctx={ctx} imageBase={`./handbook/${lang}/`} />
-              </section>
-            ))}
-            {!shown.length && <p className="hint">{t('handbookNoHits')}</p>}
-          </div>
+          <button className="btn ghost small" onClick={() => set({ dialog: 'help' })}>
+            <Keyboard size={15} /> {t('shortcuts')}
+          </button>
+          <button className="btn ghost small" onClick={() => set({ dialog: 'about' })}>
+            <Info size={15} /> {t('about')}
+          </button>
+        </div>
+      </aside>
+      <div className="hb-main">
+        <button className="btn ghost icon hb-close" title={t('close')} aria-label={t('close')} onClick={close}>
+          <X size={16} />
+        </button>
+        <div className="hb-body" ref={body} tabIndex={0} aria-label={t('handbook')}>
+          {shown.map((c) => (
+            <section key={c.id} data-chapter={c.id} id={`hb-${c.id}`}>
+              <h2>{c.title}</h2>
+              <Blocks blocks={c.blocks} ctx={ctx} imageBase={`./handbook/${lang}/`} />
+            </section>
+          ))}
+          {!shown.length && <p className="hint">{t('handbookNoHits')}</p>}
         </div>
       </div>
+    </Modal>
+  )
+}
+
+/** The handbook's title in its sidebar; it names the dialog. */
+function HandbookHead() {
+  const id = useDialogTitleId()
+  return (
+    <div className="hb-head">
+      <BookOpen size={18} aria-hidden /> <span id={id}>{t('handbook')}</span>
     </div>
   )
 }

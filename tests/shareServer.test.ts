@@ -305,7 +305,8 @@ describe('share server', () => {
       expect(offer).toMatchObject({ name: 'Klassenfahrt Größe.mp4', size: 10_000, downloads: 0 })
       expect(await server.offer(file)).toEqual(offer)
       const page = await req(port, 'GET', `/${server.downloadToken}/`)
-      const href = /href="([^"?]+)"/.exec(page.body.toString())![1]
+      // the first link of the list (the head links the app icon)
+      const href = /<a href="([^"?]+)"/.exec(page.body.toString())![1]
       expect(href).toBe(`/${server.downloadToken}/f/${offer.id}/${encodeURIComponent(offer.name)}`)
 
       const full = await req(port, 'GET', href)

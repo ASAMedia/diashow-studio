@@ -6,12 +6,13 @@
 // it didn't create is opened (a double-clicked .dshow, a dropped folder, tests driving the store).
 import { useEffect } from 'react'
 import { create } from 'zustand'
-import { Download, Film, FolderOpen, Images, Loader2, Music, Pencil, Play, Plus, X } from 'lucide-react'
+import { Check, Download, Film, FolderOpen, Images, Loader2, Music, Pencil, Play, Plus, X } from 'lucide-react'
 import { THEMES, themeMeta } from '@shared/themes'
 import { useStore } from '../store'
 import { useTimeline } from '../timeline'
 import { fmtTime, pick, t } from '../i18n'
 import { ThemeThumb } from './ThemesPanel'
+import { Modal, useDialogTitleId } from './Modal'
 import './help.css'
 
 type Step = 1 | 2 | 3
@@ -109,15 +110,15 @@ function StepPhotos() {
       <p>{t('wizardPickIntro')}</p>
       <div className="wizard-pick">
         <button disabled={busy} onClick={() => void choose(false)}>
-          <Images size={30} /> {t('wizardPickFiles')}
+          <Images size={30} aria-hidden /> {t('wizardPickFiles')}
         </button>
         <button disabled={busy} onClick={() => void choose(true)}>
-          <FolderOpen size={30} /> {t('wizardPickFolder')}
+          <FolderOpen size={30} aria-hidden /> {t('wizardPickFolder')}
         </button>
       </div>
       {(busy || !!mine?.media.length) && (
-        <div className="wizard-status">
-          {busy ? <Loader2 size={14} className="spin" /> : <Film size={14} />}
+        <div className="wizard-status" role="status">
+          {busy ? <Loader2 size={14} className="spin" aria-hidden /> : <Film size={14} aria-hidden />}
           {mine?.media.length ? t('wizardImported').replace('{n}', String(mine.media.length)) : '…'}
         </div>
       )}
@@ -132,11 +133,12 @@ function StepLook() {
   return (
     <>
       <p>{t('wizardThemeIntro')}</p>
-      <div className="themes">
+      <div className="themes" role="group" aria-label={t('themes')}>
         {THEMES.map((th) => (
           <button
             key={th.id}
             className={`theme-card ${project.settings.theme === th.id ? 'on' : ''}`}
+            aria-pressed={project.settings.theme === th.id}
             title={pick(th.description)}
             onClick={() => useStore.getState().setTheme(th.id)}
           >
@@ -148,7 +150,7 @@ function StepLook() {
       <div className="wizard-music">
         <h3>{t('music')}</h3>
         <div className="row">
-          <span className="hint" style={{ flex: 1, margin: 0 }}>
+          <span className="hint" style={{ flex: 1, minWidth: 0, margin: 0 }}>
             {t('wizardMusicIntro')}
           </span>
           <button
@@ -165,13 +167,16 @@ function StepLook() {
           <ul>
             {project.music.map((m) => (
               <li key={m.id}>
-                <Music size={13} /> {m.title}
+                <Music size={13} aria-hidden />
+                <span className="t" title={m.title}>
+                  {m.title}
+                </span>
                 <span className="d">{m.duration ? fmtTime(m.duration) : '…'}</span>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="hint">{t('wizardNoMusic')}</p>
+          <p className="empty-note">{t('wizardNoMusic')}</p>
         )}
       </div>
     </>
@@ -192,13 +197,13 @@ function StepFinish() {
       <p>{t('wizardDoneIntro')}</p>
       <div className="wizard-finish">
         <button disabled={!slides} onClick={() => finish({ fullscreen: true })}>
-          <Play size={28} /> {t('play')}
+          <Play size={28} aria-hidden /> {t('play')}
         </button>
         <button disabled={!slides} onClick={() => finish({ exportOpen: true })}>
-          <Download size={28} /> {t('wizardExport')}
+          <Download size={28} aria-hidden /> {t('wizardExport')}
         </button>
         <button onClick={() => finish({})}>
-          <Pencil size={28} /> {t('wizardEdit')}
+          <Pencil size={28} aria-hidden /> {t('wizardEdit')}
         </button>
       </div>
       <p className="wizard-summary">
@@ -222,55 +227,53 @@ export function Wizard() {
     return off
   }, [])
 
-  useEffect(() => {
-    if (!open || blocked) return
-    const key = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') closeWizard()
-    }
-    window.addEventListener('keydown', key)
-    return () => window.removeEventListener('keydown', key)
-  }, [open, blocked])
-
   if (!open || blocked) return null
+  return (
+    <Modal bare onClose={closeWizard} className="wizard" testId="wizard" data={{ step }}>
+      <WizardContent step={step} busy={busy} hasProject={hasProject} />
+    </Modal>
+  )
+}
+
+function WizardContent({ step, busy, hasProject }: { step: Step; busy: boolean; hasProject: boolean }) {
+  const titleId = useDialogTitleId()
   const titles = [t('wizardStep1'), t('wizardStep2'), t('wizardStep3')]
   return (
-    <div className="overlay">
-      <div className="dialog wizard" data-testid="wizard" data-step={step}>
-        <div className="wizard-head">
-          <h2>{t('wizardTitle')}</h2>
-          <span className="hint" style={{ margin: 0 }}>
-            {t('wizardStepOf').replace('{n}', String(step))}
-          </span>
-          <button className="btn ghost icon" title={t('wizardSkip')} onClick={closeWizard}>
-            <X size={16} />
-          </button>
-        </div>
-        <div className="wizard-steps">
-          {titles.map((title, i) => (
-            <div key={title} className={`step ${i + 1 === step ? 'on' : i + 1 < step ? 'done' : ''}`}>
-              <span className="dot">{i + 1}</span>
-              {title}
-            </div>
-          ))}
-        </div>
-        <div className="wizard-body">{step === 1 ? <StepPhotos /> : step === 2 ? <StepLook /> : <StepFinish />}</div>
-        <div className="wizard-foot">
-          <button className="btn ghost" onClick={closeWizard}>
-            {t('wizardSkip')}
-          </button>
-          <div className="grow" />
-          {step > 1 && (
-            <button className="btn" onClick={() => useWizard.setState({ step: (step - 1) as Step })}>
-              {t('back')}
-            </button>
-          )}
-          {step < 3 && (
-            <button className="btn primary" disabled={busy || !hasProject} onClick={() => useWizard.setState({ step: (step + 1) as Step })}>
-              {t('wizardNext')}
-            </button>
-          )}
-        </div>
+    <>
+      <div className="wizard-head">
+        <h2 id={titleId}>{t('wizardTitle')}</h2>
+        <span className="hint">{t('wizardStepOf').replace('{n}', String(step))}</span>
+        <button className="btn ghost icon" title={t('wizardSkip')} aria-label={t('wizardSkip')} onClick={closeWizard}>
+          <X size={16} />
+        </button>
       </div>
-    </div>
+      <ol className="wizard-steps">
+        {titles.map((title, i) => (
+          <li key={title} className={`step ${i + 1 === step ? 'on' : i + 1 < step ? 'done' : ''}`} aria-current={i + 1 === step ? 'step' : undefined}>
+            <span className="dot" aria-hidden>
+              {i + 1 < step ? <Check size={12} /> : i + 1}
+            </span>
+            <span className="ellipsis">{title}</span>
+          </li>
+        ))}
+      </ol>
+      <div className="wizard-body">{step === 1 ? <StepPhotos /> : step === 2 ? <StepLook /> : <StepFinish />}</div>
+      <div className="wizard-foot">
+        <button className="btn ghost" onClick={closeWizard}>
+          {t('wizardSkip')}
+        </button>
+        <div className="grow" />
+        {step > 1 && (
+          <button className="btn" onClick={() => useWizard.setState({ step: (step - 1) as Step })}>
+            {t('back')}
+          </button>
+        )}
+        {step < 3 && (
+          <button className="btn primary" disabled={busy || !hasProject} onClick={() => useWizard.setState({ step: (step + 1) as Step })}>
+            {t('wizardNext')}
+          </button>
+        )}
+      </div>
+    </>
   )
 }

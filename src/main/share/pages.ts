@@ -2,6 +2,10 @@
 // inline HTML, CSS and JS (no external resources: the network may have no internet), German or
 // English after the browser's Accept-Language.
 import type { ShareOffer } from '@shared/share'
+import { FAVICON } from './favicon'
+
+/** The app icon in the browser tab and on the home screen (inline: the page loads nothing else). */
+const ICON_LINKS = `<link rel="icon" type="image/png" href="${FAVICON}"><link rel="apple-touch-icon" href="${FAVICON}">`
 
 export type PageLang = 'de' | 'en'
 
@@ -284,7 +288,7 @@ export function uploadPage(o: UploadPageOptions): string {
   const limits = t.limits.replace('{p}', fmtBytes(o.limits.photo, o.lang)).replace('{v}', fmtBytes(o.limits.video, o.lang))
   return `<!doctype html>
 <html lang="${o.lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="referrer" content="no-referrer"><title>${escapeHtml(t.title)}</title><style>${STYLE}</style></head>
+<meta name="referrer" content="no-referrer"><title>${escapeHtml(t.title)}</title>${ICON_LINKS}<style>${STYLE}</style></head>
 <body><main>
 <h1>${escapeHtml(t.title)}</h1>
 <p class="sub">${escapeHtml(t.forProject.replace('{p}', o.project))}</p>
@@ -346,7 +350,7 @@ export function downloadPage(o: DownloadPageOptions): string {
     .join('\n')
   return `<!doctype html>
 <html lang="${o.lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="referrer" content="no-referrer"><title>${escapeHtml(t.title)}</title><style>${STYLE}</style></head>
+<meta name="referrer" content="no-referrer"><title>${escapeHtml(t.title)}</title>${ICON_LINKS}<style>${STYLE}</style></head>
 <body><main>
 <h1>${escapeHtml(t.title)}</h1>
 <p class="sub">${escapeHtml(t.forProject.replace('{p}', o.project))}</p>

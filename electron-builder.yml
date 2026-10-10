@@ -26,10 +26,14 @@ extraFiles:
     to: THIRD_PARTY_NOTICES.txt
   - from: LICENSE
     to: LICENSE.txt
+# app icon (made by scripts/make-icon.mjs from build/icon.svg): exe, installer, uninstaller, shortcuts
 win:
   target: [nsis, portable]
+  icon: build/icon.ico
 nsis:
   artifactName: ${productName}-Setup-${version}.${ext}
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
   oneClick: false
   allowToChangeInstallationDirectory: true
   perMachine: false
@@ -39,6 +43,7 @@ fileAssociations:
   - ext: dshow
     name: Diashow Studio project
     description: Diashow Studio project
+    icon: build/icon.ico
 # Electron fuses: the packaged exe ignores ELECTRON_RUN_AS_NODE and NODE_OPTIONS (it cannot be
 # misused as a Node runtime), loads app code only from app.asar, and encrypts cookies. Node's inspect
 # arguments stay available: the e2e tests drive a packaged build (DIASHOW_EXE) through them.

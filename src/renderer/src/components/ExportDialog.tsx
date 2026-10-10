@@ -9,6 +9,8 @@ import { localeTag, pick, t } from '../i18n'
 import { CopyChaptersButton, JobRow } from './Queue'
 import { openFacesInShow } from '@shared/people'
 import { PrivacyReview } from './PrivacyReview'
+import { Modal } from './Modal'
+import { ErrorText } from '../errors'
 
 const HEIGHTS = [720, 1080, 1440, 2160]
 
@@ -107,162 +109,180 @@ export function ExportDialog() {
     }
   }
 
+  const close = (): void => set({ exportOpen: false })
+  if (phase === 'setup' && review) {
+    return (
+      <Modal title={t('reviewTitle')} onClose={() => setReview(false)} className="wide">
+        <PrivacyReview onDone={() => setReview(false)} />
+      </Modal>
+    )
+  }
   return (
-    <div className="overlay">
-      <div className={`dialog ${review ? 'wide' : ''}`}>
-        <h2>{review ? t('reviewTitle') : t('exportTitle')}</h2>
-        {phase === 'setup' && review && <PrivacyReview onDone={() => setReview(false)} />}
-        {phase === 'setup' && !review && (
+    <Modal
+      title={t('exportTitle')}
+      onClose={close}
+      className="export-dialog"
+      actions={
+        phase === 'setup' ? (
           <>
-            <div className="grid">
-              <span>{t('preset')}</span>
-              <select
-                value={preset}
-                onChange={(e) => {
-                  setPreset(e.target.value)
-                  const pr = PRESETS.find((x) => x.id === e.target.value)
-                  if (!pr) return
-                  if (pr.aspect) setAspectId(pr.aspect)
-                  setShort(pr.short)
-                  setFps(pr.fps)
-                  setCodec(pr.codec)
-                  setQuality(pr.quality)
-                }}
-              >
-                <option value="custom">{t('presetCustom')}</option>
-                {PRESETS.map((pr) => (
-                  <option key={pr.id} value={pr.id}>
-                    {pick(pr.name)}
-                  </option>
-                ))}
-              </select>
-              <span>{t('file')}</span>
-              <div className="row">
-                <input type="text" readOnly value={path ?? ''} placeholder={`${project.name}.mp4`} style={{ flex: 1 }} />
-                <button className="btn small" onClick={() => void choose()}>
-                  {t('choose')}
-                </button>
-              </div>
-              <span>{t('aspect')}</span>
-              <select value={aspectId} onChange={(e) => setAspectId(e.target.value as AspectRatio)}>
-                {(['16:9', '4:3', '1:1', '9:16'] as AspectRatio[]).map((a) => (
-                  <option key={a} value={a}>
-                    {a}
-                    {a === project.settings.aspect ? ` (${t('projectAspect')})` : ''}
-                  </option>
-                ))}
-              </select>
-              <span>{t('resolution')}</span>
-              <select value={short} onChange={(e) => setShort(Number(e.target.value))}>
-                {HEIGHTS.map((s) => {
-                  const d = dims(aspect, s)
-                  return (
-                    <option key={s} value={s}>
-                      {s === 2160 ? '4K' : `${s}p`} · {d.w} × {d.h}
-                    </option>
-                  )
-                })}
-              </select>
-              <span>{t('frameRate')}</span>
-              <select value={fps} onChange={(e) => setFps(Number(e.target.value))}>
-                {[24, 25, 30, 50, 60].map((f) => (
-                  <option key={f} value={f}>
-                    {f} fps
-                  </option>
-                ))}
-              </select>
-              <span>{t('codec')}</span>
-              <select value={codec} onChange={(e) => setCodec(e.target.value as VideoCodec)}>
-                <option value="h264">H.264 (MP4)</option>
-                <option value="hevc">HEVC / H.265 (MP4)</option>
-              </select>
-              <span>{t('quality')}</span>
-              <select value={quality} onChange={(e) => setQuality(e.target.value as ExportQuality)}>
-                <option value="standard">{t('qStandard')}</option>
-                <option value="high">{t('qHigh')}</option>
-                <option value="max">{t('qMax')}</option>
-              </select>
-              <span />
-              <label className="check">
-                <input type="checkbox" checked={hardware && !!hwName} disabled={!hwName} onChange={(e) => setHardware(e.target.checked)} />
-                <span>
-                  {t('hardware')}
-                  {hwName ? ` (${hwName})` : ''}
-                </span>
-              </label>
-              {chapters.length >= 2 && (
-                <>
-                  <span />
-                  <label className="check export-chapters">
-                    <input type="checkbox" checked={withChapters} onChange={(e) => setWithChapters(e.target.checked)} />
-                    <span>{t('exportChapters')}</span>
-                  </label>
-                </>
-              )}
+            <button className="btn" onClick={close}>
+              {t('cancel')}
+            </button>
+            <button className="btn primary" onClick={() => void start()} disabled={busy}>
+              {t('startExport')}
+            </button>
+          </>
+        ) : phase === 'queued' ? (
+          <>
+            <button
+              className="btn"
+              onClick={() => {
+                setPath(null)
+                setPhase('setup')
+              }}
+            >
+              {t('queueMore')}
+            </button>
+            <button className="btn primary" onClick={close}>
+              {t('close')}
+            </button>
+          </>
+        ) : (
+          <>
+            <button className="btn" onClick={() => setPhase('setup')}>
+              {t('back')}
+            </button>
+            <button className="btn primary" onClick={close}>
+              {t('close')}
+            </button>
+          </>
+        )
+      }
+    >
+      {phase === 'setup' && (
+        <>
+          <div className="grid">
+            <label htmlFor="export-preset">{t('preset')}</label>
+            <select
+              id="export-preset"
+              value={preset}
+              onChange={(e) => {
+                setPreset(e.target.value)
+                const pr = PRESETS.find((x) => x.id === e.target.value)
+                if (!pr) return
+                if (pr.aspect) setAspectId(pr.aspect)
+                setShort(pr.short)
+                setFps(pr.fps)
+                setCodec(pr.codec)
+                setQuality(pr.quality)
+              }}
+            >
+              <option value="custom">{t('presetCustom')}</option>
+              {PRESETS.map((pr) => (
+                <option key={pr.id} value={pr.id}>
+                  {pick(pr.name)}
+                </option>
+              ))}
+            </select>
+            <label htmlFor="export-file">{t('file')}</label>
+            <div className="row">
+              <input id="export-file" type="text" readOnly value={path ?? ''} placeholder={`${project.name}.mp4`} title={path ?? undefined} style={{ flex: 1 }} />
+              <button className="btn small" onClick={() => void choose()}>
+                {t('choose')}
+              </button>
             </div>
+            <label htmlFor="export-aspect">{t('aspect')}</label>
+            <select id="export-aspect" value={aspectId} onChange={(e) => setAspectId(e.target.value as AspectRatio)}>
+              {(['16:9', '4:3', '1:1', '9:16'] as AspectRatio[]).map((a) => (
+                <option key={a} value={a}>
+                  {a}
+                  {a === project.settings.aspect ? ` (${t('projectAspect')})` : ''}
+                </option>
+              ))}
+            </select>
+            <label htmlFor="export-size">{t('resolution')}</label>
+            <select id="export-size" value={short} onChange={(e) => setShort(Number(e.target.value))}>
+              {HEIGHTS.map((s) => {
+                const d = dims(aspect, s)
+                return (
+                  <option key={s} value={s}>
+                    {s === 2160 ? '4K' : `${s}p`} · {d.w} × {d.h}
+                  </option>
+                )
+              })}
+            </select>
+            <label htmlFor="export-fps">{t('frameRate')}</label>
+            <select id="export-fps" value={fps} onChange={(e) => setFps(Number(e.target.value))}>
+              {[24, 25, 30, 50, 60].map((f) => (
+                <option key={f} value={f}>
+                  {f} fps
+                </option>
+              ))}
+            </select>
+            <label htmlFor="export-codec">{t('codec')}</label>
+            <select id="export-codec" value={codec} onChange={(e) => setCodec(e.target.value as VideoCodec)}>
+              <option value="h264">H.264 (MP4)</option>
+              <option value="hevc">HEVC / H.265 (MP4)</option>
+            </select>
+            <label htmlFor="export-quality">{t('quality')}</label>
+            <select id="export-quality" value={quality} onChange={(e) => setQuality(e.target.value as ExportQuality)}>
+              <option value="standard">{t('qStandard')}</option>
+              <option value="high">{t('qHigh')}</option>
+              <option value="max">{t('qMax')}</option>
+            </select>
+            <span />
+            <label className="check">
+              <input type="checkbox" checked={hardware && !!hwName} disabled={!hwName} onChange={(e) => setHardware(e.target.checked)} />
+              <span>
+                {t('hardware')}
+                {hwName ? ` (${hwName})` : ''}
+              </span>
+            </label>
             {chapters.length >= 2 && (
-              <p className="hint" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ flex: 1 }}>{t('exportChaptersHint').replace('{n}', String(chapters.length))}</span>
-                <CopyChaptersButton chapters={chapters} />
-              </p>
+              <>
+                <span />
+                <label className="check export-chapters">
+                  <input type="checkbox" checked={withChapters} onChange={(e) => setWithChapters(e.target.checked)} />
+                  <span>{t('exportChapters')}</span>
+                </label>
+              </>
             )}
-            {enc && !hwName && <p className="hint">{t('noHardware')}</p>}
-            {aspectId !== project.settings.aspect && <p className="hint">{t('aspectRelayout')}</p>}
-            {busy && <p className="warn">{t('stillProcessing')}</p>}
-            {openFaces > 0 && (
-              <p className="warn" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ flex: 1 }}>{t('reviewExportHint').replace('{n}', String(openFaces))}</span>
-                <button className="btn small" onClick={() => setReview(true)}>
-                  {t('reviewCheck')}
-                </button>
-              </p>
-            )}
-            <div className="actions">
-              <button className="btn" onClick={() => set({ exportOpen: false })}>
-                {t('cancel')}
-              </button>
-              <button className="btn primary" onClick={() => void start()} disabled={busy}>
-                {t('startExport')}
-              </button>
-            </div>
-          </>
-        )}
-        {phase === 'queued' && (
-          <>
-            <p>{t('queueAdded')}</p>
-            {job && <JobRow job={job} />}
-            <div className="actions">
-              <button
-                className="btn"
-                onClick={() => {
-                  setPath(null)
-                  setPhase('setup')
-                }}
-              >
-                {t('queueMore')}
-              </button>
-              <button className="btn primary" onClick={() => set({ exportOpen: false })}>
-                {t('close')}
-              </button>
-            </div>
-          </>
-        )}
-        {phase === 'error' && (
-          <>
-            <p className="error">
-              {t('exportFailed')}: {error}
+          </div>
+          {chapters.length >= 2 && (
+            <p className="callout info">
+              <span>{t('exportChaptersHint').replace('{n}', String(chapters.length))}</span>
+              <CopyChaptersButton chapters={chapters} />
             </p>
-            <div className="actions">
-              <button className="btn" onClick={() => setPhase('setup')}>
-                {t('back')}
+          )}
+          {enc && !hwName && <p className="hint">{t('noHardware')}</p>}
+          {aspectId !== project.settings.aspect && <p className="hint">{t('aspectRelayout')}</p>}
+          {busy && (
+            <p className="callout warn" role="status">
+              <span>{t('stillProcessing')}</span>
+            </p>
+          )}
+          {openFaces > 0 && (
+            <p className="callout warn">
+              <span>{t('reviewExportHint').replace('{n}', String(openFaces))}</span>
+              <button className="btn small" onClick={() => setReview(true)}>
+                {t('reviewCheck')}
               </button>
-              <button className="btn primary" onClick={() => set({ exportOpen: false })}>
-                {t('close')}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+            </p>
+          )}
+        </>
+      )}
+      {phase === 'queued' && (
+        <>
+          <p>{t('queueAdded')}</p>
+          {job && <JobRow job={job} />}
+        </>
+      )}
+      {phase === 'error' && (
+        <div className="error">
+          <b>{t('exportFailed')}</b>
+          <ErrorText err={error} context="export" />
+        </div>
+      )}
+    </Modal>
   )
 }

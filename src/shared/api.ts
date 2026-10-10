@@ -124,6 +124,8 @@ export interface DiashowApi {
   // Export queue (src/shared/exportQueue.ts): jobs run one after another in a hidden worker window,
   // in segments, and continue after a crash or restart.
   /** Queues an export (rejects invalid jobs, or a second job writing the same file). Starts the worker. */
+  /** Lets the app open files on these network hosts (\\host\share) from now on. */
+  trustNetworkHosts(hosts: string[]): Promise<void>
   queueAdd(job: NewExportJob): Promise<ExportJobInfo>
   /** All jobs, oldest first, including done / cancelled / failed ones until removed. */
   queueList(): Promise<ExportJobInfo[]>

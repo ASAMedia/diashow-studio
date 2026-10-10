@@ -10,7 +10,7 @@ import { showsWhole } from '../engine/draw'
 import { useStore } from '../store'
 import { timelineOf } from '../timeline'
 import { fmtTime, localeTag, t } from '../i18n'
-import { Check, Section, Slider, TITLE_STYLES } from './ui'
+import { Check, Field, Section, Slider, TITLE_STYLES } from './ui'
 import { BatchPanel, FreeTextSection, PrivacySection, SpeedSelect } from './SlideTools'
 import { TrimStrip } from './TrimStrip'
 import { ErrorText } from '../errors'
@@ -23,19 +23,20 @@ function ChapterMusic({ entry }: { entry: TextEntry }) {
   const mine = project.music.filter((m) => own.has(m.id))
   const others = project.music.filter((m) => !own.has(m.id))
   return (
-    <div className="section">
-      <h3>{t('chapterMusic')}</h3>
+    <Section title={t('chapterMusic')}>
       <div className="stack">
         {mine.map((m) => (
           <div key={m.id} className="row">
-            <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.title}</span>
-            <button className="btn small ghost icon" title={t('delete')} onClick={() => assign(m.id, null)}>
-              <Trash2 size={12} />
+            <span className="ellipsis" style={{ flex: 1 }} title={m.title}>
+              {m.title}
+            </span>
+            <button className="btn small ghost icon" title={t('removeFromChapter')} aria-label={`${t('removeFromChapter')}: ${m.title}`} onClick={() => assign(m.id, null)}>
+              <Trash2 size={14} />
             </button>
           </div>
         ))}
         {others.length > 0 && (
-          <select value="" onChange={(e) => e.target.value && assign(e.target.value, entry.id)}>
+          <select value="" aria-label={t('addSong')} onChange={(e) => e.target.value && assign(e.target.value, entry.id)}>
             <option value="">{t('addSong')}</option>
             {others.map((m) => (
               <option key={m.id} value={m.id}>
@@ -46,23 +47,23 @@ function ChapterMusic({ entry }: { entry: TextEntry }) {
         )}
         <p className="hint">{t('chapterMusicHint')}</p>
       </div>
-    </div>
+    </Section>
   )
 }
 
 function MediaInfo({ m }: { m: MediaItem }) {
   return (
-    <>
-      {m.thumb && <img className="preview-thumb" src={mediaUrl(m.thumb)} alt="" />}
+    <div className="section media-info">
+      {m.thumb && <img className="preview-thumb" src={mediaUrl(m.thumb)} alt={m.name} />}
       <dl className="info">
         <dt>{t('file')}</dt>
         <dd title={m.path}>{m.name}</dd>
         <dt>{t('format')}</dt>
-        <dd>{m.format}</dd>
+        <dd title={m.format}>{m.format}</dd>
         {m.device && (
           <>
             <dt>{t('device')}</dt>
-            <dd>{m.device}</dd>
+            <dd title={m.device}>{m.device}</dd>
           </>
         )}
         <dt>{t('size')}</dt>
@@ -76,7 +77,7 @@ function MediaInfo({ m }: { m: MediaItem }) {
       </dl>
       {m.proxied && <p className="hint">{t('proxyNote')}</p>}
       {m.status === 'error' && <ErrorText err={m.error === 'missing' ? 'missing' : m.error ?? ''} context="import" />}
-    </>
+    </div>
   )
 }
 
@@ -88,7 +89,21 @@ function DurationOverride({ entry }: { entry: Entry }) {
         {t('customDuration')}
       </Check>
       {entry.duration != null && (
-        <input type="number" min={0.5} max={120} step={0.5} style={{ width: 70 }} value={entry.duration} onChange={(e) => setEntry(entry.id, { duration: Math.max(0.5, Number(e.target.value) || 0.5) })} />
+        <>
+          <input
+            type="number"
+            aria-label={`${t('customDuration')} (${t('secondsLong')})`}
+            min={0.5}
+            max={120}
+            step={0.5}
+            style={{ width: 64 }}
+            value={entry.duration}
+            onChange={(e) => setEntry(entry.id, { duration: Math.max(0.5, Number(e.target.value) || 0.5) })}
+          />
+          <span className="hint" style={{ margin: 0 }} aria-hidden>
+            s
+          </span>
+        </>
       )}
     </div>
   )
@@ -112,17 +127,24 @@ function LayoutPicker({ slide }: { slide: TimelineSlide }) {
   )
   return (
     <Section title={t('layout')}>
-      <div className="layouts">
-        <button className={!first.layout ? 'on' : ''} onClick={() => setEntry(first.id, { layout: undefined })}>
+      <div className="layouts" role="group" aria-label={t('layout')}>
+        <button className={!first.layout ? 'on' : ''} aria-pressed={!first.layout} onClick={() => setEntry(first.id, { layout: undefined })}>
           {t('layoutAuto')}
         </button>
         {slide.entries.length > 1 && (
-          <button className={free ? 'on' : ''} onClick={() => setEntry(first.id, { layout: 'free' })}>
+          <button className={free ? 'on' : ''} aria-pressed={free} title={t('collageHint')} onClick={() => setEntry(first.id, { layout: 'free' })}>
             {t('layoutFree')}
           </button>
         )}
-        {options.map((tpl) => (
-          <button key={tpl.id} className={first.layout === tpl.id ? 'on' : ''} title={tpl.id} onClick={() => setEntry(first.id, { layout: tpl.id })}>
+        {options.map((tpl, i) => (
+          <button
+            key={tpl.id}
+            className={first.layout === tpl.id ? 'on' : ''}
+            aria-pressed={first.layout === tpl.id}
+            title={`${t('layout')} ${i + 1}`}
+            aria-label={`${t('layout')} ${i + 1}`}
+            onClick={() => setEntry(first.id, { layout: tpl.id })}
+          >
             {mini(tpl)}
           </button>
         ))}
@@ -146,6 +168,7 @@ function CaptionField({ entry }: { entry: Entry }) {
       <textarea
         rows={2}
         style={{ width: '100%', resize: 'vertical' }}
+        aria-label={t('caption')}
         placeholder={t('captionPlaceholder')}
         value={entry.caption ?? ''}
         onChange={(e) => setEntry(entry.id, { caption: e.target.value || undefined })}
@@ -179,14 +202,13 @@ function FramingSelect({ entry }: { entry: PhotoEntry | VideoEntry }) {
   const value = entry.whole == null ? 'default' : entry.whole ? 'whole' : 'crop'
   const dflt = entry.type === 'video' ? t('framingAuto') : `${t('framingDefault')} (${project.settings.scaleToFill ? t('cropMode') : t('wholeMode')})`
   return (
-    <div className="row">
-      <label>{t('framing')}</label>
+    <Field label={t('framing')}>
       <select value={value} onChange={(e) => setEntry(entry.id, { whole: e.target.value === 'default' ? undefined : e.target.value === 'whole' } as Partial<PhotoEntry>)}>
         <option value="default">{dflt}</option>
         <option value="crop">{t('cropMode')}</option>
         <option value="whole">{t('wholeMode')}</option>
       </select>
-    </div>
+    </Field>
   )
 }
 
@@ -200,14 +222,14 @@ function GroupControl({ slide }: { slide: TimelineSlide }) {
   return (
     <div className="section">
       <div className="row">
-        <label>{t('items')}</label>
-        <div className="stepper">
-          <button className="btn small icon" disabled={n < 2} onClick={() => useStore.getState().resizeSlide(ids, -1)}>
-            <Minus size={13} />
+        <span className="label">{t('items')}</span>
+        <div className="stepper" role="group" aria-label={t('items')}>
+          <button className="btn small icon" title={t('itemsFewer')} aria-label={t('itemsFewer')} disabled={n < 2} onClick={() => useStore.getState().resizeSlide(ids, -1)}>
+            <Minus size={14} />
           </button>
-          <span>{n}</span>
-          <button className="btn small icon" disabled={n >= meta.maxPerSlide} onClick={() => useStore.getState().resizeSlide(ids, 1)}>
-            <Plus size={13} />
+          <span aria-live="polite">{n}</span>
+          <button className="btn small icon" title={t('itemsMore')} aria-label={t('itemsMore')} disabled={n >= meta.maxPerSlide} onClick={() => useStore.getState().resizeSlide(ids, 1)}>
+            <Plus size={14} />
           </button>
         </div>
       </div>
@@ -223,7 +245,7 @@ export function SlidePanel() {
   const kbEdit = useStore((s) => s.kbEdit)
   const set = useStore((s) => s.set)
   const entries = selection.map((id) => project.entries.find((e) => e.id === id)).filter(Boolean) as Entry[]
-  if (!entries.length) return <p className="hint">{t('noSelection')}</p>
+  if (!entries.length) return <p className="empty-note">{t('noSelection')}</p>
   const media = (e: Entry): MediaItem | undefined => (e.type === 'text' ? undefined : project.media.find((m) => m.id === e.mediaId))
   const meta = themeMeta(project.settings.theme)
 
@@ -241,14 +263,14 @@ export function SlidePanel() {
     const videos = entries.filter((x) => x.type === 'video' && media(x)?.hasAudio).length
     return (
       <>
-        <Section title={`${entries.length} ${t('photos')}`}>
+        <Section title={t('itemsOnSlide').replace('{n}', String(entries.length))}>
           <div className="items">
             {entries.map((e) => {
               const m = media(e)
               const isVideo = e.type === 'video'
               return (
                 <div key={e.id} className="item" title={m?.name}>
-                  {m?.thumb && <img src={mediaUrl(m.thumb)} alt="" />}
+                  {m?.thumb && <img src={mediaUrl(m.thumb)} alt={m.name} />}
                   {isVideo && (
                     <span className="badge kind">
                       <Film size={10} /> {fmtTime(m?.duration ?? 0)}
@@ -258,6 +280,7 @@ export function SlidePanel() {
                     {isVideo && m?.hasAudio && (
                       <button
                         title={audible.has(e.id) ? t('soundOff') : t('soundOn')}
+                        aria-label={`${audible.has(e.id) ? t('soundOff') : t('soundOn')}: ${m?.name ?? ''}`}
                         onClick={() => setEntry(e.id, { muted: audible.has(e.id) } as Partial<VideoEntry>)}
                       >
                         {audible.has(e.id) ? <Volume2 size={12} /> : <VolumeX size={12} />}
@@ -266,17 +289,17 @@ export function SlidePanel() {
                     {themeMeta(project.settings.theme).scaleOption && e.type !== 'text' && (() => {
                       const whole = e.whole ?? showsWhole(e, project.settings, mediaAspect(m), mediaAspect(m))
                       return (
-                        <button title={whole ? t('cropMode') : t('wholeMode')} onClick={() => setEntry(e.id, { whole: !whole } as Partial<PhotoEntry>)}>
+                        <button title={whole ? t('cropMode') : t('wholeMode')} aria-label={`${whole ? t('cropMode') : t('wholeMode')}: ${m?.name ?? ''}`} onClick={() => setEntry(e.id, { whole: !whole } as Partial<PhotoEntry>)}>
                           {whole ? <CropIcon size={12} /> : <Maximize size={12} />}
                         </button>
                       )
                     })()}
                     {e.type !== 'text' && (
-                      <button title={t('privacyEdit')} className={e.privacy?.length || (e.type === 'video' && e.privacyTracks?.length) ? 'on' : ''} onClick={() => set({ privacyEdit: e.id, kbEdit: null })}>
+                      <button title={t('privacyEdit')} aria-label={`${t('privacyEdit')} ${m?.name ?? ''}`} className={e.privacy?.length || (e.type === 'video' && e.privacyTracks?.length) ? 'on' : ''} onClick={() => set({ privacyEdit: e.id, kbEdit: null })}>
                         <ScanFace size={12} />
                       </button>
                     )}
-                    <button title={t('release')} onClick={() => useStore.getState().releaseEntry(ids, e.id)}>
+                    <button title={t('release')} aria-label={`${t('release')}: ${m?.name ?? ''}`} onClick={() => useStore.getState().releaseEntry(ids, e.id)}>
                       <LogOut size={12} />
                     </button>
                   </div>
@@ -302,33 +325,34 @@ export function SlidePanel() {
   if (e.type === 'text') {
     const te = e as TextEntry
     return (
-      <Section title={t('textSlide')}>
-        <div className="stack">
-          <input type="text" value={te.title} onChange={(ev) => setEntry(te.id, { title: ev.target.value })} />
-          {te.titleStyle === 'credits' ? (
-            <textarea rows={5} placeholder={t('subtitleText')} value={te.subtitle ?? ''} onChange={(ev) => setEntry(te.id, { subtitle: ev.target.value || undefined })} style={{ width: '100%', resize: 'vertical' }} />
-          ) : (
-            <input type="text" placeholder={t('subtitleText')} value={te.subtitle ?? ''} onChange={(ev) => setEntry(te.id, { subtitle: ev.target.value || undefined })} />
-          )}
-          <div className="row">
-            <label>{t('titleStyle')}</label>
-            <select value={te.titleStyle ?? ''} onChange={(ev) => setEntry(te.id, { titleStyle: (ev.target.value || undefined) as TitleStyle | undefined })}>
-              <option value="">{t('styleShow')}</option>
-              {TITLE_STYLES.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {t(s.label)}
-                </option>
-              ))}
-              <option value="credits">{t('styleCredits')}</option>
-            </select>
+      <>
+        <Section title={t('textSlide')}>
+          <div className="stack">
+            <input type="text" aria-label={t('titleText')} placeholder={t('titleText')} value={te.title} onChange={(ev) => setEntry(te.id, { title: ev.target.value })} />
+            {te.titleStyle === 'credits' ? (
+              <textarea rows={5} aria-label={t('subtitleText')} placeholder={t('subtitleText')} value={te.subtitle ?? ''} onChange={(ev) => setEntry(te.id, { subtitle: ev.target.value || undefined })} style={{ width: '100%', resize: 'vertical' }} />
+            ) : (
+              <input type="text" aria-label={t('subtitleText')} placeholder={t('subtitleText')} value={te.subtitle ?? ''} onChange={(ev) => setEntry(te.id, { subtitle: ev.target.value || undefined })} />
+            )}
+            <Field label={t('titleStyle')}>
+              <select value={te.titleStyle ?? ''} onChange={(ev) => setEntry(te.id, { titleStyle: (ev.target.value || undefined) as TitleStyle | undefined })}>
+                <option value="">{t('styleShow')}</option>
+                {TITLE_STYLES.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {t(s.label)}
+                  </option>
+                ))}
+                <option value="credits">{t('styleCredits')}</option>
+              </select>
+            </Field>
+            {te.titleStyle === 'credits' && <p className="hint">{t('creditsHint')}</p>}
+            <DurationOverride entry={te} />
+            {themeMeta(project.settings.theme).textAsCaption && titleStyleOf(te, project.settings) === 'theme' && <p className="hint">{t('captionOnNext')}</p>}
           </div>
-          {te.titleStyle === 'credits' && <p className="hint">{t('creditsHint')}</p>}
-          <DurationOverride entry={te} />
-          {themeMeta(project.settings.theme).textAsCaption && titleStyleOf(te, project.settings) === 'theme' && <p className="hint">{t('captionOnNext')}</p>}
-        </div>
+        </Section>
         <ChapterMusic entry={te} />
         {slide && slide.kind === 'text' && <FreeTextSection slide={slide} />}
-      </Section>
+      </>
     )
   }
 
@@ -350,17 +374,16 @@ export function SlidePanel() {
                 {t('mute')}
               </Check>
               <Slider label={t('volume')} value={ve.volume ?? 1} min={0} max={2} step={0.05} display={`${Math.round((ve.volume ?? 1) * 100)} %`} onChange={(v) => setEntry(ve.id, { volume: v })} />
-              <div className="row">
-                <label>{t('duckClip')}</label>
+              <Field label={t('duckClip')}>
                 <select value={ve.duck == null ? 'default' : ve.duck ? 'on' : 'off'} onChange={(ev) => setEntry(ve.id, { duck: ev.target.value === 'default' ? undefined : ev.target.value === 'on' })}>
                   <option value="default">{t('default')}</option>
                   <option value="on">{t('on')}</option>
                   <option value="off">{t('off')}</option>
                 </select>
-              </div>
+              </Field>
             </>
           ) : (
-            <p className="hint">—</p>
+            <p className="empty-note">{t('noVideoSound')}</p>
           )}
         </Section>
         <Section title={t('duration')}>
@@ -393,27 +416,26 @@ export function SlidePanel() {
       {slide && <FreeTextSection slide={slide} />}
       <PrivacySection entry={pe} media={m} />
       {m.live && (
-        <Section title="Live">
-          <div className="row">
-            <label>{t('livePhoto')}</label>
+        <Section title={t('livePhotoTitle')}>
+          <Field label={t('livePhoto')}>
             <select value={pe.playLive == null ? 'default' : pe.playLive ? 'on' : 'off'} onChange={(ev) => setEntry(pe.id, { playLive: ev.target.value === 'default' ? undefined : ev.target.value === 'on' })}>
               <option value="default">{t('default')}</option>
               <option value="on">{t('on')}</option>
               <option value="off">{t('off')}</option>
             </select>
-          </div>
+          </Field>
         </Section>
       )}
       {meta.kenBurns && (
         <Section title={t('kenBurns')}>
           <div className="row">
-            <button className={`btn small ${kbEdit === 'start' ? 'on' : ''}`} onClick={() => set({ kbEdit: 'start' })}>
+            <button className={`btn small ${kbEdit === 'start' ? 'on' : ''}`} aria-pressed={kbEdit === 'start'} onClick={() => set({ kbEdit: 'start' })}>
               {t('kbStart')}
             </button>
-            <button className={`btn small ${kbEdit === 'end' ? 'on' : ''}`} onClick={() => set({ kbEdit: 'end' })}>
+            <button className={`btn small ${kbEdit === 'end' ? 'on' : ''}`} aria-pressed={kbEdit === 'end'} onClick={() => set({ kbEdit: 'end' })}>
               {t('kbEnd')}
             </button>
-            <button className="btn small ghost" onClick={() => setEntry(pe.id, { kenBurns: undefined })}>
+            <button className="btn small ghost" disabled={!pe.kenBurns} onClick={() => setEntry(pe.id, { kenBurns: undefined })}>
               {t('kbReset')}
             </button>
           </div>

@@ -1,10 +1,30 @@
-import { useEffect, useState } from 'react'
-import { CalendarDays, CircleHelp, Clapperboard, QrCode, ScanFace, ChevronLeft, Download, Eraser, FolderTree, History, Images, LayoutGrid, Loader2, MonitorPlay, MoreHorizontal, Package, Play, Redo2, ScanSearch, Settings, SortAsc, Undo2 } from 'lucide-react'
+import { useState } from 'react'
+import { CalendarDays, CircleHelp, Clapperboard, QrCode, ScanFace, ChevronLeft, Download, Eraser, FolderTree, History, LayoutGrid, Loader2, MonitorPlay, MoreHorizontal, Package, Play, Redo2, ScanSearch, Settings, SortAsc, Undo2 } from 'lucide-react'
 import { useStore } from '../store'
 import { useTimeline } from '../timeline'
 import { fmtTime, t } from '../i18n'
 import { QueueChip } from './Queue'
 import { UpdateChip } from './Updates'
+import { AppIcon } from './AppIcon'
+import { Menu, MenuItem, MenuSeparator } from './Menu'
+
+/** An icon-only button of the title bar; the tooltip is its name for screen readers too. */
+function IconButton(props: { label: string; onClick: () => void; disabled?: boolean; children: React.ReactNode; expanded?: boolean; popup?: boolean }) {
+  return (
+    <button
+      className="btn ghost icon"
+      title={props.label}
+      aria-label={props.label}
+      aria-haspopup={props.popup ? 'menu' : undefined}
+      aria-expanded={props.popup ? !!props.expanded : undefined}
+      disabled={props.disabled}
+      onClick={props.onClick}
+      onPointerDown={props.popup ? (e) => e.stopPropagation() : undefined}
+    >
+      {props.children}
+    </button>
+  )
+}
 
 export function TitleBar() {
   const project = useStore((s) => s.project)
@@ -16,45 +36,41 @@ export function TitleBar() {
   const canUndo = useStore((s) => s.canUndo)
   const canRedo = useStore((s) => s.canRedo)
   const view = useStore((s) => s.view)
-  useEffect(() => {
-    if (!menu) return
-    const close = (): void => setMenu(false)
-    window.addEventListener('pointerdown', close)
-    return () => window.removeEventListener('pointerdown', close)
-  }, [menu])
 
   if (!project) {
     return (
-      <div className="titlebar">
+      <header className="titlebar">
         <div className="brand">
-          <Images size={18} /> {t('appName')}
+          <AppIcon size={18} /> {t('appName')}
         </div>
         <div className="grow" />
         <UpdateChip />
         <QueueChip />
-        <button className="btn ghost icon" title={`${t('help')} (F1)`} onClick={() => useStore.getState().set({ dialog: 'handbook' })}>
-          <CircleHelp size={17} />
-        </button>
-        <button className="btn ghost icon" title={t('settings')} onClick={() => useStore.getState().set({ dialog: 'settings' })}>
-          <Settings size={17} />
-        </button>
-      </div>
+        <IconButton label={`${t('help')} (F1)`} onClick={() => useStore.getState().set({ dialog: 'handbook' })}>
+          <CircleHelp size={18} />
+        </IconButton>
+        <IconButton label={t('settings')} onClick={() => useStore.getState().set({ dialog: 'settings' })}>
+          <Settings size={18} />
+        </IconButton>
+      </header>
     )
   }
 
   const busy = project.media.filter((m) => m.status === 'pending' || m.status === 'processing').length
   const slides = tl?.slides.length ?? 0
   return (
-    <div className="titlebar">
-      <button className="btn ghost icon" title={t('back')} onClick={() => useStore.getState().closeProject()}>
+    <header className="titlebar">
+      <IconButton label={t('back')} onClick={() => useStore.getState().closeProject()}>
         <ChevronLeft size={18} />
-      </button>
+      </IconButton>
       {editing ? (
         <input
           className="name-edit"
           type="text"
           autoFocus
+          aria-label={t('projectName')}
           defaultValue={project.name}
+          onFocus={(e) => e.target.select()}
           onBlur={(e) => {
             const v = e.target.value.trim()
             if (v) update((p) => (p.name = v))
@@ -62,90 +78,100 @@ export function TitleBar() {
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-            if (e.key === 'Escape') setEditing(false)
+            if (e.key === 'Escape') {
+              e.stopPropagation()
+              setEditing(false)
+            }
           }}
         />
       ) : (
-        <span className="name" onDoubleClick={() => setEditing(true)} title={t('rename')}>
+        <button
+          className="name"
+          title={[project.name, `${slides} ${t('slides')} · ${fmtTime(tl?.duration ?? 0)} · ${project.settings.aspect}`, t('renameHint')].join('\n')}
+          aria-label={`${project.name}. ${t('renameHint')}`}
+          onDoubleClick={() => setEditing(true)}
+          onKeyDown={(e) => (e.key === 'F2' || e.key === 'Enter') && (e.preventDefault(), setEditing(true))}
+        >
           {project.name}
-        </span>
+        </button>
       )}
-      <span className="meta">
+      <span className="meta" title={`${slides} ${t('slides')} · ${fmtTime(tl?.duration ?? 0)} · ${project.settings.aspect}`}>
         {slides} {t('slides')} · {fmtTime(tl?.duration ?? 0)} · {project.settings.aspect}
       </span>
-      <button className="btn ghost icon" title={t('undo')} disabled={!canUndo} onClick={() => useStore.getState().undo()}>
-        <Undo2 size={16} />
-      </button>
-      <button className="btn ghost icon" title={t('redo')} disabled={!canRedo} onClick={() => useStore.getState().redo()}>
-        <Redo2 size={16} />
-      </button>
+      <span className="sep" aria-hidden />
+      <IconButton label={t('undo')} disabled={!canUndo} onClick={() => useStore.getState().undo()}>
+        <Undo2 size={17} />
+      </IconButton>
+      <IconButton label={t('redo')} disabled={!canRedo} onClick={() => useStore.getState().redo()}>
+        <Redo2 size={17} />
+      </IconButton>
       <div className="grow" />
       <UpdateChip />
       <QueueChip />
       {busy > 0 && (
-        <span className="chip">
-          <Loader2 size={13} className="spin" /> {busy} {t('processing')}
+        <span className="chip" role="status" title={t('processingHint')}>
+          <Loader2 size={13} className="spin" aria-hidden /> {busy} {t('processing')}
         </span>
       )}
       <div style={{ position: 'relative' }}>
-        <button className="btn ghost icon" title={t('more')} onClick={() => setMenu(!menu)} onPointerDown={(e) => e.stopPropagation()}>
+        <IconButton label={t('more')} popup expanded={menu} onClick={() => setMenu(!menu)}>
           <MoreHorizontal size={18} />
-        </button>
+        </IconButton>
         {menu && (
-          <div className="menu" style={{ position: 'absolute', right: 0, top: 34 }} onPointerDown={(e) => e.stopPropagation()} onClick={() => setMenu(false)}>
-            <button onClick={() => useStore.getState().insertDayTitles('date')}>
-              <CalendarDays size={14} /> {t('dayTitlesDate')}
-            </button>
-            <button onClick={() => useStore.getState().insertDayTitles('folder')}>
-              <FolderTree size={14} /> {t('dayTitlesFolder')}
-            </button>
-            <button onClick={() => useStore.getState().removeAutoTitles()}>
-              <Eraser size={14} /> {t('removeAutoTitles')}
-            </button>
-            <button onClick={() => useStore.getState().sortByDate()}>
-              <SortAsc size={14} /> {t('sortByDate')}
-            </button>
-            <button onClick={() => useStore.getState().addCredits()}>
-              <Clapperboard size={14} /> {t('addCredits')}
-            </button>
-            <hr />
-            <button onClick={() => set({ dialog: 'rejects' })}>
-              <ScanSearch size={14} /> {t('rejects')}
-            </button>
-            <button onClick={() => set({ dialog: 'privacyReview' })}>
-              <ScanFace size={14} /> {t('reviewCheck')}
-            </button>
-            <button onClick={() => set({ dialog: 'share' })}>
-              <QrCode size={14} /> {t('shareTitle')}
-            </button>
-            <button onClick={() => set({ dialog: 'pack' })}>
-              <Package size={14} /> {t('pack')}
-            </button>
-            <button onClick={() => set({ dialog: 'backups' })}>
-              <History size={14} /> {t('backups')}
-            </button>
-            <button disabled={!slides} onClick={() => set({ presenting: true })}>
-              <MonitorPlay size={14} /> {t('present')}
-            </button>
-            <hr />
-            <button onClick={() => set({ dialog: 'settings' })}>
-              <Settings size={14} /> {t('settings')}
-            </button>
-            <button onClick={() => set({ dialog: 'handbook' })}>
-              <CircleHelp size={14} /> {t('help')}
-            </button>
-          </div>
+          <Menu label={t('more')} onClose={() => setMenu(false)} style={{ position: 'absolute', right: 0, top: 34 }}>
+            <MenuItem icon={<CalendarDays size={15} />} onSelect={() => useStore.getState().insertDayTitles('date')}>
+              {t('dayTitlesDate')}
+            </MenuItem>
+            <MenuItem icon={<FolderTree size={15} />} onSelect={() => useStore.getState().insertDayTitles('folder')}>
+              {t('dayTitlesFolder')}
+            </MenuItem>
+            <MenuItem icon={<Eraser size={15} />} onSelect={() => useStore.getState().removeAutoTitles()}>
+              {t('removeAutoTitles')}
+            </MenuItem>
+            <MenuItem icon={<SortAsc size={15} />} onSelect={() => useStore.getState().sortByDate()}>
+              {t('sortByDate')}
+            </MenuItem>
+            <MenuItem icon={<Clapperboard size={15} />} onSelect={() => useStore.getState().addCredits()}>
+              {t('addCredits')}
+            </MenuItem>
+            <MenuSeparator />
+            <MenuItem icon={<ScanSearch size={15} />} onSelect={() => set({ dialog: 'rejects' })}>
+              {t('rejects')}
+            </MenuItem>
+            <MenuItem icon={<ScanFace size={15} />} onSelect={() => set({ dialog: 'privacyReview' })}>
+              {t('reviewCheck')}
+            </MenuItem>
+            <MenuItem icon={<QrCode size={15} />} onSelect={() => set({ dialog: 'share' })}>
+              {t('shareTitle')}
+            </MenuItem>
+            <MenuItem icon={<Package size={15} />} onSelect={() => set({ dialog: 'pack' })}>
+              {t('pack')}
+            </MenuItem>
+            <MenuItem icon={<History size={15} />} onSelect={() => set({ dialog: 'backups' })}>
+              {t('backups')}
+            </MenuItem>
+            <MenuItem icon={<MonitorPlay size={15} />} disabled={!slides} onSelect={() => set({ presenting: true })}>
+              {t('present')}
+            </MenuItem>
+            <MenuSeparator />
+            <MenuItem icon={<Settings size={15} />} onSelect={() => set({ dialog: 'settings' })}>
+              {t('settings')}
+            </MenuItem>
+            <MenuItem icon={<CircleHelp size={15} />} onSelect={() => set({ dialog: 'handbook' })}>
+              {t('handbook')}
+            </MenuItem>
+          </Menu>
         )}
       </div>
-      <button className={`btn ${view === 'cull' ? 'on' : ''}`} onClick={() => set({ view: view === 'cull' ? 'editor' : 'cull' })} disabled={!project.entries.length}>
-        <LayoutGrid size={15} /> {t('cull')}
+      <button className={`btn ${view === 'cull' ? 'on' : ''}`} aria-pressed={view === 'cull'} title={t('cullTitle')} onClick={() => set({ view: view === 'cull' ? 'editor' : 'cull' })} disabled={!project.entries.length}>
+        <LayoutGrid size={16} /> {t('cull')}
       </button>
-      <button className="btn" onClick={() => set({ fullscreen: true })} disabled={!slides}>
-        <Play size={15} /> {t('play')}
+      <button className="btn" title={`${t('playFullscreen')} (Alt+Enter)`} onClick={() => set({ fullscreen: true })} disabled={!slides}>
+        <Play size={16} /> {t('play')}
       </button>
       <button className="btn primary" onClick={() => set({ exportOpen: true })} disabled={!slides}>
-        <Download size={15} /> {t('export')}
+        <Download size={16} /> {t('export')}
       </button>
-    </div>
+    </header>
   )
 }

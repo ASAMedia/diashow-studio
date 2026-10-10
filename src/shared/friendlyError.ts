@@ -9,6 +9,7 @@ export type ErrorKind =
   | 'outOfMemory'
   | 'fileLocked'
   | 'fileMissing'
+  | 'networkBlocked'
   | 'unsupportedFile'
   | 'encoderFailed'
   | 'gpuLost'
@@ -43,6 +44,7 @@ const RULES: { kind: ErrorKind; re: RegExp; only?: ErrorContext[] }[] = [
   { kind: 'gpuLost', re: /context (was )?lost|CONTEXT_LOST|GPU process|WebGL.{0,40}(lost|unavailable|not supported)|webgl2? (is )?not available/i },
   { kind: 'encoderFailed', re: /nvenc|h264_qsv|hevc_qsv|h264_amf|hevc_amf|OpenEncodeSession|No capable devices|Error while opening encoder|Could not open encoder|Error initializing output stream|encoder (failed|error)|VideoEncoder|EncodingError|the export expects \d+|frames? (missing|mismatch)/i },
   { kind: 'fileLocked', re: /EBUSY|EPERM|EACCES|resource busy|being used by another process|permission denied|access is denied|EROFS|read-only file system|locked/i },
+  { kind: 'networkBlocked', re: /^network-blocked$/ },
   { kind: 'fileMissing', re: /ENOENT|no such file|does not exist|cannot find the (file|path)|^missing$|file not found/i },
   {
     kind: 'unsupportedFile',

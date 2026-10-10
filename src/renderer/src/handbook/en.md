@@ -15,7 +15,7 @@ The quickest way is the **assistant**. It opens on the first start, and later fr
 Other ways to start a slideshow:
 
 - Drag photos, videos or folders into the window.
-- **New project** picks files; **Play a folder** shows a folder as a slideshow straight away.
+- **New slideshow** picks files; **Play a folder** shows a folder as a slideshow straight away.
 - **Open project…** loads a `.dshow` file, e.g. a packed project from another PC.
 
 Projects are saved automatically, in `Documents\Diashow Studio`. New photos are prepared in the background; you can carry on working right away.
@@ -67,10 +67,10 @@ In the **Music** tab you add your own music files (MP3, M4A, WAV, FLAC and more)
 
 ![Review: leave out and rate](cull.jpg)
 
-- [[X]] leaves a picture out of the show (it stays in the project) and brings it back.
+- [[X]] leaves a picture out of the slideshow (it stays in the project) and brings it back.
 - [[1]] to [[5]] give stars, [[Space]] shows the picture large.
 - Filters show e.g. only **Left out**, only rated pictures, or **Blurry & duplicates**.
-- **Only 3+ ★ in the show** (or another number) keeps just the best.
+- **Only 3+ ★ in the slideshow** (or another number) keeps just the best.
 - **Find rejects…** in the **⋯** menu lists blurry photos and duplicates, including the same video twice (e.g. from WhatsApp).
 
 ## Privacy: pixelating faces {#privacy}
@@ -125,17 +125,35 @@ Faces of pupils without photo consent can be pixelated. Face detection runs offl
 - **Pack project…** copies the project with all photos, videos and music into a folder, e.g. for a USB stick. On the other PC, open the `.dshow` file.
 - If originals were moved (another folder, a new drive letter), **Search a folder…** in the yellow banner finds them again.
 
+### Repairing a damaged project
+
+If saving a project file was interrupted (e.g. by a power cut), the file is listed in red on the home screen with **Repair…**. The dialog offers two ways:
+
+- **Rescue from the file:** everything still readable is taken over. A list says what was missing or repaired.
+- **Automatic backups:** open an older, complete version.
+
+The damaged file is kept either way. Smaller damage is repaired by the app itself when it opens the project; a notice then says what changed.
+
 ## Settings and system check {#settings}
 
 Open **Settings** with the gear at the top right (or from the **⋯** menu).
 
 ![Settings](settings.jpg)
 
+- **Appearance:** System, Light or Dark (see below).
 - **Preview quality:** High, Medium or Low for slower laptops. Exports are not affected.
 - **Storage:** shows how much space thumbnails and video versions take, and cleans up.
 - **Kiosk mode:** see [Showing it](#present).
 - **Updates:** if you like, the app asks GitHub once a day for a new version and then shows a hint. Nothing is installed automatically.
-- The **System check** tests another PC (e.g. in the computer room): graphics card, video encoders, memory and a short export test. **Copy report** copies everything as text.
+- **Troubleshooting:** the **System check** tests another PC (e.g. in the computer room): graphics card, video encoders, memory and a short export test. **Copy report** copies everything as text. There is also the **diagnostics package** (see below).
+
+### Light or dark
+
+Under **Appearance** you choose **System**, **Light** or **Dark**. **System** follows the Windows app mode (Settings → Personalisation → Colours). The preview, the fullscreen player and the large view in Review always stay dark, so the photos look their best.
+
+### Diagnostics package
+
+When something doesn't work, a **diagnostics package** helps whoever helps you: **Settings → Troubleshooting → Create diagnostics package…**. Before saving you see every file of the package; a click shows its content. It contains the error log, the system check, settings, versions and, of the open project, only counts, formats and sizes – no photos, videos, names or face data. **Save…** writes a zip file you can send by e-mail.
 
 ## Keyboard shortcuts {#shortcuts}
 
@@ -148,18 +166,35 @@ Open **Settings** with the gear at the top right (or from the **⋯** menu).
 | [[Alt+Enter]] | Play fullscreen |
 | [[Esc]] | Leave fullscreen, presentation or a dialog |
 | [[F1]] | This handbook |
+| [[Alt+←]] / [[Alt+→]] | Move the slide in the filmstrip |
+| [[Shift+F10]] | Open the slide's menu |
 
 [All shortcuts and mouse tips](app:shortcuts)
+
+## Using the keyboard {#keyboard}
+
+Everything in Diashow Studio also works without a mouse:
+
+- [[Tab]] and [[Shift+Tab]] move from control to control; the active one has a blue ring. [[Space]] or [[Enter]] presses a button.
+- In the bar on the right, [[↑]] and [[↓]] switch between the tabs **Themes**, **Music**, **Duration** and **Slide**.
+- The filmstrip is a single [[Tab]] stop: there [[←]] and [[→]] go from slide to slide and select it ([[Shift]] selects a range), [[Alt+←]] / [[Alt+→]] move the slide, [[Shift+F10]] opens its menu.
+- Menus work with the arrow keys and [[Enter]]; [[Esc]] closes them.
+- [[Esc]] closes every dialog; the focus then goes back to where you were.
+- On a song's number, [[↑]] and [[↓]] move the song in the list. The handles for trimming videos and songs move with [[←]] and [[→]], with [[Shift]] in bigger steps.
+- While you type in a text field, the shortcuts don't react.
+
+> If "Animation effects" are switched off in Windows, the app leaves out movement in its interface too. The slideshow itself plays as usual.
 
 ## Troubleshooting {#trouble}
 
 - **Windows warns when installing** ("Windows protected your PC"): choose **More info** and **Run anyway**. The app has no paid code signature.
 - **The preview stutters:** lower the **Preview quality** in Settings. Exports don't get worse.
-- **A video stays at "optimizing":** some phone videos (HEVC, HDR) are converted first. That takes a while, but only once.
+- **A video stays at "being prepared":** some phone videos (HEVC, HDR) are converted first. That takes a while, but only once.
 - **Exporting is very slow:** check in the [System check](#settings) whether a hardware encoder is found. Without a graphics card, a smaller resolution (720p) helps.
 - **Files are missing:** the originals were moved – choose **Search a folder…** in the yellow banner.
+- **Files on a network drive stay blocked:** a project from another PC points to shares such as `\\server\photos`. Because Windows signs in there with your account, the app asks first at the top of the editor. Choose **Allow access** only if you trust the project; shares you import from yourself are trusted automatically.
 - **Phones can't reach the laptop:** laptop and phones must be on the same Wi-Fi, and the Windows firewall must allow the app. Otherwise use the Windows mobile hotspot.
-- **Anything else:** in the [System check](#settings), **Copy report** and send it with a description to whoever helps you.
+- **Anything else:** create a [diagnostics package](#settings) under **Settings → Troubleshooting** and send it with a description to whoever helps you.
 
 ## About, licences and updates {#about}
 

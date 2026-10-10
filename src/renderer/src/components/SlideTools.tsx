@@ -4,10 +4,10 @@ import type { Entry, FreeText, MediaItem, PhotoEntry, Rect, VideoEntry } from '@
 import { themeMeta } from '@shared/themes'
 import { MAX_SPEED, MIN_SPEED, speedHasSound, type TimelineSlide } from '@shared/timeline'
 import { useStore } from '../store'
-import { t } from '../i18n'
+import { t, type StringKey } from '../i18n'
 import { requestStabilize, useStabilizeRequest } from '../stabilize'
 import { allVideoTracks, faceArea, photoPersonFaces, videoPersonTracks } from '@shared/people'
-import { Check, FONTS, Section, Slider } from './ui'
+import { Check, Field, FONTS, Section, Slider } from './ui'
 import { PeopleList } from './PeopleList'
 
 /** A detected face grown to cover hair and chin, as the area to pixelate (now in @shared/people). */
@@ -34,9 +34,9 @@ export function PrivacySection({ entry, media }: { entry: PhotoEntry | VideoEntr
   const anyFaces = entry.type === 'video' ? !!media.videoFaces?.some((s) => s.faces.length) : faces.length > 0
   return (
     <Section title={t('privacy')}>
-      <div className="row">
-        <button className={`btn small ${editing ? 'on' : ''}`} onClick={() => set({ privacyEdit: editing ? null : entry.id, kbEdit: null })}>
-          <ScanFace size={13} /> {t('privacyEdit')}
+      <div className="row wrap">
+        <button className={`btn small ${editing ? 'on' : ''}`} aria-pressed={editing} onClick={() => set({ privacyEdit: editing ? null : entry.id, kbEdit: null })}>
+          <ScanFace size={14} /> {t('privacyEdit')}
         </button>
         {anyFaces && (
           <button className="btn small ghost" onClick={all}>
@@ -85,8 +85,7 @@ export function SpeedSelect({ entry, hasAudio }: { entry: VideoEntry; hasAudio: 
   const v = Math.min(MAX_SPEED, Math.max(MIN_SPEED, entry.speed ?? 1))
   return (
     <>
-      <div className="row">
-        <label>{t('clipSpeed')}</label>
+      <Field label={t('clipSpeed')}>
         <select value={v} onChange={(e) => setEntry(entry.id, { speed: Number(e.target.value) === 1 ? undefined : Number(e.target.value) } as Partial<VideoEntry>)}>
           {SPEEDS.map((s) => (
             <option key={s} value={s}>
@@ -94,7 +93,7 @@ export function SpeedSelect({ entry, hasAudio }: { entry: VideoEntry; hasAudio: 
             </option>
           ))}
         </select>
-      </div>
+      </Field>
       {hasAudio && !speedHasSound(v) && <p className="hint">{t('speedSilent')}</p>}
       <StabilizeToggle entry={entry} />
     </>
@@ -125,7 +124,7 @@ export function StabilizeToggle({ entry }: { entry: VideoEntry }) {
       {on && progress !== undefined && (
         <>
           <p className="hint">{t('stabilizing').replace('{p}', String(Math.floor(progress * 100)))}</p>
-          <div className="bar">
+          <div className="bar" role="progressbar" aria-label={t('stabilize')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)}>
             <div style={{ width: `${Math.round(progress * 100)}%` }} />
           </div>
         </>
@@ -140,6 +139,14 @@ export function StabilizeToggle({ entry }: { entry: VideoEntry }) {
 // ---------------------------------------------------------------- free text
 
 const BOXES: FreeText['box'][] = ['none', 'shadow', 'band', 'card', 'bubble']
+/** Text colours offered as swatches (the colour picker next to them takes any other). */
+const SWATCHES: [string, StringKey][] = [
+  ['#ffffff', 'white'],
+  ['#1c1c1c', 'black'],
+  ['#ffd75e', 'colorYellow'],
+  ['#ff5a4f', 'colorRed'],
+  ['#4d9fff', 'colorBlue']
+]
 const boxLabel = (b: FreeText['box']): string =>
   ({ none: t('boxNone'), shadow: t('boxShadow'), band: t('boxBand'), card: t('boxCard'), bubble: t('boxBubble') })[b]
 
@@ -156,24 +163,25 @@ export function FreeTextSection({ slide }: { slide: TimelineSlide }) {
   return (
     <Section title={t('freeTexts')}>
       <div className="stack">
-        {texts.map(({ entryId, ft }) => (
-          <button key={ft.id} className={`btn small text-chip ${ft.id === textSel ? 'on' : ''}`} onClick={() => set({ textSel: ft.id === textSel ? null : ft.id })}>
-            {ft.text.split('\n')[0] || '…'}
-            <span
-              className="x"
-              role="button"
-              title={t('delete')}
-              onClick={(e) => {
-                e.stopPropagation()
-                useStore.getState().removeFreeText(entryId, ft.id)
-              }}
-            >
-              <Trash2 size={12} />
-            </span>
-          </button>
-        ))}
+        {texts.length > 0 && (
+          <div className="text-chips">
+            {texts.map(({ entryId, ft }) => {
+              const label = ft.text.split('\n')[0] || '…'
+              return (
+                <div key={ft.id} className="text-chip">
+                  <button className={`btn small ${ft.id === textSel ? 'on' : ''}`} aria-pressed={ft.id === textSel} title={label} onClick={() => set({ textSel: ft.id === textSel ? null : ft.id })}>
+                    <span>{label}</span>
+                  </button>
+                  <button className="btn small ghost icon" title={t('deleteTextBox')} aria-label={`${t('deleteTextBox')}: ${label}`} onClick={() => useStore.getState().removeFreeText(entryId, ft.id)}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
         <button className="btn small" onClick={() => useStore.getState().addFreeText(owner.id)}>
-          <Plus size={13} /> {t('addFreeText')}
+          <Plus size={14} /> {t('addFreeText')}
         </button>
         {current && <FreeTextEditor entryId={current.entryId} ft={current.ft} />}
         {texts.length > 0 && <p className="hint">{t('freeTextHint')}</p>}
@@ -186,9 +194,8 @@ function FreeTextEditor({ entryId, ft }: { entryId: string; ft: FreeText }) {
   const setText = (patch: Partial<FreeText>): void => useStore.getState().setFreeText(entryId, ft.id, patch)
   return (
     <div className="stack text-editor">
-      <textarea rows={2} value={ft.text} onChange={(e) => setText({ text: e.target.value })} style={{ width: '100%', resize: 'vertical' }} />
-      <div className="row">
-        <label>{t('font')}</label>
+      <textarea rows={2} aria-label={t('freeTextContent')} value={ft.text} onChange={(e) => setText({ text: e.target.value })} style={{ width: '100%', resize: 'vertical' }} />
+      <Field label={t('font')}>
         <select value={ft.font} onChange={(e) => setText({ font: e.target.value as FreeText['font'] })}>
           <option value="theme">Inter</option>
           {FONTS.filter((f) => f.id !== 'sans').map((f) => (
@@ -197,22 +204,21 @@ function FreeTextEditor({ entryId, ft }: { entryId: string; ft: FreeText }) {
             </option>
           ))}
         </select>
-      </div>
+      </Field>
       <Slider label={t('textSize')} value={ft.size} min={0.03} max={0.22} step={0.005} display={`${Math.round(ft.size * 1000) / 10} %`} onChange={(v) => setText({ size: v })} />
       <div className="row">
-        <label>{t('textColor')}</label>
-        <div className="swatches">
-          {['#ffffff', '#1c1c1c', '#ffd75e', '#ff5a4f', '#4d9fff'].map((c) => (
-            <button key={c} className={ft.color.toLowerCase() === c ? 'on' : ''} style={{ background: c }} onClick={() => setText({ color: c })} aria-label={c} />
+        <span className="label">{t('textColor')}</span>
+        <div className="swatches" role="group" aria-label={t('textColor')}>
+          {SWATCHES.map(([c, name]) => (
+            <button key={c} className={ft.color.toLowerCase() === c ? 'on' : ''} style={{ background: c }} onClick={() => setText({ color: c })} title={t(name)} aria-label={t(name)} aria-pressed={ft.color.toLowerCase() === c} />
           ))}
-          <input type="color" value={ft.color} onChange={(e) => setText({ color: e.target.value })} />
+          <input type="color" title={t('customColor')} aria-label={t('customColor')} value={ft.color} onChange={(e) => setText({ color: e.target.value })} />
         </div>
       </div>
       <Check checked={ft.bold} onChange={(v) => setText({ bold: v })}>
         {t('bold')}
       </Check>
-      <div className="row">
-        <label>{t('textBox')}</label>
+      <Field label={t('textBox')}>
         <select value={ft.box} onChange={(e) => setText({ box: e.target.value as FreeText['box'] })}>
           {BOXES.map((b) => (
             <option key={b} value={b}>
@@ -220,7 +226,7 @@ function FreeTextEditor({ entryId, ft }: { entryId: string; ft: FreeText }) {
             </option>
           ))}
         </select>
-      </div>
+      </Field>
       <Slider label={t('rotation')} value={ft.rotation} min={-45} max={45} step={1} display={`${ft.rotation}°`} onChange={(v) => setText({ rotation: v })} />
     </div>
   )
@@ -266,8 +272,9 @@ export function BatchPanel({ entries, slides }: { entries: Entry[]; slides: Time
         </p>
         <div className="stack">
           <div className="row">
-            <label>{t('duration')}</label>
+            <label htmlFor="batch-duration">{t('duration')}</label>
             <select
+              id="batch-duration"
               value={duration === 'auto' || duration === 'mixed' ? duration : 'custom'}
               onChange={(e) => {
                 const v = e.target.value
@@ -283,10 +290,11 @@ export function BatchPanel({ entries, slides }: { entries: Entry[]; slides: Time
             {duration !== 'auto' && duration !== 'mixed' && (
               <input
                 type="number"
+                aria-label={`${t('customDuration')} (${t('secondsLong')})`}
                 min={0.5}
                 max={120}
                 step={0.5}
-                style={{ width: 70 }}
+                style={{ width: 64 }}
                 value={duration}
                 onChange={(e) => {
                   const sec = Math.max(0.5, Number(e.target.value) || 0.5)
@@ -297,8 +305,9 @@ export function BatchPanel({ entries, slides }: { entries: Entry[]; slides: Time
           </div>
           {meta.scaleOption && visual.length > 0 && (
             <div className="row">
-              <label>{t('framing')}</label>
+              <label htmlFor="batch-framing">{t('framing')}</label>
               <select
+                id="batch-framing"
                 value={framing}
                 onChange={(e) => {
                   const v = e.target.value
@@ -316,8 +325,9 @@ export function BatchPanel({ entries, slides }: { entries: Entry[]; slides: Time
           {videos.length > 0 && (
             <>
               <div className="row">
-                <label>{t('clipSpeed')}</label>
+                <label htmlFor="batch-speed">{t('clipSpeed')}</label>
                 <select
+                  id="batch-speed"
                   value={speed}
                   onChange={(e) => {
                     const v = e.target.value
@@ -334,8 +344,9 @@ export function BatchPanel({ entries, slides }: { entries: Entry[]; slides: Time
                 </select>
               </div>
               <div className="row">
-                <label>{t('videoSound')}</label>
+                <label htmlFor="batch-sound">{t('videoSound')}</label>
                 <select
+                  id="batch-sound"
                   value={sound}
                   onChange={(e) => {
                     const v = e.target.value
@@ -352,8 +363,9 @@ export function BatchPanel({ entries, slides }: { entries: Entry[]; slides: Time
           )}
           {lives.length > 0 && (
             <div className="row">
-              <label>{t('livePhoto')}</label>
+              <label htmlFor="batch-live">{t('livePhoto')}</label>
               <select
+                id="batch-live"
                 value={live}
                 onChange={(e) => {
                   const v = e.target.value
@@ -372,7 +384,7 @@ export function BatchPanel({ entries, slides }: { entries: Entry[]; slides: Time
       </Section>
       {visual.length > 0 && (
         <Section title={t('privacy')}>
-          <div className="row">
+          <div className="row wrap">
             {withFaces.length > 0 && (
               <button
                 className="btn small"
@@ -386,7 +398,7 @@ export function BatchPanel({ entries, slides }: { entries: Entry[]; slides: Time
                   })
                 }
               >
-                <ScanFace size={13} /> {t('privacyBatchOn')}
+                <ScanFace size={14} /> {t('privacyBatchOn')}
               </button>
             )}
             {pixelated > 0 && (
@@ -402,7 +414,7 @@ export function BatchPanel({ entries, slides }: { entries: Entry[]; slides: Time
         <div className="stack">
           {mergeable && (
             <button className="btn small" onClick={() => useStore.getState().mergeEntries(ids)}>
-              <Merge size={13} /> {t('merge')}
+              <Merge size={14} /> {t('merge')}
             </button>
           )}
           <button
@@ -412,10 +424,10 @@ export function BatchPanel({ entries, slides }: { entries: Entry[]; slides: Time
               useStore.getState().select([])
             }}
           >
-            <EyeOff size={13} /> {t('excludeSel')}
+            <EyeOff size={14} /> {t('excludeSel')}
           </button>
           <button className="btn small danger" onClick={() => useStore.getState().removeEntries(ids)}>
-            <Trash2 size={13} /> {t('delete')}
+            <Trash2 size={14} /> {t('deleteSlides')}
           </button>
         </div>
       </div>

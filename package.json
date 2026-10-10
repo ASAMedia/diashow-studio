@@ -17,7 +17,8 @@
     "test:media": "node scripts/make-test-media.mjs",
     "e2e": "electron-vite build && playwright test",
     "dist": "electron-vite build && node scripts/third-party-notices.mjs && electron-builder --win",
-    "notices": "node scripts/third-party-notices.mjs"
+    "notices": "node scripts/third-party-notices.mjs",
+    "icon": "node scripts/make-icon.mjs"
   },
   "dependencies": {
     "exiftool-vendored": "^39.0.1",

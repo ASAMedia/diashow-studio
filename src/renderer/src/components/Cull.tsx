@@ -1,13 +1,15 @@
 // Review grid: go through all photos and videos with the keyboard, leave the weak ones out of the
 // show (they stay in the project and can come back) and give stars.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, ChevronLeft, ChevronRight, EyeOff, Film, Star, X } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight, EyeOff, Film, Star, Undo2, X } from 'lucide-react'
 import { mediaUrl } from '@shared/api'
 import type { Entry, MediaItem } from '@shared/types'
 import { useStore } from '../store'
 import { fmtTime, t } from '../i18n'
 import { findRejects, rejectLabel } from './Dialogs'
 import { prioritize } from '../priority'
+import { keyForFocus, modalOpen } from '../keys'
+import { Seg } from './ui'
 
 type Filter = 'all' | 'in' | 'out' | 'stars' | 'suggest'
 interface Item {
@@ -80,9 +82,9 @@ export function Cull() {
 
   useEffect(() => {
     const key = (ev: KeyboardEvent): void => {
-      if ((ev.target as HTMLElement).closest('input, textarea, select')) return
+      if (keyForFocus(ev)) return
       const s = useStore.getState()
-      if (s.dialog || s.fullscreen || s.exportOpen) return
+      if (s.dialog || s.fullscreen || s.exportOpen || modalOpen()) return
       if (ev.ctrlKey && (ev.key === 'z' || ev.key === 'Z' || ev.key === 'y' || ev.key === 'Y')) {
         ev.preventDefault()
         if (ev.key.toLowerCase() === 'y' || ev.shiftKey) s.redo()
@@ -119,11 +121,11 @@ export function Cull() {
   const counts = { all: all.length, in: all.filter((x) => !x.e.excluded).length, out: all.filter((x) => x.e.excluded).length }
 
   const stars = (n: number, it?: Item) => (
-    <span className="stars">
+    <span className="stars" role="img" aria-label={t('starsLabel').replace('{n}', String(n))}>
       {[1, 2, 3, 4, 5].map((i) => (
         <Star
           key={i}
-          size={12}
+          size={13}
           fill={i <= n ? 'currentColor' : 'none'}
           className={i <= n ? 'on' : ''}
           onClick={
@@ -139,16 +141,20 @@ export function Cull() {
     </span>
   )
 
+  const tileId = (id: string): string => `cull-${id}`
   return (
-    <div className="cull">
+    <main className="cull">
       <div className="cull-bar">
         <button className="btn" onClick={() => useStore.getState().set({ view: 'editor' })}>
-          <ArrowLeft size={15} /> {t('done')}
+          <ArrowLeft size={16} /> {t('done')}
         </button>
-        <div className="seg">
-          {(['all', 'in', 'out', 'stars', 'suggest'] as Filter[]).map((f) => (
-            <button key={f} className={filter === f ? 'on' : ''} onClick={() => setFilter(f)}>
-              {f === 'all'
+        <Seg
+          label={t('cullFilter')}
+          value={filter}
+          options={(['all', 'in', 'out', 'stars', 'suggest'] as Filter[]).map((f) => ({
+            id: f,
+            label:
+              f === 'all'
                 ? `${t('cullAll')} ${counts.all}`
                 : f === 'in'
                   ? `${t('cullIn')} ${counts.in}`
@@ -156,13 +162,13 @@ export function Cull() {
                     ? `${t('cullOut')} ${counts.out}`
                     : f === 'stars'
                       ? t('cullStars').replace('{n}', String(minStars))
-                      : `${t('cullSuggest')} ${suggestions.size}`}
-            </button>
-          ))}
-        </div>
+                      : `${t('cullSuggest')} ${suggestions.size}`
+          }))}
+          onChange={setFilter}
+        />
         {filter === 'stars' && (
           <>
-            <select value={minStars} onChange={(e) => setMinStars(Number(e.target.value))}>
+            <select aria-label={t('cullMinStars')} value={minStars} onChange={(e) => setMinStars(Number(e.target.value))}>
               {[1, 2, 3, 4, 5].map((n) => (
                 <option key={n} value={n}>
                   {'★'.repeat(n)}
@@ -179,8 +185,15 @@ export function Cull() {
         )}
         <span className="hint cull-hint">{t('cullHint')}</span>
       </div>
-      <div className="cull-scroll" ref={scrollRef}>
-        {items.length === 0 && <p className="hint" style={{ padding: 20 }}>{t('cullNone')}</p>}
+      <div
+        className="cull-scroll"
+        ref={scrollRef}
+        role="listbox"
+        tabIndex={0}
+        aria-label={t('cull')}
+        aria-activedescendant={focused ? tileId(focused.e.id) : undefined}
+      >
+        {items.length === 0 && <p className="empty-note" style={{ padding: 20 }}>{t('cullNone')}</p>}
         <div style={{ height: rows * rowH, position: 'relative' }}>
           {shown.map((it, k) => {
             const i = first * cols + k
@@ -188,6 +201,10 @@ export function Cull() {
             return (
               <div
                 key={it.e.id}
+                id={tileId(it.e.id)}
+                role="option"
+                aria-selected={focused?.e.id === it.e.id}
+                aria-label={`${it.m.name}${it.e.excluded ? `, ${t('cullOut')}` : ''}${it.e.rating ? `, ${t('starsLabel').replace('{n}', String(it.e.rating))}` : ''}${sug ? `, ${rejectLabel(sug)}` : ''}`}
                 className={`cull-tile ${it.e.excluded ? 'out' : ''} ${focused?.e.id === it.e.id ? 'focus' : ''}`}
                 style={{ left: GAP + (i % cols) * (TILE + GAP), top: Math.floor(i / cols) * rowH, width: TILE }}
                 onClick={() => setFocusId(it.e.id)}
@@ -209,8 +226,8 @@ export function Cull() {
                     </span>
                   )}
                   {sug && <span className="sug" title={rejectLabel(sug)}>{sug.reason === 'blurry' ? t('blurry') : rejectLabel(sug)}</span>}
-                  <button className="out-toggle" title={it.e.excluded ? t('includeSel') : t('excludeSel')} onClick={(ev) => { ev.stopPropagation(); toggleOut(it) }}>
-                    <X size={13} />
+                  <button className="out-toggle" tabIndex={-1} title={`${it.e.excluded ? t('includeSel') : t('excludeSel')} (X)`} aria-label={it.e.excluded ? t('includeSel') : t('excludeSel')} onClick={(ev) => { ev.stopPropagation(); toggleOut(it) }}>
+                    {it.e.excluded ? <Undo2 size={13} /> : <X size={13} />}
                   </button>
                 </div>
                 <div className="meta">
@@ -223,29 +240,29 @@ export function Cull() {
         </div>
       </div>
       {large && focused && (
-        <div className="cull-large" onClick={() => setLarge(false)}>
+        <div className="cull-large" data-theme="dark" onClick={() => setLarge(false)}>
           {focused.m.kind === 'video' && focused.m.playback ? (
             <video key={focused.m.id} src={mediaUrl(focused.m.playback)} autoPlay controls onClick={(e) => e.stopPropagation()} />
           ) : (
             <img key={focused.m.id} src={mediaUrl(focused.m.display ?? focused.m.thumb ?? '')} alt="" />
           )}
-          <button className="nav prev" onClick={(e) => { e.stopPropagation(); move(-1) }}>
+          <button className="nav prev" title={t('previous')} aria-label={t('previous')} onClick={(e) => { e.stopPropagation(); move(-1) }}>
             <ChevronLeft size={28} />
           </button>
-          <button className="nav next" onClick={(e) => { e.stopPropagation(); move(1) }}>
+          <button className="nav next" title={t('next')} aria-label={t('next')} onClick={(e) => { e.stopPropagation(); move(1) }}>
             <ChevronRight size={28} />
           </button>
           <div className="cull-large-bar" onClick={(e) => e.stopPropagation()}>
-            <span>
+            <span className="name" title={focused.m.name}>
               {index + 1} / {items.length} · {focused.m.name}
             </span>
             {stars(focused.e.rating ?? 0, focused)}
-            <button className={`btn small ${focused.e.excluded ? 'on' : ''}`} onClick={() => toggleOut(focused)}>
-              <EyeOff size={13} /> {focused.e.excluded ? t('includeSel') : t('excludeSel')}
+            <button className={`btn small ${focused.e.excluded ? 'on' : ''}`} aria-pressed={!!focused.e.excluded} onClick={() => toggleOut(focused)}>
+              <EyeOff size={14} /> {focused.e.excluded ? t('includeSel') : t('excludeSel')}
             </button>
           </div>
         </div>
       )}
-    </div>
+    </main>
   )
 }

@@ -9,6 +9,8 @@ import { Player } from '../engine/player'
 import { useStore } from '../store'
 import { timelineOf } from '../timeline'
 import { fmtTime, localeTag, t } from '../i18n'
+import { keyForFocus } from '../keys'
+import { Modal } from './Modal'
 
 const CHANNEL = 'diashow-present'
 
@@ -77,7 +79,7 @@ export function PresentView() {
     }
   }, [])
   return (
-    <div ref={rootRef} className="fullscreen" style={{ cursor: 'none' }}>
+    <div ref={rootRef} className="fullscreen" data-theme="dark" style={{ cursor: 'none' }}>
       <canvas ref={canvasRef} />
     </div>
   )
@@ -118,7 +120,7 @@ export function PresenterPanel() {
 
   useEffect(() => {
     const key = (e: KeyboardEvent): void => {
-      if ((e.target as HTMLElement).closest('input, textarea, select')) return
+      if (e.key !== 'Escape' && keyForFocus(e)) return
       if (e.key === 'Escape') set({ presenting: false })
       else if (e.code === 'Space') {
         e.preventDefault()
@@ -135,41 +137,48 @@ export function PresenterPanel() {
   const next = tl.slides[idx + 1]
   const thumb = (i: number): string | undefined => tl.slides[i]?.media[0]?.thumb
   return (
-    <div className="overlay presenter">
-      <div className="dialog wide">
-        <h2>{t('presenting')}</h2>
-        <div className="presenter-slides">
-          <figure>
-            {cur && thumb(idx) ? <img src={mediaUrl(thumb(idx)!)} alt="" /> : <div className="ph">{cur?.title?.text ?? ''}</div>}
-            <figcaption>
-              {t('nowShowing')} {idx + 1} / {tl.slides.length}
-            </figcaption>
-          </figure>
-          <figure className="next">
-            {next && thumb(idx + 1) ? <img src={mediaUrl(thumb(idx + 1)!)} alt="" /> : <div className="ph">{next?.title?.text ?? '—'}</div>}
-            <figcaption>{t('upNext')}</figcaption>
-          </figure>
-        </div>
-        <input type="range" className="scrub" min={0} max={Math.max(0.01, state.duration)} step={0.1} value={state.t} onChange={(e) => send({ type: 'cmd', action: 'seek', t: Number(e.target.value) })} />
-        <div className="row" style={{ justifyContent: 'center', gap: 12 }}>
-          <button className="btn icon" title={t('previous')} onClick={() => send({ type: 'cmd', action: 'prev' })}>
-            <SkipBack size={16} />
-          </button>
-          <button className="btn primary" onClick={() => send({ type: 'cmd', action: 'toggle' })}>
-            {state.playing ? <Pause size={16} /> : <Play size={16} />} {state.playing ? t('pause') : t('play')}
-          </button>
-          <button className="btn icon" title={t('next')} onClick={() => send({ type: 'cmd', action: 'next' })}>
-            <SkipForward size={16} />
-          </button>
-          <span className="val">
-            {fmtTime(state.t)} / {fmtTime(state.duration)}
-          </span>
-          <button className="btn" onClick={() => set({ presenting: false })}>
-            <MonitorX size={16} /> {t('stopPresenting')}
-          </button>
-        </div>
-        <p className="hint">{t('presentHint')}</p>
+    <Modal title={t('presenting')} onClose={() => set({ presenting: false })} noCloseButton className="wide" overlayClassName="presenter">
+      <div className="presenter-slides">
+        <figure>
+          {cur && thumb(idx) ? <img src={mediaUrl(thumb(idx)!)} alt="" /> : <div className="ph">{cur?.title?.text ?? ''}</div>}
+          <figcaption>
+            {t('nowShowing')} {idx + 1} / {tl.slides.length}
+          </figcaption>
+        </figure>
+        <figure className="next">
+          {next && thumb(idx + 1) ? <img src={mediaUrl(thumb(idx + 1)!)} alt="" /> : <div className="ph">{next?.title?.text ?? '—'}</div>}
+          <figcaption>{t('upNext')}</figcaption>
+        </figure>
       </div>
-    </div>
+      <input
+        type="range"
+        className="scrub"
+        aria-label={t('position')}
+        aria-valuetext={`${fmtTime(state.t)} / ${fmtTime(state.duration)}`}
+        min={0}
+        max={Math.max(0.01, state.duration)}
+        step={0.1}
+        value={state.t}
+        onChange={(e) => send({ type: 'cmd', action: 'seek', t: Number(e.target.value) })}
+      />
+      <div className="presenter-controls">
+        <button className="btn icon" title={t('previous')} aria-label={t('previous')} onClick={() => send({ type: 'cmd', action: 'prev' })}>
+          <SkipBack size={16} />
+        </button>
+        <button className="btn primary" onClick={() => send({ type: 'cmd', action: 'toggle' })}>
+          {state.playing ? <Pause size={16} /> : <Play size={16} />} {state.playing ? t('pause') : t('play')}
+        </button>
+        <button className="btn icon" title={t('next')} aria-label={t('next')} onClick={() => send({ type: 'cmd', action: 'next' })}>
+          <SkipForward size={16} />
+        </button>
+        <span className="val">
+          {fmtTime(state.t)} / {fmtTime(state.duration)}
+        </span>
+        <button className="btn" onClick={() => set({ presenting: false })}>
+          <MonitorX size={16} /> {t('stopPresenting')}
+        </button>
+      </div>
+      <p className="hint">{t('presentHint')}</p>
+    </Modal>
   )
 }

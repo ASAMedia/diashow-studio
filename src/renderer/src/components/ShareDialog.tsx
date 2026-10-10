@@ -2,7 +2,7 @@
 // the open show ("Fotos einsammeln"), or download the finished video ("Video verteilen"). The server
 // runs in the main process (src/main/share) only while this dialog is open.
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Copy, FolderOpen, Play, Square, Trash2, Upload, X } from 'lucide-react'
+import { AlertTriangle, Check, Copy, FolderOpen, Play, Square, Trash2, Upload } from 'lucide-react'
 import { toString as qrSvg } from 'qrcode'
 import type { ShareAddress, ShareStatus } from '@shared/share'
 import { aspectValue } from '@shared/timeline'
@@ -10,8 +10,11 @@ import { queueExport } from '../engine/exporter'
 import { useStore } from '../store'
 import { localeTag, t } from '../i18n'
 import { ErrorText } from '../errors'
+import { Modal } from './Modal'
+import { Check as CheckBox, Field, Seg } from './ui'
 
 type Tab = 'collect' | 'distribute'
+const NEWLINE = '\n'
 
 /** Files that arrive within this time are imported together. */
 const BATCH_MS = 1500
@@ -170,204 +173,194 @@ export function ShareDialog() {
   const publicAddress = running && !!status?.addresses.find((a) => a.address === status.address)?.public
 
   return (
-    <div className="overlay">
-      <div className="dialog wide share-dialog">
-        <div className="row" style={{ marginBottom: 8 }}>
-          <h2 style={{ margin: 0, flex: 1 }}>{t('shareTitle')}</h2>
-          <button className="btn ghost icon" title={t('close')} onClick={() => set({ dialog: null })}>
-            <X size={16} />
-          </button>
-        </div>
-        <div className="seg">
-          <button className={tab === 'collect' ? 'on' : ''} onClick={() => setTab('collect')}>
-            {t('shareCollect')}
-          </button>
-          <button className={tab === 'distribute' ? 'on' : ''} onClick={() => setTab('distribute')}>
-            {t('shareDistribute')}
-          </button>
-        </div>
-        <p className="hint">{tab === 'collect' ? t('shareCollectIntro') : t('shareDistributeIntro')}</p>
+    <Modal title={t('shareTitle')} onClose={() => set({ dialog: null })} className="wide share-dialog">
+      <Seg
+        label={t('shareTitle')}
+        value={tab}
+        options={[
+          { id: 'collect', label: t('shareCollect') },
+          { id: 'distribute', label: t('shareDistribute') }
+        ]}
+        onChange={setTab}
+      />
+      <p className="hint">{tab === 'collect' ? t('shareCollectIntro') : t('shareDistributeIntro')}</p>
 
-        <div className="share-body">
-          <div>
-            {qr && running ? (
-              <div className="share-qr" dangerouslySetInnerHTML={{ __html: qr }} />
-            ) : (
-              <div className="share-qr off">{running ? '…' : t('shareStopped')}</div>
-            )}
-          </div>
-          <div className="stack">
-            {!running ? (
-              <>
-                <p className="share-note">{t('shareFirewall')}</p>
-                <div className="row">
-                  <button className="btn primary share-start" disabled={busy || !project} onClick={() => void start()}>
-                    <Play size={14} /> {t('shareStart')}
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                {(status?.addresses.length ?? 0) > 1 && (
-                  <div className="row">
-                    <label>{t('shareNetwork')}</label>
-                    <select value={status?.address ?? ''} disabled={busy} onChange={(e) => void control({ type: 'address', address: e.target.value })}>
-                      {status?.addresses.map((a) => (
-                        <option key={a.address} value={a.address}>
-                          {addressLabel(a)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                <div className="share-url" data-testid={tab === 'collect' ? 'share-upload-url' : 'share-download-url'}>
-                  {url}
-                </div>
-                {publicAddress && (
-                  <p className="share-warning" data-testid="share-public-warning">
-                    <AlertTriangle size={14} /> {t('sharePublicWarning')}
-                  </p>
-                )}
-                <div className="row">
-                  <button
-                    className="btn small"
-                    onClick={() => {
-                      if (!url) return
-                      void navigator.clipboard.writeText(url).then(() => setCopied(true), () => {})
-                    }}
-                  >
-                    <Copy size={13} /> {copied ? t('shareCopied') : t('shareCopy')}
-                  </button>
-                  <button className="btn small" disabled={busy} onClick={() => void control({ type: 'stop' })}>
-                    <Square size={12} /> {t('shareStop')}
-                  </button>
-                </div>
-              </>
-            )}
-            {status?.error && <ErrorText err={status.error} context="share" />}
-            {error && <ErrorText err={error} context="share" />}
-
-            {tab === 'collect' && running && (
-              <>
-                <label className="check">
-                  <input type="checkbox" checked={!!status?.collecting} onChange={(e) => void control({ type: 'collect', on: e.target.checked })} />
-                  <span>{t('shareAccept')}</span>
-                </label>
-                <div className="row">
-                  <label>{t('sharePlacement')}</label>
-                  <select value={placement} onChange={(e) => setPlacement(e.target.value as 'byTime' | 'selection')}>
-                    <option value="byTime">{t('sharePlaceByTime')}</option>
-                    <option value="selection">{t('sharePlaceSelection')}</option>
+      <div className="share-body">
+        <div>
+          {qr && running ? (
+            <div className="share-qr" role="img" aria-label={t('shareQr')} dangerouslySetInnerHTML={{ __html: qr }} />
+          ) : (
+            <div className="share-qr off">{running ? '…' : t('shareStopped')}</div>
+          )}
+        </div>
+        <div className="stack">
+          {!running ? (
+            <>
+              <p className="share-note">{t('shareFirewall')}</p>
+              <div className="row">
+                <button className="btn primary share-start" disabled={busy || !project} onClick={() => void start()}>
+                  <Play size={14} /> {t('shareStart')}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              {(status?.addresses.length ?? 0) > 1 && (
+                <Field label={t('shareNetwork')}>
+                  <select value={status?.address ?? ''} disabled={busy} onChange={(e) => void control({ type: 'address', address: e.target.value })}>
+                    {status?.addresses.map((a) => (
+                      <option key={a.address} value={a.address}>
+                        {addressLabel(a)}
+                      </option>
+                    ))}
                   </select>
-                </div>
-                {limits && (
-                  <p className="hint" style={{ marginTop: 0 }}>
-                    {t('shareLimits').replace('{p}', size(limits.photo)).replace('{v}', size(limits.video))} {t('shareAutoImport')}
-                  </p>
-                )}
-                <div className="row">
-                  <h3 style={{ margin: 0, flex: 1 }}>
-                    {t('shareReceived')} ({status?.received.length ?? 0})
-                  </h3>
-                  {!!status?.uploading && (
-                    <span className="val">
-                      <Upload size={12} /> {t('shareUploading').replace('{n}', String(status.uploading))}
-                    </span>
-                  )}
-                  {status?.folder && (
-                    <button className="btn small ghost" onClick={() => void window.api.revealInFolder(status.folder!)}>
-                      <FolderOpen size={13} /> {t('shareOpenFolder')}
-                    </button>
-                  )}
-                </div>
-                <div className="share-list" data-testid="share-received">
-                  {byUploader.length === 0 && <p className="hint">{t('shareNothingYet')}</p>}
-                  {byUploader.map(([who, files]) => (
-                    <div key={who} className="share-who">
-                      <div className="who">
-                        {who} · {files.length}
-                      </div>
-                      <div className="files" title={files.map((f) => f.name).join('\n')}>
-                        {files
-                          .slice(0, 12)
-                          .map((f) => f.name)
-                          .join(', ')}
-                        {files.length > 12 ? ', …' : ''}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <p className="hint">{t('shareNoConnect')}</p>
-              </>
-            )}
+                </Field>
+              )}
+              <div className="share-url" data-testid={tab === 'collect' ? 'share-upload-url' : 'share-download-url'}>
+                {url}
+              </div>
+              {publicAddress && (
+                <p className="share-warning" data-testid="share-public-warning" role="alert">
+                  <AlertTriangle size={14} aria-hidden /> {t('sharePublicWarning')}
+                </p>
+              )}
+              <div className="row">
+                <button
+                  className="btn small"
+                  onClick={() => {
+                    if (!url) return
+                    void navigator.clipboard.writeText(url).then(() => setCopied(true), () => {})
+                  }}
+                >
+                  {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? t('shareCopied') : t('shareCopy')}
+                </button>
+                <button className="btn small" disabled={busy} onClick={() => void control({ type: 'stop' })}>
+                  <Square size={12} /> {t('shareStop')}
+                </button>
+              </div>
+            </>
+          )}
+          {status?.error && <ErrorText err={status.error} context="share" />}
+          {error && <ErrorText err={error} context="share" />}
 
-            {tab === 'distribute' && running && (
-              <>
-                <h3 style={{ margin: '4px 0 0' }}>{t('shareOffered')}</h3>
-                <div className="share-list" data-testid="share-offered">
-                  {offered.length === 0 && <p className="hint">{t('shareNoOffers')}</p>}
-                  {offered.map((o) => (
-                    <div key={o.id} className="share-row">
-                      <span className="name" title={o.path}>
-                        {o.name}
-                      </span>
-                      <span className="val">{size(o.size)}</span>
-                      <span className="val">{t('shareDownloads').replace('{n}', String(o.downloads))}</span>
-                      <button className="btn small ghost icon" title={t('shareUnoffer')} onClick={() => void control({ type: 'unoffer', id: o.id })}>
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <div className="row">
-                  <button className="btn small" disabled={busy} onClick={() => void control({ type: 'pickOffer' })}>
-                    {t('sharePickFile')}
-                  </button>
-                </div>
-                {offerable.length > 0 && (
-                  <>
-                    <h3 style={{ margin: '4px 0 0' }}>{t('shareFinished')}</h3>
-                    <div className="share-list">
-                      {offerable.map((j) => (
-                        <div key={j.id} className="share-row">
-                          <span className="name" title={j.outPath}>
-                            {j.name}
-                          </span>
-                          <span className="val">
-                            {j.width}×{j.height}
-                          </span>
-                          <button className="btn small" onClick={() => void control({ type: 'offer', paths: [j.outPath] })}>
-                            {t('shareOfferIt')}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </>
+          {tab === 'collect' && running && (
+            <>
+              <CheckBox checked={!!status?.collecting} onChange={(v) => void control({ type: 'collect', on: v })}>
+                {t('shareAccept')}
+              </CheckBox>
+              <Field label={t('sharePlacement')}>
+                <select value={placement} onChange={(e) => setPlacement(e.target.value as 'byTime' | 'selection')}>
+                  <option value="byTime">{t('sharePlaceByTime')}</option>
+                  <option value="selection">{t('sharePlaceSelection')}</option>
+                </select>
+              </Field>
+              {limits && (
+                <p className="hint" style={{ marginTop: 0 }}>
+                  {t('shareLimits').replace('{p}', size(limits.photo)).replace('{v}', size(limits.video))} {t('shareAutoImport')}
+                </p>
+              )}
+              <div className="share-section">
+                <h3 className="subhead">
+                  {t('shareReceived')} ({status?.received.length ?? 0})
+                </h3>
+                {!!status?.uploading && (
+                  <span className="val" role="status">
+                    <Upload size={12} aria-hidden /> {t('shareUploading').replace('{n}', String(status.uploading))}
+                  </span>
                 )}
-                {(large || mobile || offered.length > 0) && project && (
-                  <div className="share-note">
-                    {t('shareMobileTip')}
-                    <div className="row" style={{ marginTop: 6 }}>
-                      {mobile && mobile.state !== 'done' ? (
-                        <span className="val">
-                          {t('shareMaking720').replace(
-                            '{s}',
-                            mobile.state === 'running' ? `${Math.floor((mobile.frame / Math.max(1, mobile.totalFrames)) * 100)} %` : mobile.state === 'error' ? (mobile.error ?? t('queueError')) : t('queueQueued')
-                          )}
-                        </span>
-                      ) : (
-                        <button className="btn small" onClick={() => void makeMobile()}>
-                          {t('shareMake720')}
-                        </button>
-                      )}
+                {status?.folder && (
+                  <button className="btn small ghost" onClick={() => void window.api.revealInFolder(status.folder!)}>
+                    <FolderOpen size={13} /> {t('shareOpenFolder')}
+                  </button>
+                )}
+              </div>
+              <div className="share-list" data-testid="share-received">
+                {byUploader.length === 0 && <p className="hint">{t('shareNothingYet')}</p>}
+                {byUploader.map(([who, files]) => (
+                  <div key={who} className="share-who">
+                    <div className="who" title={who}>
+                      {who} · {files.length}
+                    </div>
+                    <div className="files" title={files.map((f) => f.name).join(NEWLINE)}>
+                      {files
+                        .slice(0, 12)
+                        .map((f) => f.name)
+                        .join(', ')}
+                      {files.length > 12 ? ', …' : ''}
                     </div>
                   </div>
-                )}
-              </>
-            )}
-          </div>
+                ))}
+              </div>
+              <p className="hint">{t('shareNoConnect')}</p>
+            </>
+          )}
+
+          {tab === 'distribute' && running && (
+            <>
+              <h3 className="subhead">{t('shareOffered')}</h3>
+              <div className="share-list" data-testid="share-offered">
+                {offered.length === 0 && <p className="hint">{t('shareNoOffers')}</p>}
+                {offered.map((o) => (
+                  <div key={o.id} className="share-row">
+                    <span className="name" title={o.path}>
+                      {o.name}
+                    </span>
+                    <span className="val">{size(o.size)}</span>
+                    <span className="val">{t('shareDownloads').replace('{n}', String(o.downloads))}</span>
+                    <button className="btn small ghost icon" title={t('shareUnoffer')} aria-label={`${t('shareUnoffer')}: ${o.name}`} onClick={() => void control({ type: 'unoffer', id: o.id })}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="row">
+                <button className="btn small" disabled={busy} onClick={() => void control({ type: 'pickOffer' })}>
+                  {t('sharePickFile')}
+                </button>
+              </div>
+              {offerable.length > 0 && (
+                <>
+                  <h3 className="subhead">{t('shareFinished')}</h3>
+                  <div className="share-list">
+                    {offerable.map((j) => (
+                      <div key={j.id} className="share-row">
+                        <span className="name" title={j.outPath}>
+                          {j.name}
+                        </span>
+                        <span className="val">
+                          {j.width}×{j.height}
+                        </span>
+                        <button className="btn small" onClick={() => void control({ type: 'offer', paths: [j.outPath] })}>
+                          {t('shareOfferIt')}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+              {(large || mobile || offered.length > 0) && project && (
+                <div className="share-note">
+                  {t('shareMobileTip')}
+                  <div className="row" style={{ marginTop: 6 }}>
+                    {mobile && mobile.state !== 'done' ? (
+                      <span className="val left" role="status">
+                        {t('shareMaking720').replace(
+                          '{s}',
+                          mobile.state === 'running' ? `${Math.floor((mobile.frame / Math.max(1, mobile.totalFrames)) * 100)} %` : mobile.state === 'error' ? (mobile.error ?? t('queueError')) : t('queueQueued')
+                        )}
+                      </span>
+                    ) : (
+                      <button className="btn small" onClick={() => void makeMobile()}>
+                        {t('shareMake720')}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }

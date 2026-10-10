@@ -22,6 +22,8 @@ import { registerDiagnostics } from './diagnostics'
 import { checkDirectExport, checkLocalFile } from './ipcGuards'
 import { registerProjectRepair } from './projectRepair'
 import { collectSystemInfo } from './systemCheck'
+import { uncHost, validHost } from '@shared/netPaths'
+import { setMediaPathPolicy } from './protocol'
 
 function broadcast(channel: string, payload: unknown): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -56,9 +58,16 @@ export function registerIpc(): void {
   // a project that had to be repaired when it was read: the editor shows what changed
   const onReport = (event: ProjectReportEvent): void => broadcast('project:report', event)
   const projects = createProjectStore(join(dataDir || app.getPath('documents'), 'Diashow Studio'), { onReport })
+  // Network shares: trusted hosts come from the app settings; until they are read, none are
+  const trustedHosts = new Set<string>()
+  const allowPath = (p: string): boolean => {
+    const host = uncHost(p)
+    return !host || trustedHosts.has(host)
+  }
   const service = createMediaService({
     ffmpegDir,
     cacheDir,
+    allowPath,
     onUpdate: (item: MediaItem) => broadcast('media:update', item),
     onMusicUpdate: (track: MusicTrack) => broadcast('music:update', track),
     directDecode: directDecodeSupport
@@ -67,6 +76,18 @@ export function registerIpc(): void {
   // Warm up encoder detection so the export dialog has it ready
   void service.ffmpeg.encoders()
   const appSettings = createAppSettingsStore(join(app.getPath('userData'), 'settings.json'))
+  const hostsLoaded = appSettings
+    .get()
+    .then((s) => (s.trustedHosts ?? []).forEach((h) => trustedHosts.add(h)))
+    .catch(() => {})
+  setMediaPathPolicy(allowPath)
+  /** Shares the user picked files or folders on themselves are trusted from then on. */
+  const trustPaths = async (paths: string[]): Promise<void> => {
+    const fresh = [...new Set(paths.map(uncHost).filter((h): h is string => !!h && !trustedHosts.has(h)))]
+    if (!fresh.length) return
+    fresh.forEach((h) => trustedHosts.add(h))
+    await appSettings.update({ trustedHosts: [...trustedHosts] }).catch(() => {})
+  }
   const awake = createKeepAwake({
     start: () => powerSaveBlocker.start('prevent-display-sleep'),
     stop: (id) => powerSaveBlocker.stop(id)
@@ -97,17 +118,38 @@ export function registerIpc(): void {
   // DIASHOW_LOCALE (e.g. en-US) overrides the Windows language, for tests in either language
   ipcMain.handle('app:locale', () => process.env.DIASHOW_LOCALE || app.getLocale())
 
-  ipcMain.handle('media:import', (_e, paths: string[]) => service.importPaths(stringList(paths)))
-  ipcMain.handle('media:restore', (_e, items: MediaItem[]) => service.restoreMedia(items))
-  ipcMain.handle('music:import', (_e, paths: string[]) => service.importMusic(stringList(paths)))
-  ipcMain.handle('music:restore', (_e, tracks: MusicTrack[]) => service.restoreMusic(tracks))
+  ipcMain.handle('media:import', async (_e, paths: string[]) => {
+    await trustPaths(stringList(paths))
+    return service.importPaths(stringList(paths))
+  })
+  ipcMain.handle('media:restore', async (_e, items: MediaItem[]) => {
+    await hostsLoaded
+    return service.restoreMedia(items)
+  })
+  ipcMain.handle('music:import', async (_e, paths: string[]) => {
+    await trustPaths(stringList(paths))
+    return service.importMusic(stringList(paths))
+  })
+  ipcMain.handle('music:restore', async (_e, tracks: MusicTrack[]) => {
+    await hostsLoaded
+    return service.restoreMusic(tracks)
+  })
+  // the user agreed to open files on these network hosts (banner in the editor)
+  ipcMain.handle('net:trust-hosts', async (_e, hosts: unknown) => {
+    const list = Array.isArray(hosts) ? hosts.filter(validHost).map((h) => h.toLowerCase()) : []
+    list.forEach((h) => trustedHosts.add(h))
+    await appSettings.update({ trustedHosts: [...trustedHosts] })
+  })
   // paths FFmpeg reads for the renderer: existing files only, never URLs (ipcGuards.ts)
   ipcMain.handle('audio:waveform', async (_e, path: string, buckets: number) => service.waveform(await checkLocalFile(path), buckets))
   ipcMain.handle('media:faces', (_e, id: string, faces: Rect[], desc?: number[][]) => service.setFaces(id, faces, desc))
   ipcMain.handle('media:video-faces', (_e, id: string, samples: VideoFaces[]) => service.setVideoFaces(id, samples))
   ipcMain.handle('media:frames', async (_e, path: string, times: number[], maxEdge: number) => service.videoFrames(await checkLocalFile(path), times, maxEdge))
   ipcMain.handle('media:strip', async (_e, path: string, count: number, height: number) => service.videoStrip(await checkLocalFile(path), count, height))
-  ipcMain.handle('media:relink', (_e, missing: MediaItem[], folder: string) => service.relinkMedia(missing, folder))
+  ipcMain.handle('media:relink', async (_e, missing: MediaItem[], folder: string) => {
+    await trustPaths([String(folder)])
+    return service.relinkMedia(missing, folder)
+  })
   ipcMain.handle('media:prioritize', (_e, ids: string[]) => service.prioritize(stringList(ids)))
   ipcMain.handle('media:stabilize', (_e, id: string) => service.stabilizeVideo(String(id)))
   // Sharing over the local network: uploads go to <Documents>/Diashow Studio/Uploads/<project>/<name>
@@ -196,11 +238,14 @@ export function registerIpc(): void {
     const win = windowOf(e)
     const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
     if (r.canceled || !r.filePaths.length) return null
+    // a pack the user opened from a share: its files sit next to it on that share
+    await trustPaths([r.filePaths[0]])
     return importProjectFile(r.filePaths[0], projects, { onReport })
   })
 
-  ipcMain.handle('project:import-file', (_e, path: string) => {
+  ipcMain.handle('project:import-file', async (_e, path: string) => {
     if (typeof path !== 'string' || !path) throw new Error('no project file')
+    await trustPaths([path])
     return importProjectFile(path, projects, { onReport })
   })
 

@@ -5,6 +5,7 @@ import { Player } from '../engine/player'
 import { useStore } from '../store'
 import { timelineOf } from '../timeline'
 import { fmtTime, localeTag, t } from '../i18n'
+import { keyForFocus } from '../keys'
 
 export function FullscreenPlayer() {
   const project = useStore((s) => s.project)
@@ -84,13 +85,15 @@ export function FullscreenPlayer() {
   useEffect(() => {
     const key = (e: KeyboardEvent): void => {
       const p = playerRef.current
+      poke()
       if (e.key === 'Escape') exit()
+      // Tab moves through the controls, Space/Enter press the focused one
+      else if (keyForFocus(e)) return
       else if (e.code === 'Space') {
         e.preventDefault()
         p?.toggle()
       } else if (e.key === 'ArrowLeft') p?.step(-1)
       else if (e.key === 'ArrowRight') p?.step(1)
-      poke()
     }
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)
@@ -104,24 +107,25 @@ export function FullscreenPlayer() {
 
   const duration = playerRef.current?.tl?.duration ?? 0
   return (
-    <div ref={rootRef} className={`fullscreen ${ui ? 'show-ui' : ''}`} onMouseMove={poke} onClick={() => playerRef.current?.toggle()}>
+    <div ref={rootRef} className={`fullscreen ${ui ? 'show-ui' : ''}`} data-theme="dark" role="region" aria-label={t('playFullscreen')} onMouseMove={poke} onClick={() => playerRef.current?.toggle()}>
       <canvas ref={canvasRef} />
       <div className="fs-controls" onClick={(e) => e.stopPropagation()}>
-        <button title={t('previous')} onClick={() => playerRef.current?.step(-1)}>
+        <button title={t('previous')} aria-label={t('previous')} onClick={() => playerRef.current?.step(-1)}>
           <SkipBack size={18} />
         </button>
-        <button title={playing ? t('pause') : t('play')} onClick={() => playerRef.current?.toggle()}>
+        <button title={playing ? t('pause') : t('play')} aria-label={playing ? t('pause') : t('play')} onClick={() => playerRef.current?.toggle()}>
           {playing ? <Pause size={20} /> : <Play size={20} />}
         </button>
-        <button title={t('next')} onClick={() => playerRef.current?.step(1)}>
+        <button title={t('next')} aria-label={t('next')} onClick={() => playerRef.current?.step(1)}>
           <SkipForward size={18} />
         </button>
         <span className="time">
           {fmtTime(time)} / {fmtTime(duration)}
         </span>
-        <Volume2 size={16} color="#ccc" />
+        <Volume2 size={16} aria-hidden />
         <input
           type="range"
+          aria-label={t('volume')}
           min={0}
           max={1}
           step={0.01}
@@ -132,7 +136,7 @@ export function FullscreenPlayer() {
             playerRef.current?.setVolume(v)
           }}
         />
-        <button title={t('exitFullscreen')} onClick={exit}>
+        <button title={t('exitFullscreen')} aria-label={t('exitFullscreen')} onClick={exit}>
           <X size={18} />
         </button>
       </div>

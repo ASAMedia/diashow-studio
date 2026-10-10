@@ -17,12 +17,15 @@ function FaceTile({ m, match, person, project }: { m: MediaItem; match: PersonMa
   const url = useAsyncUrl(() => faceCropUrl(m, match.r, match.t, 96), [m.id, match.t, match.r.x, match.r.y])
   const entryId = entryOf(project, m.id)
   return (
-    <div className="people-match" title={`${m.name} · ${match.d.toFixed(2)}`} onClick={() => entryId && openPrivacyEditor(entryId, match.t)}>
-      {url && <img src={url} alt="" draggable={false} />}
+    <div className="people-match" title={`${m.name} · ${match.d.toFixed(2)}`}>
+      <button className="open" aria-label={`${t('privacyEdit')} ${m.name}`} onClick={() => entryId && openPrivacyEditor(entryId, match.t)}>
+        {url && <img src={url} alt="" draggable={false} />}
+      </button>
       {match.t !== undefined && <span className="video-tag">{`${match.t.toFixed(1)} s`}</span>}
       <button
         className="wrong"
         title={t('peopleWrong')}
+        aria-label={t('peopleWrong')}
         onClick={(e) => {
           e.stopPropagation()
           notThisPerson(person.id, match.desc)
@@ -55,7 +58,7 @@ export function PeopleList() {
         </p>
       )}
       {!people.length && (
-        <p className="hint" style={{ margin: 0 }}>
+        <p className="empty-note" style={{ padding: 0 }}>
           {t('peopleEmpty')}
         </p>
       )}
@@ -69,16 +72,16 @@ export function PeopleList() {
             <div className="people-row">
               <Avatar m={first && media.get(first.mediaId)} match={first} />
               <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <input type="text" value={p.name ?? ''} placeholder={`${personLabel(p, people)} – ${t('peopleName')}`} onChange={(e) => renamePerson(p.id, e.target.value)} />
+                <input type="text" value={p.name ?? ''} aria-label={`${personLabel(p, people)} – ${t('peopleName')}`} placeholder={`${personLabel(p, people)} – ${t('peopleName')}`} onChange={(e) => renamePerson(p.id, e.target.value)} />
                 <span className="people-meta">
                   {t('peopleMatches').replace('{p}', String(nPhotos)).replace('{v}', String(list.length - nPhotos))} · {t('peopleSamples').replace('{n}', String(p.desc.length))}
                 </span>
               </div>
-              <button className="btn small ghost" disabled={!list.length} onClick={() => setOpen(shown ? null : p.id)}>
+              <button className="btn small ghost" disabled={!list.length} aria-expanded={shown} onClick={() => setOpen(shown ? null : p.id)}>
                 {shown ? <ChevronDown size={13} /> : <ChevronRight size={13} />} {shown ? t('peopleHide') : t('peopleShow')}
               </button>
-              <button className="btn small ghost icon" title={t('peopleRemove')} onClick={() => removePerson(p.id)}>
-                <Trash2 size={13} />
+              <button className="btn small ghost icon" title={t('peopleRemove')} aria-label={`${t('peopleRemove')}: ${personLabel(p, people)}`} onClick={() => removePerson(p.id)}>
+                <Trash2 size={14} />
               </button>
             </div>
             {shown && (

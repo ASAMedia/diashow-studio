@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
-import { FolderSearch, X } from 'lucide-react'
+import { FolderSearch, Lightbulb } from 'lucide-react'
 import type { BackupInfo, CacheInfo } from '@shared/types'
 import { useStore } from '../store'
-import { localeTag, t } from '../i18n'
+import { localeTag, t, type StringKey } from '../i18n'
+import { appearance, setAppearance, type Appearance } from '../appearance'
 import { UpdateSetting } from './Updates'
 import { DiagnosticsDialog } from './Diagnostics'
+import { Modal } from './Modal'
+import { Field, Section, Seg } from './ui'
 
 export type PreviewQuality = 'high' | 'medium' | 'low'
 
@@ -26,6 +29,28 @@ export const QUALITY: Record<PreviewQuality, { dpr: number; maxWidth: number; im
 
 const mb = (bytes: number): string =>
   bytes >= 1e9 ? `${(bytes / 1e9).toLocaleString(localeTag(), { maximumFractionDigits: 1 })} GB` : `${Math.round(bytes / 1e6).toLocaleString(localeTag())} MB`
+
+function AppearanceSetting() {
+  const [value, setValue] = useState<Appearance>(appearance())
+  return (
+    <Section title={t('appearance')}>
+      <Seg
+        label={t('appearance')}
+        value={value}
+        options={[
+          { id: 'system', label: t('appearanceSystem') },
+          { id: 'light', label: t('appearanceLight') },
+          { id: 'dark', label: t('appearanceDark') }
+        ]}
+        onChange={(v) => {
+          setValue(v)
+          setAppearance(v)
+        }}
+      />
+      <p className="hint">{t('appearanceHint')}</p>
+    </Section>
+  )
+}
 
 export function SettingsDialog() {
   const set = useStore((s) => s.set)
@@ -59,135 +84,125 @@ export function SettingsDialog() {
     }
   }
 
+  const close = (): void => set({ dialog: null })
   return (
-    <div className="overlay">
-      <div className="dialog wide">
-        <div className="row" style={{ marginBottom: 8 }}>
-          <h2 style={{ margin: 0, flex: 1 }}>{t('settings')}</h2>
-          <button className="btn ghost icon" title={t('close')} onClick={() => set({ dialog: null })}>
-            <X size={16} />
-          </button>
-        </div>
-
-        <div className="section">
-          <h3>{t('previewQualityTitle')}</h3>
-          <div className="seg">
-            {(['high', 'medium', 'low'] as PreviewQuality[]).map((q) => (
-              <button
-                key={q}
-                className={quality === q ? 'on' : ''}
-                onClick={() => {
-                  setQuality(q)
-                  try {
-                    localStorage.setItem('previewQuality', q)
-                  } catch {
-                    // private window: the choice lasts for this session only
-                  }
-                  window.dispatchEvent(new Event('previewquality'))
-                }}
-              >
-                {t(q === 'high' ? 'qualityHigh' : q === 'medium' ? 'qualityMedium' : 'qualityLow')}
-              </button>
-            ))}
-          </div>
-          <p className="hint">{t('previewQualityHint')}</p>
-        </div>
-
-        <div className="section">
-          <h3>{t('storage')}</h3>
-          {!cache ? (
-            <p className="hint">…</p>
-          ) : (
-            <>
-              <dl className="info" style={{ gridTemplateColumns: '170px 1fr' }}>
-                <dt>{t('storageTotal')}</dt>
-                <dd>{mb(cache.total)}</dd>
-                <dt>{t('storageProxies')}</dt>
-                <dd>{mb(cache.parts.proxies)}</dd>
-                <dt>{t('storageHires')}</dt>
-                <dd>{mb(cache.parts.hires)}</dd>
-                <dt>{t('storageImages')}</dt>
-                <dd>{mb(cache.parts.display + cache.parts.thumbs)}</dd>
-                <dt>{t('storageAudio')}</dt>
-                <dd>{mb(cache.parts.audio + cache.parts.other)}</dd>
-                <dt>{t('storageUnused')}</dt>
-                <dd>
-                  {mb(cache.unused)} ({cache.unusedItems})
-                </dd>
-              </dl>
-              <div className="row" style={{ flexWrap: 'wrap' }}>
-                <button className="btn small" disabled={busy || !cache.unused} onClick={() => void clean('unused')}>
-                  {t('cleanUnused')}
-                </button>
-                <button className="btn small" disabled={busy || !cache.parts.hires} onClick={() => void clean('hires')}>
-                  {t('cleanHires')}
-                </button>
-                <button className="btn small" disabled={busy || !cache.parts.proxies} onClick={() => void clean('proxies')}>
-                  {t('cleanProxies')}
-                </button>
-                <button className="btn small ghost" onClick={() => void window.api.revealInFolder(cache.dir)}>
-                  {t('showInFolder')}
-                </button>
-              </div>
-              <p className="hint">{t('storageHint')}</p>
-            </>
-          )}
-        </div>
-
-        <div className="section">
-          <h3>{t('kiosk')}</h3>
-          <div className="row">
-            <label>{t('kioskProject')}</label>
-            <select
-              value={kiosk}
-              onChange={(e) => {
-                setKiosk(e.target.value)
-                void window.api.setAppSettings({ kioskProjectId: e.target.value || null })
-              }}
-            >
-              <option value="">{t('off')}</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <p className="hint">{t('kioskHint')}</p>
-        </div>
-
-        <UpdateSetting />
-
-        <div className="section">
-          <h3>{t('diagnostics')}</h3>
-          <div className="row">
-            <button className="btn small" data-testid="diagnostics-open" onClick={() => setDiagnostics(true)}>
-              {t('diagButton')}
-            </button>
-          </div>
-          <p className="hint">{t('diagHint')}</p>
-        </div>
-        {diagnostics && <DiagnosticsDialog onClose={() => setDiagnostics(false)} />}
-
-        <div className="actions">
-          <button className="btn" onClick={() => set({ dialog: 'systemcheck' })}>
-            {t('systemCheck')}
-          </button>
+    <Modal
+      title={t('settings')}
+      onClose={close}
+      className="wide settings-dialog"
+      actions={
+        <>
           <button className="btn" onClick={() => set({ dialog: 'help' })}>
             {t('shortcuts')}
           </button>
           <button className="btn" onClick={() => set({ dialog: 'handbook' })}>
-            {t('help')}
+            {t('handbook')}
           </button>
           <button className="btn" onClick={() => set({ dialog: 'about' })}>
             {t('about')}
           </button>
-          <button className="btn primary" onClick={() => set({ dialog: null })}>
+          <span className="spacer" />
+          <button className="btn primary" onClick={close}>
             {t('close')}
           </button>
+        </>
+      }
+    >
+      <AppearanceSetting />
+
+      <Section title={t('previewQualityTitle')}>
+        <Seg
+          label={t('previewQualityTitle')}
+          value={quality}
+          options={(['high', 'medium', 'low'] as PreviewQuality[]).map((q) => ({ id: q, label: t(q === 'high' ? 'qualityHigh' : q === 'medium' ? 'qualityMedium' : 'qualityLow') }))}
+          onChange={(q) => {
+            setQuality(q)
+            try {
+              localStorage.setItem('previewQuality', q)
+            } catch {
+              // private window: the choice lasts for this session only
+            }
+            window.dispatchEvent(new Event('previewquality'))
+          }}
+        />
+        <p className="hint">{t('previewQualityHint')}</p>
+      </Section>
+
+      <Section title={t('storage')}>
+        {!cache ? (
+          <p className="hint">{t('loading')}</p>
+        ) : (
+          <>
+            <dl className="info wide">
+              <dt>{t('storageTotal')}</dt>
+              <dd>{mb(cache.total)}</dd>
+              <dt>{t('storageProxies')}</dt>
+              <dd>{mb(cache.parts.proxies)}</dd>
+              <dt>{t('storageHires')}</dt>
+              <dd>{mb(cache.parts.hires)}</dd>
+              <dt>{t('storageImages')}</dt>
+              <dd>{mb(cache.parts.display + cache.parts.thumbs)}</dd>
+              <dt>{t('storageAudio')}</dt>
+              <dd>{mb(cache.parts.audio + cache.parts.other)}</dd>
+              <dt>{t('storageUnused')}</dt>
+              <dd>
+                {mb(cache.unused)} ({cache.unusedItems})
+              </dd>
+            </dl>
+            <div className="row wrap">
+              <button className="btn small" disabled={busy || !cache.unused} onClick={() => void clean('unused')}>
+                {t('cleanUnused')}
+              </button>
+              <button className="btn small" disabled={busy || !cache.parts.hires} onClick={() => void clean('hires')}>
+                {t('cleanHires')}
+              </button>
+              <button className="btn small" disabled={busy || !cache.parts.proxies} onClick={() => void clean('proxies')}>
+                {t('cleanProxies')}
+              </button>
+              <button className="btn small ghost" onClick={() => void window.api.revealInFolder(cache.dir)}>
+                {t('showInFolder')}
+              </button>
+            </div>
+            <p className="hint">{t('storageHint')}</p>
+          </>
+        )}
+      </Section>
+
+      <Section title={t('kiosk')}>
+        <Field label={t('kioskProject')}>
+          <select
+            value={kiosk}
+            onChange={(e) => {
+              setKiosk(e.target.value)
+              void window.api.setAppSettings({ kioskProjectId: e.target.value || null })
+            }}
+          >
+            <option value="">{t('off')}</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <p className="hint">{t('kioskHint')}</p>
+      </Section>
+
+      <UpdateSetting />
+
+      <Section title={t('troubleshooting')}>
+        <div className="row wrap">
+          <button className="btn small" onClick={() => set({ dialog: 'systemcheck' })}>
+            {t('systemCheck')}
+          </button>
+          <button className="btn small" data-testid="diagnostics-open" onClick={() => setDiagnostics(true)}>
+            {t('diagButton')}
+          </button>
         </div>
-      </div>
-    </div>
+        <p className="hint">{t('troubleshootingHint')}</p>
+      </Section>
+      {diagnostics && <DiagnosticsDialog onClose={() => setDiagnostics(false)} />}
+    </Modal>
   )
 }
 
@@ -199,92 +214,106 @@ export function BackupsDialog() {
     void window.api.listBackups(project.id).then(setList)
   }, [project.id])
   const fmt = new Intl.DateTimeFormat(localeTag(), { dateStyle: 'medium', timeStyle: 'short' })
+  const close = (): void => set({ dialog: null })
   return (
-    <div className="overlay">
-      <div className="dialog">
-        <h2>{t('backupsTitle')}</h2>
-        {!list ? (
-          <p className="hint">…</p>
-        ) : list.length === 0 ? (
-          <p className="hint">{t('noBackups')}</p>
-        ) : (
-          <div className="stack" style={{ maxHeight: '50vh', overflowY: 'auto' }}>
-            {list.map((b) => (
-              <div key={b.file} className="row backup">
-                <span style={{ flex: 1 }}>{fmt.format(b.savedAt)}</span>
-                <span className="val">
-                  {b.slideCount} {t('entries')}
-                </span>
-                <button
-                  className="btn small"
-                  onClick={async () => {
-                    const p = await window.api.restoreBackup(b.file)
-                    set({ dialog: null })
-                    await useStore.getState().openProjectData(p)
-                  }}
-                >
-                  {t('restore')}
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-        <p className="hint">{t('backupsHint')}</p>
-        <div className="actions">
-          <button className="btn primary" onClick={() => set({ dialog: null })}>
-            {t('close')}
-          </button>
+    <Modal
+      title={t('backupsTitle')}
+      onClose={close}
+      actions={
+        <button className="btn primary" onClick={close}>
+          {t('close')}
+        </button>
+      }
+    >
+      <p className="hint lead">{t('backupsHint')}</p>
+      {!list ? (
+        <p className="hint">{t('loading')}</p>
+      ) : list.length === 0 ? (
+        <p className="empty-note">{t('noBackups')}</p>
+      ) : (
+        <div className="stack">
+          {list.map((b) => (
+            <div key={b.file} className="row backup">
+              <span className="when">{fmt.format(b.savedAt)}</span>
+              <span className="val">
+                {b.slideCount} {t('entries')}
+              </span>
+              <button
+                className="btn small"
+                onClick={async () => {
+                  const p = await window.api.restoreBackup(b.file)
+                  set({ dialog: null })
+                  await useStore.getState().openProjectData(p)
+                }}
+              >
+                {t('restore')}
+              </button>
+            </div>
+          ))}
         </div>
-      </div>
-    </div>
+      )}
+    </Modal>
   )
 }
 
-const SHORTCUTS: [string, string][] = [
-  ['Leertaste', 'scPlay'],
-  ['← / →', 'scStep'],
-  ['Strg+Z / Strg+Y', 'scUndo'],
-  ['Entf', 'scDelete'],
-  ['Strg+Klick', 'scMulti'],
-  ['Umschalt+Klick', 'scRange'],
-  ['Strg+A', 'scAll'],
-  ['Alt+Enter', 'scFullscreen'],
-  ['Esc', 'scEsc'],
-  ['F1', 'scHelp']
+/** Keys of the shortcut list, written the way the keyboard labels them in the UI language. */
+const SHORTCUTS: [StringKey[], StringKey][] = [
+  [['kbdSpace'], 'scPlay'],
+  [['kbdLeftRight'], 'scStep'],
+  [['kbdAltArrows'], 'scMove'],
+  [['kbdUndo', 'kbdRedo'], 'scUndo'],
+  [['kbdDelete'], 'scDelete'],
+  [['kbdCtrlClick'], 'scMulti'],
+  [['kbdShiftClick'], 'scRange'],
+  [['kbdSelectAll'], 'scAll'],
+  [['kbdAltEnter'], 'scFullscreen'],
+  [['kbdEsc'], 'scEsc'],
+  [['kbdF1'], 'scHelp'],
+  [['kbdTab'], 'scTab'],
+  [['kbdEnter'], 'scEnter'],
+  [['kbdMenu'], 'scMenu']
 ]
 
 export function HelpDialog() {
   const set = useStore((s) => s.set)
+  const close = (): void => set({ dialog: null })
   return (
-    <div className="overlay" onClick={() => set({ dialog: null })}>
-      <div className="dialog" onClick={(e) => e.stopPropagation()}>
-        <h2>{t('shortcuts')}</h2>
-        <dl className="info" style={{ gridTemplateColumns: '140px 1fr', fontSize: 13, gap: '6px 12px' }}>
-          {SHORTCUTS.map(([k, label]) => (
-            <div key={k} style={{ display: 'contents' }}>
-              <dt>
-                <kbd>{k}</kbd>
-              </dt>
-              <dd>{t(label as never)}</dd>
-            </div>
-          ))}
-        </dl>
-        <h3 style={{ fontSize: 13, marginTop: 14 }}>{t('mouseTitle')}</h3>
-        <ul className="hint" style={{ paddingLeft: 18, lineHeight: 1.7 }}>
-          <li>{t('tipDrag')}</li>
-          <li>{t('tipMerge')}</li>
-          <li>{t('tipCrop')}</li>
-          <li>{t('tipDuration')}</li>
-        </ul>
-        <h3 style={{ fontSize: 13, marginTop: 14 }}>{t('cull')}</h3>
-        <p className="hint">{t('cullHint')}</p>
-        <div className="actions">
-          <button className="btn primary" onClick={() => set({ dialog: null })}>
-            {t('close')}
-          </button>
-        </div>
-      </div>
-    </div>
+    <Modal
+      title={t('shortcuts')}
+      onClose={close}
+      backdropClose
+      className="help-dialog"
+      actions={
+        <button className="btn primary" onClick={close}>
+          {t('close')}
+        </button>
+      }
+    >
+      <dl className="info wide shortcuts">
+        {SHORTCUTS.map(([keys, label]) => (
+          <div key={label} style={{ display: 'contents' }}>
+            <dt>
+              {keys.map((k, i) => (
+                <span key={k}>
+                  {i > 0 && ' / '}
+                  <kbd>{t(k)}</kbd>
+                </span>
+              ))}
+            </dt>
+            <dd>{t(label)}</dd>
+          </div>
+        ))}
+      </dl>
+      <h3 className="subhead">{t('mouseTitle')}</h3>
+      <ul className="hint tips">
+        <li>{t('tipDrag')}</li>
+        <li>{t('tipMerge')}</li>
+        <li>{t('tipCrop')}</li>
+        <li>{t('tipDuration')}</li>
+      </ul>
+      <h3 className="subhead">{t('cull')}</h3>
+      <p className="hint">{t('cullHint')}</p>
+    </Modal>
   )
 }
 
@@ -300,8 +329,9 @@ export function Tip({ id, children }: { id: string; children: React.ReactNode })
   })
   if (!open) return null
   return (
-    <div className="tip">
-      <div style={{ flex: 1 }}>{children}</div>
+    <div className="tip" role="note">
+      <Lightbulb size={16} aria-hidden />
+      <span>{children}</span>
       <button
         className="btn small"
         onClick={() => {
@@ -327,9 +357,9 @@ export function MissingBanner() {
   const missing = project.media.filter((m) => m.status === 'error' && m.error === 'missing')
   if (!missing.length) return null
   return (
-    <div className="banner">
-      <FolderSearch size={16} />
-      <span style={{ flex: 1 }}>
+    <div className="banner" role="status">
+      <FolderSearch size={16} aria-hidden />
+      <span>
         {t('missingFiles').replace('{n}', String(missing.length))} {result}
       </span>
       <button

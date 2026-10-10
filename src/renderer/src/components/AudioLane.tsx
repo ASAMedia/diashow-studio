@@ -30,6 +30,13 @@ function useWaveforms(tracks: { path: string; duration: number }[]): Map<string,
   return waves
 }
 
+/** A song title shortened to about `px` pixels of 10 px text (titles of short songs don't run into the next). */
+function fitText(text: string, px: number): string {
+  const chars = Math.floor(px / 5.8)
+  if (chars < 3) return ''
+  return text.length <= chars ? text : `${text.slice(0, Math.max(1, chars - 1)).trimEnd()}…`
+}
+
 export function AudioLane({ tl, width }: { tl: Timeline; width: number }) {
   const project = useStore((s) => s.project)!
   const plan = useMemo(() => buildAudioPlan(project, tl), [project, tl])
@@ -72,11 +79,18 @@ export function AudioLane({ tl, width }: { tl: Timeline; width: number }) {
     })
   }, [music, waves, tl])
   const titles = new Map(project.music.map((m) => [m.playback, m.title]))
+  // songs overlap in crossfades: a title ends where the next song begins
+  const starts = music.map((c) => c.start).sort((a, b) => a - b)
+  const nextStart = (start: number): number => {
+    const next = starts.find((s) => s > start + 1e-3)
+    return next === undefined ? Infinity : timeToX(tl, next)
+  }
   return (
     <svg
       className="lane"
       width={width}
       height={H}
+      aria-hidden
       onClick={(e) => {
         const r = (e.currentTarget as SVGElement).getBoundingClientRect()
         playerRef.current?.seek(xToTime(tl, e.clientX - r.left))
@@ -87,23 +101,23 @@ export function AudioLane({ tl, width }: { tl: Timeline; width: number }) {
         const x1 = timeToX(tl, c.start + c.duration)
         return (
           <g key={c.id}>
-            <rect x={x0} y={2} width={Math.max(1, x1 - x0)} height={H - 6} rx={4} fill={i % 2 ? 'rgba(77,159,255,0.10)' : 'rgba(77,159,255,0.16)'} />
-            {wavePaths[i] && <path d={wavePaths[i]} fill="rgba(143,184,232,0.35)" />}
-            <text x={x0 + 6} y={H - 8} fontSize={10} fill="#8fb8e8">
-              {titles.get(c.src) ?? ''}
+            <rect className={`music ${i % 2 ? 'alt' : ''}`} x={x0} y={2} width={Math.max(1, x1 - x0)} height={H - 6} rx={4} />
+            {wavePaths[i] && <path className="wave" d={wavePaths[i]} />}
+            <text className="title" x={x0 + 6} y={H - 8}>
+              {fitText(titles.get(c.src) ?? '', Math.min(x1, nextStart(c.start)) - x0 - 10)}
             </text>
           </g>
         )
       })}
       {beats.map((b, i) => (
-        <line key={i} x1={timeToX(tl, b)} x2={timeToX(tl, b)} y1={2} y2={6} stroke="rgba(255,255,255,0.35)" strokeWidth={1} />
+        <line key={i} className="beat" x1={timeToX(tl, b)} x2={timeToX(tl, b)} y1={2} y2={6} />
       ))}
       {videos.map((c) => {
         const x0 = timeToX(tl, c.start)
         const x1 = timeToX(tl, c.start + c.duration)
-        return <rect key={c.id} x={x0} y={H - 5} width={Math.max(1, x1 - x0)} height={4} rx={2} fill="var(--video)" />
+        return <rect key={c.id} className="clip" x={x0} y={H - 5} width={Math.max(1, x1 - x0)} height={4} rx={2} />
       })}
-      {points && <polyline points={points} fill="none" stroke="#4d9fff" strokeWidth={1.5} />}
+      {points && <polyline className="gain" points={points} />}
     </svg>
   )
 }

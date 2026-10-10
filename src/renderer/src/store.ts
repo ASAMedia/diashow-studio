@@ -53,6 +53,8 @@ interface State {
   redo(): void
   /** Opens a project that came from a file (packed project). */
   openProjectData(p: Project): Promise<void>
+  /** Checks the open project's files again (e.g. after access to a network share was allowed). */
+  reloadMedia(): Promise<void>
   /** Custom on-screen time of a slide (undefined = automatic), stored on its first entry. */
   setSlideDuration(slideIds: string[], seconds: number | undefined): void
   /** Text slides at every new day ('date') or every new subfolder ('folder'). */
@@ -167,6 +169,17 @@ export const useStore = create<State>((set, get) => ({
 
   async openProject(id) {
     await get().openProjectData(await window.api.loadProject(id))
+  },
+
+  async reloadMedia() {
+    const p = get().project
+    if (!p) return
+    const [media, music] = await Promise.all([window.api.restoreMedia(p.media), window.api.restoreMusic(p.music)])
+    const cur = get().project
+    if (!cur || cur.id !== p.id) return
+    const byId = new Map(media.map((m) => [m.id, m]))
+    const songs = new Map(music.map((m) => [m.id, m]))
+    set({ project: { ...cur, media: cur.media.map((m) => byId.get(m.id) ?? m), music: cur.music.map((m) => songs.get(m.id) ?? m) } })
   },
 
   async openProjectData(p) {

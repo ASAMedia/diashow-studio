@@ -5,7 +5,13 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
 ## Features
 
 - **Getting started:** on the first start a three-step assistant makes a first show (photos or a folder, theme and music, then play or export). It can be skipped and is also on the home screen ("New slideshow with assistant").
-- **Handbook:** F1 (or Help in Settings and the "⋯" menu) opens a short handbook in German or English, with screenshots and a searchable table of contents. It is bundled with the app and works offline.
+- **Handbook:** F1 (or Handbook in Settings and the "⋯" menu) opens a short handbook in German or English, with screenshots and a searchable table of contents. It is bundled with the app and works offline.
+- **Light or dark:** Settings → Appearance offers System (follows Windows), Light and Dark. The preview, fullscreen player and presentation stay dark, because photos look best there.
+- **Keyboard and screen readers:**
+  - Every control can be reached with Tab and shows a focus ring. Esc closes dialogs and menus, and Tab stays inside an open dialog.
+  - The filmstrip is one Tab stop: ←/→ select slides (Shift for a range), Alt+←/→ move a slide, and Shift+F10 opens its menu.
+  - Trim handles and song order work with the arrow keys.
+  - Buttons, fields and dialogs have names for screen readers, text meets WCAG AA contrast in both themes, and UI animations stay off when Windows' "Animation effects" are off.
 - **11 themes.** The seven Photos themes are Ken Burns, Origami, Reflections, Sliding Panels, Vintage Prints, Classic and Magazine. Four more are our own:
   - Retro Film: a Super 8 look.
   - Scrapbook: taped prints on kraft paper with handwritten captions.
@@ -67,7 +73,7 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
 - **Speed:**
   - Exports run about 3x faster than before: the graphics card converts each frame to YUV, and the next frame renders while the last one is read back. A 220-second show exports in 55 s at 1080p with NVENC, at the same quality.
   - 4K: the same show took 429 s before and 175 s now. Besides the YUV frames, NVENC now uses its p4 preset: the same quality as p5, but 2.5× faster for H.264 at 4K, where the encoder had become the limit.
-  - HDR phone videos are tone-mapped on the graphics card (libplacebo on Vulkan), falling back to the CPU automatically. Rotated SDR videos that the graphics card decodes get their proxies there too.
+  - HDR phone videos are decoded, rotated and scaled on the graphics card (libplacebo on Vulkan), falling back to the CPU automatically. PQ is tone-mapped there too. HLG (iPhone, Pixel) gets the CPU's tone curve at proxy size, so its proxy looks the same with or without a graphics card, at half the CPU time. Rotated SDR videos that the graphics card decodes get their proxies there too.
   - Importing is about 4× faster. A folder of 625 phone photos and videos (17 GB) went from "everything ready" after 558 s to 130 s. Every thumbnail now appears within about 20 s, and every photo is ready after about 66 s.
     - Thumbnails come first, then the rest in show order. What the viewer, the filmstrip and the review grid show goes ahead of everything else.
     - Display images, video sound and proxies run side by side, each on its own resource (CPU, disk, graphics card).
@@ -81,6 +87,7 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
 - **Projects:**
   - Automatic backups: before a save, the previous version is kept (at most every 10 minutes, the last 20). Restore them with "Restore an older version…" in the "⋯" menu.
   - Missing originals (moved folder, new drive letter) are found again with "Search a folder…" in the banner.
+  - A project made elsewhere that points to network shares (`\\host\share`) doesn't open those files until you allow it in a banner, because Windows would sign in to that host with your account. Shares you import from yourself are trusted automatically.
   - Settings show how much cache each part uses, with buttons to remove unused files, 4K versions or video proxies.
   - Damaged files: every project is checked when it opens (also packed ones). Broken or unknown parts are dropped or repaired, and a notice says what changed; the file as it was stays as a backup. A file that can't be read at all (e.g. cut off by a power loss) is listed on the home screen with "Repair…": rescue what is readable, or take one of its backups. The damaged file is kept.
   - The project format has a version and a migration chain (`src/main/projectSchema.ts`); a project saved by a newer version is refused with a hint to update instead of being opened half.
@@ -168,9 +175,13 @@ npm run notices      # vendor/THIRD_PARTY_NOTICES.txt: licences of FFmpeg, fonts
 
 The handbook lives in `src/renderer/src/handbook/de.md` and `en.md` (a small Markdown subset, see `handbook/markdown.tsx`). Its screenshots in `src/renderer/public/handbook/<de|en>/` are made from the generated test media by `npx electron-vite build && DIASHOW_HANDBOOK_SHOTS=1 npx playwright test e2e/handbook-shots.spec.ts`.
 
+`DIASHOW_UI_REVIEW=1 npx playwright test e2e/ui-review.spec.ts` takes screenshots of every screen and dialog (German and English, light and dark, small and large window) and checks contrast and accessible names; the results are in `test-results/ui-review/`.
+
+The app icon is drawn in `build/icon.svg` (and `build/icon-small.svg` for 16 px); `npm run icon` writes `build/icon.ico`, `build/icon.png` and the favicon of the phone pages from them.
+
 **Releases:** add a section for the version to `CHANGELOG.md`, set the same version in `package.json`, and push a tag `v<version>`. `.github/workflows/release.yml` then runs the type check and unit tests, builds the installer and the portable exe, and publishes them as a GitHub release with that changelog section, `THIRD_PARTY_NOTICES.txt` and the source of the bundled FFmpeg build.
 
-GitHub Actions (`.github/workflows/ci.yml`) runs the type check, the unit tests and the end-to-end tests (app, editing tools, export queue) on Windows for every push.
+GitHub Actions (`.github/workflows/ci.yml`) runs the type check, the unit tests and most end-to-end tests on Windows for every push, in English and with software WebGL. Tests that need a graphics card (GPU tone mapping, hardware encoders) skip themselves there.
 
 `npm run test:media` writes generated sample files (iPhone, Android and Sony-like) to `test-media/`.
 

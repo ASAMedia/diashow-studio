@@ -23,6 +23,7 @@ import { exportShow, queueExport, runExportWorker } from './engine/exporter'
 import { detectFaces, faceTestApi } from './faces'
 import { installErrorReporting } from './diagnostics'
 import { importProjectSafely } from './components/ProjectRepair'
+import { watchAppearance } from './appearance'
 
 // Errors of every window (editor, presentation, export worker) go into the log file
 installErrorReporting()
@@ -46,6 +47,8 @@ if (route === '#export-worker') {
 }
 
 if (route !== '#export-worker') {
+  // light or dark before the first paint (Settings → Appearance)
+  watchAppearance()
   void window.api.locale().then((l) => {
     setLocale(l)
     document.documentElement.lang = l.slice(0, 2)

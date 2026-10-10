@@ -6,6 +6,7 @@ import { chapterText, type Chapter } from '@shared/chapters'
 import { useStore } from '../store'
 import { fmtTime, t } from '../i18n'
 import { friendly } from '../errors'
+import { Modal } from './Modal'
 
 const active = (j: ExportJobInfo): boolean => j.state === 'queued' || j.state === 'running'
 
@@ -44,7 +45,10 @@ export function CopyChaptersButton({ chapters }: { chapters: Chapter[] }) {
       title={copied ? t('chaptersCopied') : chapterText(chapters)}
       onClick={() => void navigator.clipboard.writeText(chapterText(chapters)).then(() => setCopied(true), () => {})}
     >
-      {copied ? <Check size={12} /> : <ListOrdered size={12} />} {t('copyChapters')}
+      {copied ? <Check size={13} /> : <ListOrdered size={13} />} {t('copyChapters')}
+      <span className="sr-only" role="status">
+        {copied ? t('chaptersCopied') : ''}
+      </span>
     </button>
   )
 }
@@ -65,32 +69,32 @@ export function JobRow({ job }: { job: ExportJobInfo }) {
           {job.width}×{job.height} · {job.codec === 'hevc' ? 'HEVC' : 'H.264'}
         </span>
       </div>
-      <div className="bar">
+      <div className="bar" role="progressbar" aria-label={job.name} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
         <div style={{ width: `${pct}%` }} />
       </div>
       <div className="row job-status">
-        <span style={{ flex: 1 }} title={job.state === 'error' ? job.error : undefined}>
-          {job.state === 'running' && <Loader2 size={12} className="spin" />} {status(job, waiting)}
+        <span className="text" title={job.state === 'error' ? job.error : undefined}>
+          {job.state === 'running' && <Loader2 size={12} className="spin" aria-hidden />} {status(job, waiting)}
         </span>
         {(job.state === 'paused' || job.state === 'error' || waiting) && (
           <button className="btn small" onClick={() => void window.api.queueResume(job.id)}>
-            <Play size={12} /> {t('queueResume')}
+            <Play size={13} /> {t('queueResume')}
           </button>
         )}
         {job.state === 'done' && !!job.chapters?.length && <CopyChaptersButton chapters={job.chapters} />}
         {job.state === 'done' && (
           <button className="btn small" onClick={() => void window.api.revealInFolder(job.outPath)}>
-            <FolderOpen size={12} /> {t('showInFolder')}
+            <FolderOpen size={13} /> {t('showInFolder')}
           </button>
         )}
         {active(job) && (
-          <button className="btn small ghost icon" title={t('cancel')} onClick={() => void window.api.queueCancel(job.id)}>
-            <X size={13} />
+          <button className="btn small ghost icon" title={t('queueCancelJob')} aria-label={t('queueCancelJob')} onClick={() => void window.api.queueCancel(job.id)}>
+            <X size={14} />
           </button>
         )}
         {job.state !== 'running' && !active(job) && (
-          <button className="btn small ghost icon" title={t('queueRemove')} onClick={() => void window.api.queueRemove(job.id)}>
-            <Trash2 size={13} />
+          <button className="btn small ghost icon" title={t('queueRemove')} aria-label={t('queueRemove')} onClick={() => void window.api.queueRemove(job.id)}>
+            <Trash2 size={14} />
           </button>
         )}
       </div>
@@ -102,23 +106,18 @@ export function QueueDialog() {
   const jobs = useStore((s) => s.exportJobs)
   const set = useStore((s) => s.set)
   return (
-    <div className="overlay" onClick={() => set({ dialog: null })}>
-      <div className="dialog wide" onClick={(e) => e.stopPropagation()}>
-        <div className="row" style={{ marginBottom: 8 }}>
-          <h2 style={{ margin: 0, flex: 1 }}>{t('queue')}</h2>
-          <button className="btn ghost icon" title={t('close')} onClick={() => set({ dialog: null })}>
-            <X size={16} />
-          </button>
-        </div>
-        {jobs.length === 0 && <p className="hint">{t('queueEmpty')}</p>}
+    <Modal title={t('queue')} onClose={() => set({ dialog: null })} backdropClose className="wide">
+      <p className="hint lead">{t('queueHint')}</p>
+      {jobs.length === 0 ? (
+        <p className="empty-note">{t('queueEmpty')}</p>
+      ) : (
         <div className="jobs">
           {[...jobs].reverse().map((j) => (
             <JobRow key={j.id} job={j} />
           ))}
         </div>
-        <p className="hint">{t('queueHint')}</p>
-      </div>
-    </div>
+      )}
+    </Modal>
   )
 }
 
@@ -134,15 +133,15 @@ export function QueueChip() {
   if (running) {
     const pct = Math.floor((running.frame / Math.max(1, running.totalFrames)) * 100)
     return (
-      <button className="chip queue-chip" title={running.name} onClick={open}>
-        <Loader2 size={13} className="spin" /> {t('queue')} {running.phase === 'video' ? `${pct} %` : '…'}
+      <button className="chip queue-chip" title={`${t('queue')}: ${running.name}`} onClick={open}>
+        <Loader2 size={13} className="spin" aria-hidden /> {t('queue')} {running.phase === 'video' ? `${pct} %` : '…'}
         {queued > 0 ? ` +${queued}` : ''}
       </button>
     )
   }
   return (
     <button className="chip queue-chip warn" onClick={open}>
-      <AlertTriangle size={13} /> {t('queueInterrupted').replace('{n}', String(stuck))}
+      <AlertTriangle size={13} aria-hidden /> {t('queueInterrupted').replace('{n}', String(stuck))}
     </button>
   )
 }

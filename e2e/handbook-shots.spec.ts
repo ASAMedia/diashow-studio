@@ -60,6 +60,11 @@ for (const lang of ['de', 'en'] as const) {
       }, [WIDTH, HEIGHT])
       // one-time tips would cover parts of the pictures
       await page.evaluate(() => ['home', 'editor'].forEach((id) => localStorage.setItem(`tip:${id}`, '1')))
+      // the pictures show the dark theme, whatever Windows uses on this PC
+      await page.evaluate(() => {
+        localStorage.setItem('appearance', 'dark')
+        window.dispatchEvent(new Event('appearance'))
+      })
 
       // ---- assistant: a folder, then theme and music
       const wizard = page.getByTestId('wizard')

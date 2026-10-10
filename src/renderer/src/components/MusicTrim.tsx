@@ -6,6 +6,7 @@ import type { MusicTrack } from '@shared/types'
 import { trackSpan } from '@shared/timeline'
 import { useStore } from '../store'
 import { fmtTime, t } from '../i18n'
+import { handleProps } from './TrimStrip'
 
 const BARS = 160
 
@@ -90,22 +91,31 @@ export function MusicTrim({ track }: { track: MusicTrack }) {
         <div className="trim-dim" style={{ left: 0, width: pct(from) }} />
         <div className="trim-dim" style={{ left: pct(to), right: 0 }} />
         {pos != null && <div className="wave-pos" style={{ left: pct(pos) }} />}
-        <div className="trim-handle" style={{ left: pct(from) }} onPointerDown={drag('in')} />
-        <div className="trim-handle end" style={{ left: pct(to) }} onPointerDown={drag('out')} />
+        <div
+          className="trim-handle"
+          style={{ left: pct(from) }}
+          onPointerDown={drag('in')}
+          {...handleProps(t('songStart'), from, len, (v) => save({ trimIn: v <= 0.05 ? undefined : Math.min(v, to - 5) }))}
+        />
+        <div
+          className="trim-handle end"
+          style={{ left: pct(to) }}
+          onPointerDown={drag('out')}
+          {...handleProps(t('songEnd'), to, len, (v) => save({ trimOut: v >= len - 0.05 ? undefined : Math.max(v, from + 5) }))}
+        />
       </div>
-      <div className="row" style={{ marginTop: 6 }}>
-        <span className="val" style={{ textAlign: 'left' }}>
+      <div className="trim-row">
+        <span className="val">
           {fmtTime(from)} – {fmtTime(to)} · {fmtTime(to - from)}
         </span>
-        <span style={{ flex: 1 }} />
-        <button className="btn small" onClick={() => (playing ? stop() : listen(from))}>
-          {playing ? <Square size={12} /> : <Play size={12} />} {playing ? t('stop') : t('listen')}
-        </button>
         {(track.trimIn != null || track.trimOut != null) && (
           <button className="btn small ghost" onClick={() => save({ trimIn: undefined, trimOut: undefined })}>
             {t('resetTrim')}
           </button>
         )}
+        <button className="btn small" onClick={() => (playing ? stop() : listen(from))}>
+          {playing ? <Square size={12} /> : <Play size={13} />} {playing ? t('stop') : t('listen')}
+        </button>
       </div>
       <p className="hint">{t('musicTrimHint')}</p>
     </div>

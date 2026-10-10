@@ -16,6 +16,12 @@ import { AUDIO_EXT, extOf, IMAGE_EXT, VIDEO_EXT } from '@shared/formats'
 
 const SERVED_EXT = new Set([...IMAGE_EXT, ...VIDEO_EXT, ...AUDIO_EXT])
 
+/** Network shares the user hasn't trusted are refused too (set by ipc.ts). */
+let pathPolicy: (path: string) => boolean = () => true
+export function setMediaPathPolicy(allow: (path: string) => boolean): void {
+  pathPolicy = allow
+}
+
 /** May the renderer read this file through dsmedia://? (See the access limits above.) */
 export function mediaPathAllowed(path: string): boolean {
   if (typeof path !== 'string' || !path || path.length > 4000 || path.includes('\0') || !isAbsolute(path)) return false
@@ -115,7 +121,7 @@ export async function handleMediaRequest(request: Request): Promise<Response> {
   } catch {
     return new Response('bad url', { status: 400 })
   }
-  if (!mediaPathAllowed(path)) return new Response('not found', { status: 404 })
+  if (!mediaPathAllowed(path) || !pathPolicy(path)) return new Response('not found', { status: 404 })
   let size: number
   try {
     const st = await stat(path)

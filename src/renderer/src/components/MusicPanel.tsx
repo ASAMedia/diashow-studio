@@ -24,11 +24,18 @@ export function MusicPanel() {
   const chapters = project.entries.filter((e): e is TextEntry => e.type === 'text' && !e.excluded)
   const chapterOf = new Map(chapters.flatMap((c) => (c.music ?? []).map((id) => [id, c.id] as const)))
   const db = (g: number): string => (g <= 0 ? '−∞ dB' : `${(20 * Math.log10(g)).toFixed(0)} dB`)
+  const move = (from: number, to: number): void => {
+    if (to < 0 || to >= project.music.length || from === to) return
+    update((p) => {
+      const [m] = p.music.splice(from, 1)
+      p.music.splice(to, 0, m)
+    })
+  }
 
   return (
     <>
       <Section title={t('selectedMusic')}>
-        {project.music.length === 0 && <p className="hint">{t('noMusic')}</p>}
+        {project.music.length === 0 && <p className="empty-note">{t('noMusic')}</p>}
         <div className="tracks">
           {project.music.map((tr, i) => (
             <div key={tr.id}>
@@ -47,25 +54,36 @@ export function MusicPanel() {
                 onDrop={(e) => {
                   e.preventDefault()
                   if (dragIdx == null || dragIdx === i) return
-                  update((p) => {
-                    const [m] = p.music.splice(dragIdx, 1)
-                    p.music.splice(i, 0, m)
-                  })
+                  move(dragIdx, i)
                   setDragIdx(null)
                   setOverIdx(null)
                 }}
               >
-                <span className="n">{tr.status === 'ready' ? i + 1 : <GripVertical size={12} />}</span>
+                <button
+                  className="n"
+                  title={t('moveSong')}
+                  aria-label={`${tr.title}: ${t('moveSong')}`}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
+                    e.preventDefault()
+                    const to = i + (e.key === 'ArrowUp' ? -1 : 1)
+                    move(i, to)
+                    // the focus moves along with the song
+                    requestAnimationFrame(() => document.querySelectorAll<HTMLElement>('.track button.n')[to]?.focus())
+                  }}
+                >
+                  {tr.status === 'ready' ? i + 1 : <GripVertical size={12} />}
+                </button>
                 <span className="tt" title={tr.path}>
                   {tr.title}
                   {tr.artist && <span className="ar">{tr.artist}</span>}
                   {tr.status === 'error' && (
-                    <span className="ar" style={{ color: 'var(--danger)' }} title={tr.error}>
+                    <span className="ar err" title={tr.error}>
                       {friendly(tr.error ?? '', 'music').text}
                     </span>
                   )}
                   {chapters.length > 0 && (
-                    <select className="chapter-pick" title={t('playsIn')} value={chapterOf.get(tr.id) ?? ''} onChange={(e) => useStore.getState().assignSong(tr.id, e.target.value || null)}>
+                    <select className="chapter-pick" title={t('playsIn')} aria-label={`${tr.title}: ${t('playsIn')}`} value={chapterOf.get(tr.id) ?? ''} onChange={(e) => useStore.getState().assignSong(tr.id, e.target.value || null)}>
                       <option value="">{t('wholeShow')}</option>
                       {chapters.map((c) => (
                         <option key={c.id} value={c.id}>
@@ -79,11 +97,18 @@ export function MusicPanel() {
                   {tr.status === 'ready' ? fmtTime(trackSpan(tr).length) : '…'}
                   {tr.bpm ? <span className="ar">{Math.round(tr.bpm)} BPM</span> : null}
                 </span>
-                <button title={t('musicTrim')} disabled={tr.status !== 'ready'} className={trimming === tr.id || tr.trimIn != null || tr.trimOut != null ? 'on' : ''} onClick={() => setTrimming(trimming === tr.id ? null : tr.id)}>
-                  <Scissors size={13} />
+                <button
+                  title={t('musicTrim')}
+                  aria-label={`${t('musicTrim')}: ${tr.title}`}
+                  aria-expanded={trimming === tr.id}
+                  disabled={tr.status !== 'ready'}
+                  className={trimming === tr.id || tr.trimIn != null || tr.trimOut != null ? 'on' : ''}
+                  onClick={() => setTrimming(trimming === tr.id ? null : tr.id)}
+                >
+                  <Scissors size={14} />
                 </button>
-                <button title={t('delete')} onClick={() => update((p) => (p.music = p.music.filter((m) => m.id !== tr.id)))}>
-                  <Trash2 size={13} />
+                <button title={t('removeSong')} aria-label={`${t('removeSong')}: ${tr.title}`} onClick={() => update((p) => (p.music = p.music.filter((m) => m.id !== tr.id)))}>
+                  <Trash2 size={14} />
                 </button>
               </div>
               {trimming === tr.id && <MusicTrim track={tr} />}
@@ -92,9 +117,10 @@ export function MusicPanel() {
         </div>
         <div className="row">
           <button className="btn small" onClick={async () => useStore.getState().addMusic(await window.api.pickMusic())}>
-            <Plus size={13} /> {t('addMusic')}
+            <Plus size={14} /> {t('addMusic')}
           </button>
-          {total > 0 && <span className="val">{fmtTime(total)}</span>}
+          <span className="spacer" />
+          {total > 0 && <span className="val" title={t('musicTotal')}>{fmtTime(total)}</span>}
         </div>
         {chapterOf.size > 0 && project.settings.timing.mode === 'fitToMusic' && <p className="hint">{t('chapterFit')}</p>}
       </Section>

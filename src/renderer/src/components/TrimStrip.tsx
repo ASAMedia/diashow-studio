@@ -5,6 +5,32 @@ import type { MediaItem, VideoEntry } from '@shared/types'
 import { playerRef, useStore } from '../store'
 import { timelineOf } from '../timeline'
 import { fmtSeconds, t } from '../i18n'
+import { Play } from 'lucide-react'
+
+/**
+ * A trim handle for the keyboard: a slider (arrows 0.1 s, with Shift 1 s, Home/End). The keys stay
+ * with the handle, so the preview doesn't step at the same time.
+ */
+export function handleProps(label: string, value: number, max: number, set: (v: number) => void) {
+  return {
+    role: 'slider',
+    tabIndex: 0,
+    'aria-label': label,
+    'aria-valuemin': 0,
+    'aria-valuemax': Math.round(max * 10) / 10,
+    'aria-valuenow': Math.round(value * 10) / 10,
+    'aria-valuetext': fmtSeconds(value),
+    onKeyDown: (e: React.KeyboardEvent) => {
+      const step = e.shiftKey ? 1 : 0.1
+      const next =
+        e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? value - step : e.key === 'ArrowRight' || e.key === 'ArrowUp' ? value + step : e.key === 'Home' ? 0 : e.key === 'End' ? max : null
+      if (next == null) return
+      e.preventDefault()
+      e.stopPropagation()
+      set(Math.round(Math.max(0, Math.min(max, next)) * 10) / 10)
+    }
+  } as const
+}
 
 /** Frames of the clip with two handles for start and end, plus a preview of the trimmed part. */
 export function TrimStrip({ entry, media }: { entry: VideoEntry; media: MediaItem }) {
@@ -42,6 +68,8 @@ export function TrimStrip({ entry, media }: { entry: VideoEntry; media: MediaIte
     el.addEventListener('pointerup', up)
   }
   const pct = (v: number): string => `${len ? (v / len) * 100 : 0}%`
+  const setIn = (v: number): void => setEntry(entry.id, { trimIn: Math.max(0, Math.min(v, tout - 0.5)) } as Partial<VideoEntry>)
+  const setOut = (v: number): void => setEntry(entry.id, { trimOut: Math.min(len, Math.max(v, tin + 0.5)) } as Partial<VideoEntry>)
   // the preview stops at the end of the clip, unless the user moved on in the meantime
   const stopAt = useRef(0)
   useEffect(() => () => window.clearTimeout(stopAt.current), [])
@@ -67,16 +95,15 @@ export function TrimStrip({ entry, media }: { entry: VideoEntry; media: MediaIte
         <div className="trim-dim" style={{ left: 0, width: pct(tin) }} />
         <div className="trim-dim" style={{ left: pct(tout), right: 0 }} />
         {shown < tout && <div className="trim-cut" style={{ left: pct(shown), width: `calc(${pct(tout)} - ${pct(shown)})` }} />}
-        <div className="trim-handle" style={{ left: pct(tin) }} onPointerDown={drag('in')} />
-        <div className="trim-handle end" style={{ left: pct(tout) }} onPointerDown={drag('out')} />
+        <div className="trim-handle" style={{ left: pct(tin) }} onPointerDown={drag('in')} {...handleProps(t('trimStart'), tin, len, setIn)} />
+        <div className="trim-handle end" style={{ left: pct(tout) }} onPointerDown={drag('out')} {...handleProps(t('trimEnd'), tout, len, setOut)} />
       </div>
-      <div className="row" style={{ marginTop: 6 }}>
-        <span className="val" style={{ textAlign: 'left' }}>
+      <div className="trim-row">
+        <span className="val">
           {fmtSeconds(tin)} – {fmtSeconds(Math.min(tout, shown))}
         </span>
-        <span style={{ flex: 1 }} />
         <button className="btn small" onClick={play}>
-          {t('trimPreview')}
+          <Play size={13} /> {t('trimPreview')}
         </button>
       </div>
       <p className="hint">{t('trimHint')}</p>

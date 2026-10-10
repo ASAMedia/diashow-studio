@@ -2,13 +2,14 @@
 // and what it means, e.g. on a school PC without an NVIDIA card. Ends with a short export benchmark
 // through the real export path; "Bericht kopieren" puts everything on the clipboard as plain text.
 import { useEffect, useRef, useState } from 'react'
-import { Copy, RefreshCw, X } from 'lucide-react'
+import { Check, Copy, Loader2, RefreshCw } from 'lucide-react'
 import type { BenchMedia, EncoderTest, SystemInfo } from '@shared/systemCheck'
 import { buildTimeline } from '@shared/timeline'
 import { DEFAULT_SETTINGS, type Entry, type MediaItem, type Project } from '@shared/types'
 import { exportShow, type ExportTick } from '../engine/exporter'
 import { useStore } from '../store'
 import { localeTag, t, type StringKey } from '../i18n'
+import { Modal } from './Modal'
 
 type Verdict = 'ok' | 'slow' | 'low' | 'missing' | 'info' | 'pending'
 
@@ -262,46 +263,54 @@ export function SystemCheck() {
     return lines.join('\n')
   }
 
+  const close = (): void => set({ dialog: null })
   return (
-    <div className="overlay">
-      <div className="dialog wide">
-        <div className="row" style={{ marginBottom: 8 }}>
-          <h2 style={{ margin: 0, flex: 1 }}>{t('systemCheck')}</h2>
-          <button className="btn ghost icon" title={t('close')} onClick={() => set({ dialog: null })}>
-            <X size={16} />
-          </button>
-        </div>
-        <p className="hint" style={{ marginTop: 0 }}>
-          {t('scIntro')}
-        </p>
-        {exportRunning && <p className="hint">{t('scBenchBusy')}</p>}
-        <div className="sc-list" data-testid="systemcheck">
-          {items.map((it) => {
-            const v = VERDICT[it.verdict]
-            return (
-              <div key={it.id} className="sc-item" data-id={it.id} data-verdict={it.verdict}>
-                <span className="title">{t(it.title)}</span>
-                <span>{v ? <span className={`sc-badge ${it.harmless ? 'info' : it.verdict}`}>{t(v)}</span> : <span className="sc-badge info">–</span>}</span>
-                <span className="value">
-                  {it.value}
-                  {it.meaning && <span className="meaning">{it.meaning}</span>}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-        <div className="actions">
+    <Modal
+      title={t('systemCheck')}
+      onClose={close}
+      className="wide"
+      actions={
+        <>
           <button className="btn" disabled={running} onClick={() => void run()}>
-            <RefreshCw size={13} className={running ? 'spin' : ''} /> {t('scAgain')}
+            <RefreshCw size={14} className={running ? 'spin' : ''} /> {t('scAgain')}
           </button>
           <button className="btn" disabled={!items.length} onClick={() => void navigator.clipboard.writeText(report()).then(() => setCopied(true), () => {})}>
-            <Copy size={13} /> {copied ? t('scCopied') : t('scCopy')}
+            {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? t('scCopied') : t('scCopy')}
           </button>
-          <button className="btn primary" onClick={() => set({ dialog: null })}>
+          <span className="spacer" />
+          <button className="btn primary" onClick={close}>
             {t('close')}
           </button>
-        </div>
+        </>
+      }
+    >
+      <p className="hint lead">{t('scIntro')}</p>
+      {exportRunning && <p className="callout warn">{t('scBenchBusy')}</p>}
+      <div className="sc-list" data-testid="systemcheck" aria-busy={running}>
+        {items.map((it) => {
+          const v = VERDICT[it.verdict]
+          return (
+            <div key={it.id} className="sc-item" data-id={it.id} data-verdict={it.verdict}>
+              <span className="title">{t(it.title)}</span>
+              <span>
+                {it.verdict === 'pending' ? (
+                  <span className="sc-badge pending">
+                    <Loader2 size={11} className="spin" aria-hidden /> {t('scChecking')}
+                  </span>
+                ) : v ? (
+                  <span className={`sc-badge ${it.harmless ? 'info' : it.verdict}`}>{t(v)}</span>
+                ) : (
+                  <span className="sc-badge info">–</span>
+                )}
+              </span>
+              <span className="value">
+                {it.value}
+                {it.meaning && <span className="meaning">{it.meaning}</span>}
+              </span>
+            </div>
+          )
+        })}
       </div>
-    </div>
+    </Modal>
   )
 }

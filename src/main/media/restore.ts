@@ -34,6 +34,16 @@ function stripDerived(item: MediaItem): MediaItem {
   return { ...rest, status: 'pending' }
 }
 
+/** Derived files point into the cache (or are the original itself); others are dropped and rebuilt. */
+function withoutForeignFiles(it: MediaItem, allow: (path: string) => boolean): MediaItem {
+  const out = { ...it }
+  for (const key of ['thumb', 'display', 'playback', 'audio', 'liveVideo', 'stabilized'] as const) {
+    const p = out[key]
+    if (typeof p === 'string' && p !== it.path && !allow(p)) delete out[key]
+  }
+  return out
+}
+
 export async function restoreMedia(ctx: ServiceContext, items: MediaItem[]): Promise<MediaItem[]> {
   // a malformed entry from the renderer must not fail the whole project
   const list = items.filter((it) => !!it && typeof it.id === 'string' && typeof it.path === 'string')
@@ -45,6 +55,10 @@ export async function restoreMedia(ctx: ServiceContext, items: MediaItem[]): Pro
     list.map(async (it) => {
       const current = ctx.items.get(it.id)
       if (current && current.status !== 'error') return { ...current }
+      // a network share from a project made elsewhere: not touched until the user trusts the host
+      const allow = ctx.config.allowPath ?? (() => true)
+      if (!allow(it.path)) return clean({ ...it, status: 'error' as const, error: 'network-blocked', progress: undefined })
+      it = withoutForeignFiles(it, allow)
       let changed = false
       try {
         const st = await stat(it.path)

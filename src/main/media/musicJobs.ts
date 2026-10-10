@@ -135,6 +135,9 @@ export async function restoreMusic(ctx: ServiceContext, list: MusicTrack[]): Pro
     list.map(async (t) => {
       const current = ctx.tracks.get(t.id)
       if (current && current.status !== 'error') return { ...current }
+      const allow = ctx.config.allowPath ?? (() => true)
+      if (!allow(t.path)) return { ...t, status: 'error' as const, error: 'network-blocked' }
+      if (t.playback && t.playback !== t.path && !allow(t.playback)) t = { ...t, playback: undefined, status: 'pending' as const }
       if (!existsSync(t.path)) return { ...t, status: 'error' as const, error: 'missing' }
       if (t.status === 'ready' && t.playback && existsSync(t.playback)) {
         ctx.tracks.set(t.id, t)

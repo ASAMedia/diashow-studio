@@ -2,11 +2,12 @@
 // saved, then writes the zip where the user chooses. The package is built by the main process
 // (src/main/diagnostics/package.ts) from counts, versions and the log; no photos, names or face data.
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, FolderOpen, Save, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, FolderOpen, Loader2, Save } from 'lucide-react'
 import type { DiagnosticsFile, DiagnosticsInput, DiagnosticsPreview } from '@shared/diagnostics'
 import { useStore } from '../store'
 import { localeTag, t, type StringKey } from '../i18n'
 import { ErrorText } from '../errors'
+import { Modal } from './Modal'
 
 const ABOUT: Record<DiagnosticsFile['about'], StringKey> = {
   readme: 'diagAboutReadme',
@@ -93,59 +94,60 @@ export function DiagnosticsDialog({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="overlay">
-      <div className="dialog wide diag-dialog" data-testid="diagnostics-dialog">
-        <div className="row" style={{ marginBottom: 8 }}>
-          <h2 style={{ margin: 0, flex: 1 }}>{t('diagTitle')}</h2>
-          <button className="btn ghost icon" title={t('close')} onClick={onClose}>
-            <X size={16} />
-          </button>
-        </div>
-        <p className="hint" style={{ marginTop: 0 }}>
-          {t('diagIntro')}
-        </p>
-        <p className="diag-privacy">{t('diagPrivacy')}</p>
-        {!preview && !error && <p className="hint">{t('diagCollecting')}</p>}
-        {preview && (
-          <div className="diag-files" data-testid="diagnostics-files">
-            {preview.files.map((f) => (
-              <div key={f.name} className="diag-file">
-                <button className="diag-head" onClick={() => setOpen(open === f.name ? null : f.name)}>
-                  {open === f.name ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                  <span className="name">{f.name}</span>
-                  <span className="about">{t(ABOUT[f.about])}</span>
-                  <span className="val">{kb(f.bytes)}</span>
-                </button>
-                {open === f.name && <pre className="diag-preview">{f.preview}</pre>}
-              </div>
-            ))}
-          </div>
-        )}
-        {preview && (
-          <p className="hint">
-            {t('diagTotal')
-              .replace('{n}', String(preview.files.length))
-              .replace('{s}', kb(preview.bytes))}
-          </p>
-        )}
-        {saved && (
-          <div className="row diag-saved">
-            <span style={{ flex: 1 }}>{t('diagSaved').replace('{path}', saved)}</span>
-            <button className="btn small" onClick={() => void window.api.revealInFolder(saved)}>
-              <FolderOpen size={13} /> {t('showInFolder')}
-            </button>
-          </div>
-        )}
-        {error !== null && <ErrorText err={error} context="save" />}
-        <div className="actions">
+    <Modal
+      title={t('diagTitle')}
+      onClose={onClose}
+      className="wide diag-dialog"
+      testId="diagnostics-dialog"
+      actions={
+        <>
           <button className="btn" onClick={onClose}>
             {t('close')}
           </button>
           <button className="btn primary" disabled={!preview || busy} onClick={() => void save()} data-testid="diagnostics-save">
-            <Save size={13} /> {t('diagSave')}
+            <Save size={14} /> {t('diagSave')}
+          </button>
+        </>
+      }
+    >
+      <p className="hint lead">{t('diagIntro')}</p>
+      <p className="diag-privacy">{t('diagPrivacy')}</p>
+      {!preview && !error && (
+        <p className="hint busy-line" role="status">
+          <Loader2 size={13} className="spin" aria-hidden /> {t('diagCollecting')}
+        </p>
+      )}
+      {preview && (
+        <div className="diag-files" data-testid="diagnostics-files">
+          {preview.files.map((f) => (
+            <div key={f.name} className="diag-file">
+              <button className="diag-head" aria-expanded={open === f.name} onClick={() => setOpen(open === f.name ? null : f.name)}>
+                {open === f.name ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                <span className="name">{f.name}</span>
+                <span className="about">{t(ABOUT[f.about])}</span>
+                <span className="val">{kb(f.bytes)}</span>
+              </button>
+              {open === f.name && <pre className="diag-preview">{f.preview}</pre>}
+            </div>
+          ))}
+        </div>
+      )}
+      {preview && (
+        <p className="hint">
+          {t('diagTotal')
+            .replace('{n}', String(preview.files.length))
+            .replace('{s}', kb(preview.bytes))}
+        </p>
+      )}
+      {saved && (
+        <div className="row diag-saved" role="status">
+          <span>{t('diagSaved').replace('{path}', saved)}</span>
+          <button className="btn small" onClick={() => void window.api.revealInFolder(saved)}>
+            <FolderOpen size={13} /> {t('showInFolder')}
           </button>
         </div>
-      </div>
-    </div>
+      )}
+      {error !== null && <ErrorText err={error} context="save" />}
+    </Modal>
   )
 }

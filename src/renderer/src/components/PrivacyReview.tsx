@@ -12,6 +12,7 @@ import { openPrivacyEditor } from '../personActions'
 import { useStore } from '../store'
 import { t } from '../i18n'
 import { PeopleList } from './PeopleList'
+import { Modal } from './Modal'
 import './people.css'
 
 function Tile({ item }: { item: OpenFaces }) {
@@ -31,11 +32,11 @@ function Tile({ item }: { item: OpenFaces }) {
         ))}
       </div>
       <div className="review-caption">
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {m.kind === 'video' && <Film size={11} style={{ verticalAlign: -1, marginRight: 3 }} />}
+        <span className="name">
+          {m.kind === 'video' && <Film size={11} style={{ verticalAlign: -1, marginRight: 3 }} aria-hidden />}
           {m.name}
         </span>
-        <span>{t('reviewFaces').replace('{n}', String(count))}</span>
+        <span className="n">{t('reviewFaces').replace('{n}', String(count))}</span>
       </div>
     </button>
   )
@@ -50,11 +51,11 @@ export function PrivacyReview({ onDone, doneLabel }: { onDone: () => void; doneL
   return (
     <div className="privacy-review">
       <div className="review-people">
-        <h3 style={{ margin: '0 0 8px', fontSize: 13 }}>{t('peopleTitle')}</h3>
+        <h3 className="subhead">{t('peopleTitle')}</h3>
         <PeopleList />
       </div>
-      {items.length > 0 ? <p className="hint">{t('reviewIntro')}</p> : <p>{t('reviewNone')}</p>}
-      {pending > 0 && <p className="warn">{t('reviewPending').replace('{n}', String(pending))}</p>}
+      {items.length > 0 ? <p className="hint lead">{t('reviewIntro')}</p> : <p className="review-ok">{t('reviewNone')}</p>}
+      {pending > 0 && <p className="callout warn">{t('reviewPending').replace('{n}', String(pending))}</p>}
       {items.length > 0 && (
         <div className="review-grid">
           {items.map((it) => (
@@ -62,7 +63,7 @@ export function PrivacyReview({ onDone, doneLabel }: { onDone: () => void; doneL
           ))}
         </div>
       )}
-      <div className="actions">
+      <div className="actions inline">
         <button className="btn primary" onClick={onDone}>
           {doneLabel ?? t('reviewOk')}
         </button>
@@ -75,11 +76,8 @@ export function PrivacyReview({ onDone, doneLabel }: { onDone: () => void; doneL
 export function PrivacyReviewDialog() {
   const set = useStore((s) => s.set)
   return (
-    <div className="overlay" onClick={() => set({ dialog: null })}>
-      <div className="dialog wide" onClick={(e) => e.stopPropagation()}>
-        <h2>{t('reviewTitle')}</h2>
-        <PrivacyReview onDone={() => set({ dialog: null })} />
-      </div>
-    </div>
+    <Modal title={t('reviewTitle')} onClose={() => set({ dialog: null })} backdropClose className="wide">
+      <PrivacyReview onDone={() => set({ dialog: null })} />
+    </Modal>
   )
 }

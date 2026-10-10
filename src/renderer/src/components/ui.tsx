@@ -1,34 +1,80 @@
-// Small building blocks shared by the inspector panels.
-import type { ReactNode } from 'react'
+// Small building blocks shared by the inspector panels and dialogs.
+import { cloneElement, useId, type ReactElement, type ReactNode } from 'react'
 import type { TextFont, TitleStyle } from '@shared/types'
 import type { StringKey } from '../i18n'
 
-export function Section(props: { title: string; children: ReactNode }) {
+export function Section(props: { title: string; children: ReactNode; className?: string }) {
+  const id = useId()
   return (
-    <div className="section">
-      <h3>{props.title}</h3>
+    <section className={`section ${props.className ?? ''}`} aria-labelledby={id}>
+      <h3 id={id}>{props.title}</h3>
       {props.children}
-    </div>
+    </section>
   )
 }
 
-export function Check(props: { checked: boolean; onChange: (v: boolean) => void; children: ReactNode }) {
+export function Check(props: { checked: boolean; onChange: (v: boolean) => void; children: ReactNode; disabled?: boolean; className?: string; testId?: string }) {
   return (
-    <label className="check">
-      <input type="checkbox" checked={props.checked} onChange={(e) => props.onChange(e.target.checked)} />
+    <label className={`check ${props.className ?? ''}`}>
+      <input type="checkbox" checked={props.checked} disabled={props.disabled} data-testid={props.testId} onChange={(e) => props.onChange(e.target.checked)} />
       <span>{props.children}</span>
     </label>
   )
 }
 
-export function Slider(props: { label: string; value: number; min: number; max: number; step: number; display: string; onChange: (v: number) => void }) {
+/** A label and one control (select, input) in a row; the label is tied to the control. */
+export function Field(props: { label: ReactNode; children: ReactElement<{ id?: string }>; extra?: ReactNode; className?: string }) {
+  const id = useId()
   return (
-    <div>
+    <div className={`row ${props.className ?? ''}`}>
+      <label htmlFor={id}>{props.label}</label>
+      {cloneElement(props.children, { id })}
+      {props.extra}
+    </div>
+  )
+}
+
+export function Slider(props: { label: string; value: number; min: number; max: number; step: number; display: string; onChange: (v: number) => void }) {
+  const id = useId()
+  return (
+    <div className="slider">
       <div className="row">
-        <label>{props.label}</label>
-        <span className="val">{props.display}</span>
+        <label htmlFor={id}>{props.label}</label>
+        <span className="val" aria-hidden>
+          {props.display}
+        </span>
       </div>
-      <input type="range" min={props.min} max={props.max} step={props.step} value={props.value} onChange={(e) => props.onChange(Number(e.target.value))} />
+      <input
+        id={id}
+        type="range"
+        min={props.min}
+        max={props.max}
+        step={props.step}
+        value={props.value}
+        aria-valuetext={props.display}
+        onChange={(e) => props.onChange(Number(e.target.value))}
+      />
+    </div>
+  )
+}
+
+/** Segmented buttons for one choice (aria-pressed on the chosen one). */
+export function Seg<T extends string | number>(props: { label: string; value: T; options: { id: T; label: ReactNode; title?: string }[]; onChange: (v: T) => void; className?: string }) {
+  return (
+    <div className={`seg ${props.className ?? ''}`} role="group" aria-label={props.label}>
+      {props.options.map((o) => (
+        <button
+          key={String(o.id)}
+          type="button"
+          className={props.value === o.id ? 'on' : ''}
+          aria-pressed={props.value === o.id}
+          title={o.title}
+          aria-label={o.title}
+          onClick={() => props.onChange(o.id)}
+        >
+          {o.label}
+        </button>
+      ))}
     </div>
   )
 }

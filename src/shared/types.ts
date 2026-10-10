@@ -413,6 +413,8 @@ export interface AppSettings {
   /** Last automatic update check (ms since 1970) and the newest release it found. */
   updateCheckedAt?: number
   updateLatest?: { version: string; url: string } | null
+  /** Network hosts (\\host\share) whose files may be opened without asking. */
+  trustedHosts?: string[]
 }
 
 export interface EncoderInfo {

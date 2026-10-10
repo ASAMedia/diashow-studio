@@ -6,6 +6,7 @@ import { create } from 'zustand'
 import { ArrowUpCircle, X } from 'lucide-react'
 import type { UpdateStatus } from '@shared/about'
 import { t } from '../i18n'
+import { Section } from './ui'
 import './help.css'
 
 export const useUpdate = create<{ status: UpdateStatus | null }>(() => ({ status: null }))
@@ -36,8 +37,7 @@ export function UpdateSetting() {
     void window.api.getAppSettings().then((s) => setOn(s.updateCheck !== false))
   }, [])
   return (
-    <div className="section">
-      <h3>{t('updates')}</h3>
+    <Section title={t('updates')}>
       <label className="check">
         <input
           type="checkbox"
@@ -54,7 +54,7 @@ export function UpdateSetting() {
         <span>{t('updateSetting')}</span>
       </label>
       <p className="hint">{t('updateSettingHint')}</p>
-    </div>
+    </Section>
   )
 }
 
@@ -77,10 +77,11 @@ export function UpdateChip() {
   return (
     <span className="update-chip" data-testid="update-chip">
       <a href={status.url} target="_blank" rel="noreferrer" title={t('updateChipHint').replace('{v}', version)}>
-        <ArrowUpCircle size={13} /> {t('updateChip').replace('{v}', version)}
+        <ArrowUpCircle size={13} aria-hidden /> {t('updateChip').replace('{v}', version)}
       </a>
       <button
         title={t('updateDismiss')}
+        aria-label={t('updateDismiss')}
         onClick={() => {
           setDismissed(version)
           try {

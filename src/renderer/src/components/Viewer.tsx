@@ -15,6 +15,7 @@ import { previewQuality, QUALITY } from './Settings'
 import { FreeTextLayer, PrivacyEditor } from './Overlays'
 import { CollageEditor } from './CollageEditor'
 import { prioritize } from '../priority'
+import { Seg } from './ui'
 
 function useBox(ref: React.RefObject<HTMLElement | null>): { w: number; h: number } {
   const [box, setBox] = useState({ w: 0, h: 0 })
@@ -35,7 +36,6 @@ export function Viewer() {
   const kbEdit = useStore((s) => s.kbEdit)
   const privacyEdit = useStore((s) => s.privacyEdit)
   const fullscreen = useStore((s) => s.fullscreen)
-  const set = useStore((s) => s.set)
   const tl = useTimeline()
   const stageRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -126,8 +126,8 @@ export function Viewer() {
   })()
 
   return (
-    <div className="viewer">
-      <div className="stage" ref={stageRef}>
+    <section className="viewer" aria-label={t('preview')}>
+      <div className="stage" ref={stageRef} data-theme="dark">
         <div className="frame" style={{ width: fw, height: fh, visibility: empty ? 'hidden' : 'visible' }}>
           <canvas ref={canvasRef} />
           {!playing && !kbEdit && !privacyEdit && editSlide && <CropEditor slide={editSlide} scale={fw / (canvasRef.current?.width || fw)} />}
@@ -137,14 +137,14 @@ export function Viewer() {
           {kbEdit && selectedPhoto && <KenBurnsEditor entry={selectedPhoto.e} display={selectedPhoto.m.display} mediaAspect={selectedPhoto.m.width / selectedPhoto.m.height} frameAspect={aspect} w={fw} h={fh} />}
         </div>
         {empty && (
-          <div className="empty-stage" style={{ position: 'absolute' }}>
+          <div className="empty-stage">
             <p>{t('emptyShow')}</p>
-            <div className="row" style={{ justifyContent: 'center' }}>
+            <div className="row">
               <button className="btn" onClick={async () => useStore.getState().importMedia(await window.api.pickMedia())}>
-                <ImagePlus size={15} /> {t('addMedia')}
+                <ImagePlus size={16} /> {t('addMedia')}
               </button>
               <button className="btn" onClick={async () => useStore.getState().importMedia(await window.api.pickFolder())}>
-                <FolderPlus size={15} /> {t('addFolder')}
+                <FolderPlus size={16} /> {t('addFolder')}
               </button>
             </div>
           </div>
@@ -153,37 +153,37 @@ export function Viewer() {
       <input
         className="scrub"
         type="range"
+        aria-label={t('position')}
+        aria-valuetext={`${fmtTime(playhead)} / ${fmtTime(duration)}`}
         min={0}
         max={Math.max(0.01, duration)}
         step={0.01}
         value={Math.min(playhead, duration)}
+        disabled={empty}
         onChange={(e) => playerRef.current?.seek(Number(e.target.value))}
       />
       <div className="controls">
         <div className="left">
           <button
-            className={`btn small ${project.settings.loop ? 'on' : ''}`}
+            className={`btn small icon ${project.settings.loop ? 'on' : ''}`}
             title={t('loop')}
+            aria-label={t('loop')}
+            aria-pressed={!!project.settings.loop}
             onClick={() => useStore.getState().setSettings({ loop: !project.settings.loop })}
           >
-            <Repeat size={14} />
+            <Repeat size={15} />
           </button>
         </div>
-        <button className="playbtn" title={playing ? t('pause') : t('preview')} onClick={() => playerRef.current?.toggle()} disabled={empty}>
+        <button className="playbtn" title={`${playing ? t('pause') : t('playPreview')} (${t('kbdSpace')})`} aria-label={playing ? t('pause') : t('playPreview')} onClick={() => playerRef.current?.toggle()} disabled={empty}>
           {playing ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" style={{ marginLeft: 2 }} />}
         </button>
         <div className="right">
-          <span>
+          <span aria-hidden>
             {fmtTime(playhead)} / {fmtTime(duration)}
           </span>
-          {kbEdit && (
-            <button className="btn small" onClick={() => set({ kbEdit: null })}>
-              {t('done')}
-            </button>
-          )}
         </div>
       </div>
-    </div>
+    </section>
   )
 }
 
@@ -248,24 +248,30 @@ function KenBurnsEditor(props: { entry: PhotoEntry; display?: string; mediaAspec
       {rect(kbEdit === 'start' ? 'end' : 'start')}
       {rect(kbEdit)}
       <div className="kb-bar">
-        <div className="seg">
-          {(['start', 'end'] as const).map((k) => (
-            <button key={k} className={kbEdit === k ? 'on' : ''} onClick={() => useStore.getState().set({ kbEdit: k })}>
-              {k === 'start' ? t('kbStart') : t('kbEnd')}
-            </button>
-          ))}
-        </div>
+        <Seg
+          label={t('kenBurns')}
+          value={kbEdit}
+          options={[
+            { id: 'start', label: t('kbStart') },
+            { id: 'end', label: t('kbEnd') }
+          ]}
+          onChange={(k) => useStore.getState().set({ kbEdit: k })}
+        />
         <input
           type="range"
+          className="zoom"
           min={0}
           max={0.85}
           step={0.01}
-          style={{ width: 120 }}
-          title="Zoom"
+          title={t('zoom')}
+          aria-label={t('zoom')}
           value={1 - cur.w / full.w}
           onChange={(e) => zoom(cur, (full.w * (1 - Number(e.target.value))) / cur.w)}
         />
-        <span className="hint" style={{ margin: 0 }}>{t('kbHint')}</span>
+        <span className="hint">{t('kbHint')}</span>
+        <button className="btn small primary" onClick={() => useStore.getState().set({ kbEdit: null })}>
+          {t('done')}
+        </button>
       </div>
     </div>
   )
@@ -333,6 +339,7 @@ function CropEditor({ slide, scale }: { slide: TimelineSlide; scale: number }) {
             <button
               className="cell-toggle"
               title={whole ? t('cropMode') : t('wholeMode')}
+              aria-label={`${whole ? t('cropMode') : t('wholeMode')}: ${m.name}`}
               onPointerDown={(ev) => ev.stopPropagation()}
               onDoubleClick={(ev) => ev.stopPropagation()}
               onClick={() => setEntry(e.id, { whole: !whole } as Partial<PhotoEntry>)}

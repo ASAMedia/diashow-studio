@@ -15,6 +15,7 @@ const TEXT: Record<ErrorKind, StringKey> = {
   outOfMemory: 'errOutOfMemory',
   fileLocked: 'errFileLocked',
   fileMissing: 'errFileMissing',
+  networkBlocked: 'errNetworkBlocked',
   unsupportedFile: 'errUnsupportedFile',
   encoderFailed: 'errEncoderFailed',
   gpuLost: 'errGpuLost',
@@ -49,7 +50,7 @@ export function ErrorText({ err, context, className = 'error' }: { err: unknown;
     <div className={`${className} friendly-error`} data-kind={f.kind ?? 'other'}>
       <span>{f.text}</span>
       {showDetail && (
-        <button type="button" className="link" onClick={() => setOpen(!open)}>
+        <button type="button" className="link" aria-expanded={open} onClick={() => setOpen(!open)}>
           {open ? t('errHideDetails') : t('errDetails')}
         </button>
       )}
@@ -122,7 +123,7 @@ export function ErrorNotices() {
     <div className="notice-stack" role="alert">
       {notices.map((n) => (
         <div key={n.id} className="notice" data-testid="error-notice">
-          <AlertTriangle size={16} className="notice-icon" />
+          <AlertTriangle size={16} className="notice-icon" aria-hidden />
           <div className="notice-body">
             <b>{n.title}</b>
             <ErrorText err={n.err} context={n.context} className="notice-text" />
@@ -138,7 +139,7 @@ export function ErrorNotices() {
               </button>
             )}
           </div>
-          <button className="btn ghost icon small" title={t('close')} onClick={() => dismissNotice(n.id)}>
+          <button className="btn ghost icon small" title={t('close')} aria-label={t('close')} onClick={() => dismissNotice(n.id)}>
             <X size={14} />
           </button>
         </div>

@@ -112,7 +112,8 @@ test('share dialog: phones upload into the project, download an offered video', 
     const downloadUrl = (await page.getByTestId('share-download-url').textContent())!.trim()
     expect(downloadUrl).not.toBe(uploadUrl)
     const list = await (await fetch(downloadUrl)).text()
-    const href = /href="([^"?]+)"/.exec(list)![1]
+    // the first link of the list (the head links the app icon)
+    const href = /<a href="([^"?]+)"/.exec(list)![1]
     const size = readFileSync(offered).length
     const part = await fetch(new URL(href, downloadUrl), { headers: { Range: 'bytes=0-1' } })
     expect(part.status).toBe(206)
