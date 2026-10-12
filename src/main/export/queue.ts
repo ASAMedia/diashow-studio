@@ -14,6 +14,7 @@ import type { ExportJobInfo, ExportJobState, ExportTask } from '@shared/exportQu
 import type { EncoderInfo } from '@shared/types'
 import { abortError } from '../abort'
 import { Ffmpeg } from '../ffmpeg'
+import { rebaseThemeMusic } from '../themeMusic'
 import { joinSegments } from './assemble'
 import { mixAudioPlan } from './audioMix'
 import { pickEncoder } from './encoder'
@@ -69,6 +70,8 @@ export interface ExportQueueOptions {
   /** Folder with one subfolder per job, e.g. <userData>/exports. */
   dir: string
   ffmpegDir: string
+  /** The bundled theme songs, where a resumed job finds its theme song again (themeMusic.ts). */
+  themeMusicDir?: string
   /** Encoder detection; defaults to Ffmpeg.encoders(). */
   encoders?: () => Promise<EncoderInfo>
   /** Segment length in seconds (default 30; tests use shorter ones). */
@@ -262,7 +265,7 @@ export async function openExportQueue(opts: ExportQueueOptions): Promise<ExportQ
     let run: Promise<void> | undefined
     run = (async (): Promise<void> => {
       try {
-        await mixAudioPlan(ff, job.file.audio, tmp, clips, { signal: ctrl.signal })
+        await mixAudioPlan(ff, rebaseThemeMusic(job.file.audio, opts.themeMusicDir ?? ''), tmp, clips, { signal: ctrl.signal })
         if (ctrl.signal.aborted) throw abortError()
         await rename(tmp, mixPath(job))
       } catch (err) {
@@ -361,7 +364,8 @@ export async function openExportQueue(opts: ExportQueueOptions): Promise<ExportQ
       totalFrames: job.file.totalFrames,
       segmentFrames: job.file.segmentFrames,
       segments: remaining(job),
-      ...(job.file.input ? { input: job.file.input } : {})
+      ...(job.file.input ? { input: job.file.input } : {}),
+      ...(job.file.themeSong ? { themeSong: job.file.themeSong } : {})
     }
   }
 
@@ -430,7 +434,8 @@ export async function openExportQueue(opts: ExportQueueOptions): Promise<ExportQ
         createdAt,
         project: job.project,
         audio: job.audio,
-        ...(job.chapters?.length ? { chapters: job.chapters } : {})
+        ...(job.chapters?.length ? { chapters: job.chapters } : {}),
+        ...(job.themeSong ? { themeSong: job.themeSong } : {})
       }
       const entry = makeJob(file, dir)
       saveJob(entry)

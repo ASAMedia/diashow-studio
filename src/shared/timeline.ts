@@ -2,6 +2,7 @@
 // preview, the fullscreen player and the export all use the same result.
 import type { AspectRatio, CollagePlace, Entry, MediaItem, MusicTrack, Project, ProjectSettings, TextEntry, TitleStyle, VideoEntry } from './types'
 import { classicTransitionSeconds, themeMeta } from './themes'
+import { effectiveMusic, placementAudio, type ThemeTrack } from './themeMusic'
 import { groupEntries, mediaAspect, pickTemplate, templatesFor, type Slot, type Template } from './layout'
 
 export type SlideKind = 'photos' | 'video' | 'text' | 'title'
@@ -59,7 +60,12 @@ export interface Timeline {
   duration: number
   /** Computed seconds for an automatic single-photo slide. */
   photoSeconds: number
+  /** Length of the show's own songs ("Fit to music"); 0 with the theme song, which loops instead. */
   musicDuration: number
+  /** The songs that play (shared/themeMusic.ts effectiveMusic): the show's own, or its theme song. */
+  music: MusicTrack[]
+  /** Set when the theme song plays. */
+  themeSong?: ThemeTrack
   /** Output aspect ratio as width / height. */
   aspect: number
   /** Where which songs play: the show playlist from the start, then each chapter with its own songs. */
@@ -195,7 +201,11 @@ interface Draft {
   max?: number
 }
 
-export function buildTimeline(project: Project, locale = 'de-DE'): Timeline {
+/**
+ * `themeTracks`: the bundled theme songs (shared/themeMusic.ts); the show's theme song plays from
+ * them while it has no songs of its own.
+ */
+export function buildTimeline(project: Project, locale = 'de-DE', themeTracks: readonly ThemeTrack[] = []): Timeline {
   const { settings } = project
   const meta = themeMeta(settings.theme)
   const aspect = aspectValue(settings.aspect)
@@ -312,13 +322,18 @@ export function buildTimeline(project: Project, locale = 'de-DE'): Timeline {
     }
   }
 
-  const musicDuration = musicLength(project)
+  // The theme song plays like a playlist of one song that loops; "Fit to music" ignores it, so a
+  // long show is never squeezed into the song (nominal durations, or the custom total)
+  const eff = effectiveMusic(project, themeTracks)
+  const playing: Project = eff.theme ? { ...project, music: eff.tracks } : project
+  const audio = placementAudio(settings.audio, !!eff.theme)
+  const musicDuration = eff.theme ? 0 : musicLength(project)
   const target =
     settings.timing.mode === 'custom' ? settings.timing.customTotal : musicDuration > 0 ? musicDuration : undefined
   // Music from here on: a text slide with its own songs starts a new stretch of music
-  const chapters = chapterMusic(project)
-  const songs = new Map(project.music.map((m) => [m.id, m]))
-  const segStarts: { draft: number; tracks: string[]; chapterId?: string }[] = [{ draft: 0, tracks: showPlaylist(project).map((m) => m.id) }]
+  const chapters = chapterMusic(playing)
+  const songs = new Map(eff.tracks.map((m) => [m.id, m]))
+  const segStarts: { draft: number; tracks: string[]; chapterId?: string }[] = [{ draft: 0, tracks: showPlaylist(playing).map((m) => m.id) }]
   drafts.forEach((d, i) => {
     const id = [d.slide.captionEntryId, ...d.slide.entries.map((e) => e.id)].find((x): x is string => !!x && chapters.has(x))
     if (!id) return
@@ -380,7 +395,7 @@ export function buildTimeline(project: Project, locale = 'de-DE'): Timeline {
     const at = new Map(segStarts.map((seg) => [seg.draft, seg]))
     const beatsFrom = (k: number, start: number): number[] | null => {
       const seg = at.get(k)
-      return seg ? placedBeats(seg.tracks.map((id) => songs.get(id)).filter(playableTrack), settings.audio, k === 0 ? 0 : start, t + 30) : null
+      return seg ? placedBeats(seg.tracks.map((id) => songs.get(id)).filter(playableTrack), audio, k === 0 ? 0 : start, t + 30) : null
     }
     snapToBeats(slides, beatsFrom, drafts.map((d) => d.fixed != null), minAuto * 0.8)
   }
@@ -391,15 +406,16 @@ export function buildTimeline(project: Project, locale = 'de-DE'): Timeline {
     tracks: seg.tracks,
     chapterId: seg.chapterId
   }))
-  return { slides, duration, photoSeconds: p, musicDuration, aspect, musicSegments }
+  return { slides, duration, photoSeconds: p, musicDuration, music: eff.tracks, ...(eff.theme ? { themeSong: eff.theme } : {}), aspect, musicSegments }
 }
 
 /** Beat times of the music on the show timeline (same placement as the audio plan). */
 export function musicBeatTimes(project: Project, until: number, tl?: Timeline): number[] {
-  const songs = new Map(project.music.map((m) => [m.id, m]))
+  const songs = new Map((tl?.music ?? project.music).map((m) => [m.id, m]))
+  const audio = placementAudio(project.settings.audio, !!tl?.themeSong)
   const segments = tl?.musicSegments ?? [{ start: 0, end: until, tracks: showPlaylist(project).map((m) => m.id) }]
   return segments.flatMap((seg) =>
-    placedBeats(seg.tracks.map((id) => songs.get(id)).filter(playableTrack), project.settings.audio, seg.start, Math.min(until, seg.end))
+    placedBeats(seg.tracks.map((id) => songs.get(id)).filter(playableTrack), audio, seg.start, Math.min(until, seg.end))
   )
 }
 

@@ -7,6 +7,7 @@ import { basename, dirname, extname, join } from 'node:path'
 import type { ExportJobInfo, ExportJobRequest, ExportJobState, SegmentInput } from '@shared/exportQueue'
 import type { AudioPlan, Project, VideoCodec } from '@shared/types'
 import type { Chapter } from '@shared/chapters'
+import type { ThemeTrack } from '@shared/themeMusic'
 import type { Segment } from './segments'
 import { finite, ID_RE, isObject } from './validate'
 
@@ -39,6 +40,8 @@ export interface JobFile {
   audio: AudioPlan
   /** Chapter marks for the MP4 (NewExportJob.chapters). */
   chapters?: Chapter[]
+  /** NewExportJob.themeSong. */
+  themeSong?: ThemeTrack
 }
 
 export type Phase = NonNullable<ExportJobInfo['phase']>

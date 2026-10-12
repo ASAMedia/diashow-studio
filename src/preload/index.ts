@@ -16,6 +16,7 @@ const api: DiashowApi = {
   importMusic: (paths) => ipcRenderer.invoke('music:import', paths),
   restoreMusic: (tracks) => ipcRenderer.invoke('music:restore', tracks),
   onMusicUpdate: (cb) => subscribe('music:update', cb),
+  themeSongs: () => ipcRenderer.invoke('music:theme-songs'),
   waveform: (path, buckets) => ipcRenderer.invoke('audio:waveform', path, buckets),
   pickMedia: () => ipcRenderer.invoke('dialog:media'),
   pickFolder: () => ipcRenderer.invoke('dialog:folder'),

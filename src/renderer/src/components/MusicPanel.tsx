@@ -1,4 +1,5 @@
-// Music tab: the playlist (order, song sections, chapters), music levels and fades, video sound and ducking.
+// Music tab: theme music, the playlist (order, song sections, chapters), music levels and fades, video
+// sound and ducking.
 import { useState } from 'react'
 import { GripVertical, Plus, Scissors, Trash2 } from 'lucide-react'
 import type { TextEntry } from '@shared/types'
@@ -9,6 +10,7 @@ import { fmtSeconds, fmtTime, t } from '../i18n'
 import { friendly } from '../errors'
 import { Check, Section, Slider } from './ui'
 import { MusicTrim } from './MusicTrim'
+import { ThemeMusicSection } from './ThemeMusic'
 
 export function MusicPanel() {
   const project = useStore((s) => s.project)!
@@ -34,6 +36,7 @@ export function MusicPanel() {
 
   return (
     <>
+      <ThemeMusicSection />
       <Section title={t('selectedMusic')}>
         {project.music.length === 0 && <p className="empty-note">{t('noMusic')}</p>}
         <div className="tracks">

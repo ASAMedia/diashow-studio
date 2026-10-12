@@ -66,6 +66,8 @@ Das **Thema** bestimmt, wie die Folien aussehen und wechseln. Es gibt 11 Themen,
 
 Im Reiter **Musik** fügst du eigene Musikdateien hinzu (MP3, M4A, WAV, FLAC und mehr). Mehrere Songs bilden eine Wiedergabeliste, die du per Ziehen ordnest.
 
+Jedes Thema hat seine eigene Musik (CC0, frei nutzbar, auch in geteilten Videos); deine eigene Musik ersetzt sie.
+
 ![Musik mit Wellenform und Taktmarken](music.jpg)
 
 - **An Musik anpassen** (Reiter **Dauer**): Die Diashow dauert genau so lange wie die Musik. Alternativ legst du eine eigene Gesamtdauer fest.

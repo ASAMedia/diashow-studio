@@ -66,6 +66,8 @@ The **theme** decides how slides look and change. There are 11 themes, e.g. **Ke
 
 In the **Music** tab you add your own music files (MP3, M4A, WAV, FLAC and more). Several songs form a playlist that you reorder by dragging.
 
+Each theme has its own music (CC0, free to use, also in shared videos); your own music replaces it.
+
 ![Music with waveform and beat markers](music.jpg)
 
 - **Fit to music** (**Duration** tab): the slideshow lasts exactly as long as the music. Or set your own total length.

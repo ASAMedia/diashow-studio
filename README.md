@@ -129,6 +129,10 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
   - Classic has a free choice of transition with speed and direction: Dissolve, Fade through black or white, Push, Wipe, Move in, Reveal, Cube, Flip, Zoom or Droplet.
 - **Ken Burns:** set the start and end framing per photo by dragging and zooming a frame.
 - **Music:** your own files (MP3, M4A/AAC, WAV, FLAC, OGG, Opus, ALAC, WMA, AIFF) in a playlist you can reorder. It supports crossfades, fades and repeat.
+  - Theme music, like in Photos: each theme has its own song, and a new slideshow plays it right away.
+    - The songs are CC0 or public domain, so they are free to use, also in shared videos, without credit. Sources and licence statements are in `resources/theme-music/SOURCES.md`.
+    - Your own music replaces the theme song. The Music tab switches it off or picks another theme's song.
+    - Long slideshows loop the song with a crossfade, and "Fit to music" ignores a lone theme song.
   - Song sections: drag the start and end of each song over its waveform (scissors button), e.g. to skip a long intro, and listen to the result.
   - Music per chapter: each song can play in the whole show or from a chapter's text slide on (e.g. its own songs for each day).
     - With "Fit to music", every chapter lasts as long as its songs.
@@ -186,7 +190,8 @@ npm run dev          # start the app with hot reload
 npm test             # unit and pipeline tests (generates test media first)
 npm run e2e          # build + Playwright end-to-end test with screenshots of every theme
 npm run dist         # Windows installer and portable exe in dist/ (writes THIRD_PARTY_NOTICES first)
-npm run notices      # vendor/THIRD_PARTY_NOTICES.txt: licences of FFmpeg, fonts, models and every bundled npm package
+npm run notices      # vendor/THIRD_PARTY_NOTICES.txt: licences of FFmpeg, fonts, models, theme songs and every bundled npm package
+npm run theme-music -- <folder>   # theme songs: resources/theme-music from <theme>.mp3 … files and sources.json (see the script)
 npm run site         # rebuilds the generated parts of the website in docs/ (handbook pages, screenshots, icons, link previews)
 ```
 

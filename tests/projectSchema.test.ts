@@ -137,6 +137,31 @@ describe('project validation', () => {
     expect(project.settings.transition.direction).toBe('left')
   })
 
+  it('keeps theme music as saved, drops wrong values and never switches it on for older files', () => {
+    const p = sample()
+    expect(validateProject(p).project.settings).toMatchObject({ themeMusic: true, themeSong: 'auto' })
+    p.settings = { ...p.settings, themeMusic: false, themeSong: 'vintage' }
+    expect(validateProject(p).project.settings).toMatchObject({ themeMusic: false, themeSong: 'vintage' })
+    // wrong values: off, and the theme's own song
+    const s = p.settings as unknown as Record<string, unknown>
+    s.themeMusic = 'yes'
+    s.themeSong = 'hologram'
+    const bad = validateProject(p)
+    expect(codes(bad.report)).toEqual({ settings: 2 })
+    expect(bad.project.settings.themeMusic).toBeUndefined()
+    expect(bad.project.settings.themeSong).toBeUndefined()
+    // a file from before theme music: the fields stay missing (= off), so the show stays silent
+    delete s.themeMusic
+    delete s.themeSong
+    const old = readProjectText(JSON.stringify(p))
+    expect(old.report.changes).toEqual([])
+    expect('themeMusic' in old.project.settings).toBe(false)
+    // settings lost altogether: today's defaults, but without theme music
+    const lost = validateProject({ ...sample(), settings: 7 })
+    expect(lost.project.settings.theme).toBe(DEFAULT_SETTINGS.theme)
+    expect(lost.project.settings.themeMusic).toBeUndefined()
+  })
+
   it('repairs a text style field by field instead of dropping it', () => {
     const p = sample()
     ;(p.settings as unknown as Record<string, unknown>).text = { font: 'hand', scale: 1.4, color: 7, position: 'center' }

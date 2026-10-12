@@ -3,6 +3,7 @@
 // restart from the last finished segment.
 import type { AudioPlan, ExportQuality, Project, VideoCodec } from './types'
 import type { Chapter } from './chapters'
+import type { ThemeTrack } from './themeMusic'
 
 export interface ExportJobRequest {
   outPath: string
@@ -29,6 +30,11 @@ export interface NewExportJob {
   audio: AudioPlan
   /** Chapter marks written into the MP4 (buildChapters), ascending; none when left out. */
   chapters?: Chapter[]
+  /**
+   * The theme song the show plays (it has no songs of its own), with its file path: the worker builds
+   * the same timeline from it (beats), also when the job continues after a restart.
+   */
+  themeSong?: ThemeTrack
 }
 
 export type ExportJobState = 'queued' | 'running' | 'paused' | 'done' | 'error' | 'cancelled'
@@ -68,6 +74,8 @@ export interface ExportTask {
   segments: number[]
   /** Frame input of the segments already done, so resumed segments match them. */
   input?: SegmentInput
+  /** NewExportJob.themeSong. */
+  themeSong?: ThemeTrack
 }
 
 /** How the worker delivers a segment: raw frames through exportFrame, or its own encoded stream through exportChunk. */

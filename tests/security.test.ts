@@ -1,6 +1,6 @@
 // Electron hardening: which URLs count as the app's page, which navigations are blocked, what the
 // dsmedia:// protocol serves (and to whom), and the IPC guard.
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -19,7 +19,7 @@ vi.mock('electron', () => ({
     }
   }
 }))
-const { handleMediaRequest, mediaPathAllowed, originAllowed } = await import('../src/main/protocol')
+const { handleMediaRequest, inThemeMusicDir, mediaPathAllowed, originAllowed, setMediaPathPolicy, setThemeMusicDir } = await import('../src/main/protocol')
 const { guardIpc, isAppUrlFor, navigationAllowed } = await import('../src/main/security')
 const { ipcMain } = await import('electron')
 
@@ -97,6 +97,43 @@ describe('dsmedia access limits', () => {
     expect(originAllowed('file://')).toBe(true)
     expect(originAllowed('http://localhost:5173', 'http://localhost:5173/')).toBe(true)
     expect(originAllowed('http://localhost:5173', undefined)).toBe(false)
+  })
+})
+
+describe('dsmedia and the theme songs', () => {
+  it('serves the theme-music folder wherever the app is (also when the path policy refuses it), nothing next to it', async () => {
+    const songs = join(dir, 'resources', 'theme-music')
+    mkdirSync(join(songs, 'sub'), { recursive: true })
+    mkdirSync(join(dir, 'resources', 'theme-music-x'), { recursive: true })
+    const files = {
+      song: join(songs, 'kenburns.m4a'),
+      index: join(songs, 'theme-music.json'),
+      below: join(songs, 'sub', 'a.m4a'),
+      sibling: join(dir, 'resources', 'theme-music-x', 'a.m4a'),
+      other: join(dir, 'song.mp3')
+    }
+    for (const f of Object.values(files)) writeFileSync(f, 'x')
+    const status = async (p: string): Promise<number> => (await handleMediaRequest(new Request(mediaUrl(p)))).status
+    expect(inThemeMusicDir(files.song, songs)).toBe(true)
+    expect(inThemeMusicDir(files.song.toUpperCase(), songs)).toBe(true)
+    expect(inThemeMusicDir(files.below, songs)).toBe(false)
+    expect(inThemeMusicDir(files.sibling, songs)).toBe(false)
+    expect(inThemeMusicDir(files.song, '')).toBe(false)
+    // e.g. the app on a network share the user has not trusted: only its theme songs are served
+    setMediaPathPolicy(() => false)
+    setThemeMusicDir(songs)
+    try {
+      expect(await status(files.song)).toBe(200)
+      expect(await status(files.index)).toBe(404)
+      expect(await status(files.below)).toBe(404)
+      expect(await status(files.sibling)).toBe(404)
+      expect(await status(files.other)).toBe(404)
+      expect(await status(`${songs}\\..\\theme-music\\kenburns.m4a`)).toBe(404)
+    } finally {
+      setMediaPathPolicy(() => true)
+      setThemeMusicDir('')
+    }
+    expect(await status(files.other)).toBe(200)
   })
 })
 

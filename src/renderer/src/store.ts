@@ -5,6 +5,7 @@ import type {
 import { DEFAULT_SETTINGS } from '@shared/types'
 import type { ExportJobInfo } from '@shared/exportQueue'
 import { themeMeta } from '@shared/themes'
+import type { ThemeTrack } from '@shared/themeMusic'
 import { withProjectFields } from '@shared/mediaEdit'
 import { t } from './i18n'
 import { notifyError } from './errors'
@@ -42,6 +43,8 @@ interface State {
   presenting: boolean
   /** Fullscreen started by kiosk mode: loops whatever the project says. */
   kiosk: boolean
+  /** The bundled theme songs (loaded once at start, src/shared/themeMusic.ts). */
+  themeTracks: ThemeTrack[]
   loadProjects(): Promise<void>
   createProject(paths?: string[], name?: string): Promise<Project>
   openProject(id: string): Promise<void>
@@ -170,6 +173,7 @@ export const useStore = create<State>((set, get) => ({
   exportJobs: [],
   presenting: false,
   kiosk: false,
+  themeTracks: [],
 
   async loadProjects() {
     set({ projects: await window.api.listProjects() })

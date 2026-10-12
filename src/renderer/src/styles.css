@@ -498,6 +498,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline-offs
 .trim-handle:focus-visible { outline: 2px solid #fff; outline-offset: 0; }
 .trim-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; min-height: 26px; }
 .trim-row .val { color: var(--text-2); font-variant-numeric: tabular-nums; font-size: 12px; flex: 1; }
+.trim-row .theme-credit { flex: 1; min-width: 0; margin: 0; }
+.theme-music select.theme-song { width: 100%; margin-top: 4px; }
 
 .notices:empty { display: none; }
 /* fixed rows: without notices the filmstrip must not move into the flexible row (it was squeezed off-screen) */

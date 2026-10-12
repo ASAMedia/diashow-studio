@@ -405,6 +405,8 @@ function validateEntry(raw: Data, mediaKinds: Map<string, string>): { entry: Dat
 
 /** Audio settings that older files may lack; missing means off, so they are never filled in. */
 const OPTIONAL_AUDIO = ['normalize']
+/** Settings that older files lack and that mean "off" when missing (theme music: shared/themeMusic.ts). */
+const OPTIONAL_SETTINGS = ['themeMusic', 'themeSong']
 
 /**
  * Settings with wrong values reset to their defaults. Fields that are simply missing stay missing
@@ -413,6 +415,8 @@ const OPTIONAL_AUDIO = ['normalize']
  */
 function validateSettings(raw: unknown, changes: Changes): Project['settings'] {
   const d = structuredClone(DEFAULT_SETTINGS) as unknown as Data
+  // new shows get theme music; a file without the fields keeps its sound (none)
+  for (const key of OPTIONAL_SETTINGS) delete d[key]
   if (!isObj(raw)) {
     changes.add('settings')
     return d as unknown as Project['settings']
@@ -431,6 +435,9 @@ function validateSettings(raw: unknown, changes: Changes): Project['settings'] {
   for (const key of ['scaleToFill', 'playFullVideos', 'playLivePhotos', 'loop', 'showTitle']) reset(key, s[key] === undefined || typeof s[key] === 'boolean')
   for (const key of ['titleText', 'subtitleText', 'titleStyle']) reset(key, s[key] === undefined || str(s[key]))
   reset('maxVideoSeconds', s.maxVideoSeconds === undefined || (num(s.maxVideoSeconds) && s.maxVideoSeconds >= 0))
+  // a wrong value means off / the theme's own song
+  reset('themeMusic', s.themeMusic === undefined || typeof s.themeMusic === 'boolean')
+  reset('themeSong', s.themeSong === undefined || s.themeSong === 'auto' || THEMES.some((t) => t.id === s.themeSong))
   const timing = s.timing
   if (isObj(timing)) {
     const t: Data = { ...timing }

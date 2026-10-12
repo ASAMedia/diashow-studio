@@ -16,6 +16,7 @@ import type {
   VideoFaces
 } from './types'
 import type { ExportJobInfo, ExportTask, NewExportJob, SegmentInput } from './exportQueue'
+import type { ThemeTrack } from './themeMusic'
 import type { ShareCommand, ShareFilesEvent, ShareStatus } from './share'
 import type { CleanupChoice, CleanupInventory, CleanupResult, DeleteExtras } from './cleanup'
 import type { BenchMedia, EncoderTest, SystemInfo } from './systemCheck'
@@ -37,6 +38,8 @@ export interface DiashowApi {
   importMusic(paths: string[]): Promise<MusicTrack[]>
   restoreMusic(tracks: MusicTrack[]): Promise<MusicTrack[]>
   onMusicUpdate(cb: (track: MusicTrack) => void): () => void
+  /** The bundled theme songs (src/shared/themeMusic.ts), ready to play; [] when there are none. */
+  themeSongs(): Promise<ThemeTrack[]>
   /** Peak values 0..1 for an audio lane. */
   waveform(path: string, buckets: number): Promise<number[]>
 

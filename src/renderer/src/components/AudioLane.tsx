@@ -1,8 +1,10 @@
-// The audio lane under the filmstrip: song waveforms and beats, video sound, and the music volume.
+// The audio lane under the filmstrip: song waveforms and beats (the show's own songs or its theme
+// song), video sound, and the music volume.
 import { useEffect, useMemo, useState } from 'react'
 import { buildAudioPlan, gainAt } from '@shared/audioPlan'
 import { musicBeatTimes, type Timeline } from '@shared/timeline'
 import { playerRef, useStore } from '../store'
+import { t } from '../i18n'
 import { timeToX, xToTime } from './stripScale'
 
 /** Peaks of a track at about 10 values per second, cached per file for the session. */
@@ -43,7 +45,8 @@ export function AudioLane({ tl, width }: { tl: Timeline; width: number }) {
   const H = 40
   const music = plan.clips.filter((c) => c.kind === 'music')
   const videos = plan.clips.filter((c) => c.kind === 'video')
-  const tracks = project.music.filter((m) => m.playback && m.status === 'ready').map((m) => ({ path: m.playback!, duration: m.duration }))
+  // the songs that play: the timeline's (its own, or the theme song)
+  const tracks = tl.music.filter((m) => m.playback && m.status === 'ready').map((m) => ({ path: m.playback!, duration: m.duration }))
   const waves = useWaveforms(tracks)
   const beats = useMemo(() => musicBeatTimes(project, tl.duration, tl), [project, tl])
   const maxGain = Math.max(0.01, ...music.map((c) => Math.max(...c.gain.map((g) => g.g))))
@@ -78,7 +81,7 @@ export function AudioLane({ tl, width }: { tl: Timeline; width: number }) {
       return `M${top.join(' L')} L${bottom.join(' L')} Z`
     })
   }, [music, waves, tl])
-  const titles = new Map(project.music.map((m) => [m.playback, m.title]))
+  const titles = new Map(tl.music.map((m) => [m.playback, tl.themeSong === m ? `${t('themeMusic')}: ${m.title}` : m.title]))
   // songs overlap in crossfades: a title ends where the next song begins
   const starts = music.map((c) => c.start).sort((a, b) => a - b)
   const nextStart = (start: number): number => {
@@ -101,7 +104,7 @@ export function AudioLane({ tl, width }: { tl: Timeline; width: number }) {
         const x1 = timeToX(tl, c.start + c.duration)
         return (
           <g key={c.id}>
-            <rect className={`music ${i % 2 ? 'alt' : ''}`} x={x0} y={2} width={Math.max(1, x1 - x0)} height={H - 6} rx={4} />
+            <rect className={`music ${i % 2 ? 'alt' : ''} ${tl.themeSong ? 'theme' : ''}`} x={x0} y={2} width={Math.max(1, x1 - x0)} height={H - 6} rx={4} />
             {wavePaths[i] && <path className="wave" d={wavePaths[i]} />}
             <text className="title" x={x0 + 6} y={H - 8}>
               {fitText(titles.get(c.src) ?? '', Math.min(x1, nextStart(c.start)) - x0 - 10)}

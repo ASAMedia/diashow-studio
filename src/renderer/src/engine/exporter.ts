@@ -10,6 +10,8 @@ import type { ExportJobInfo, ExportJobRequest, ExportTask, SegmentInput } from '
 import { buildTimeline, type Timeline } from '@shared/timeline'
 import { buildAudioPlan } from '@shared/audioPlan'
 import { buildChapters } from '@shared/chapters'
+import type { ThemeTrack } from '@shared/themeMusic'
+import { useStore } from '../store'
 import { Engine, loadFonts } from './engine'
 import { Compositor } from './gl'
 
@@ -108,12 +110,13 @@ class FrameRenderer {
   constructor(
     project: Project,
     private req: ExportRequest,
-    locale: string
+    locale: string,
+    themeTracks: readonly ThemeTrack[]
   ) {
     this.canvas.width = req.width
     this.canvas.height = req.height
     this.engine = new Engine(this.canvas, 'export')
-    this.tl = buildTimeline(project, locale)
+    this.tl = buildTimeline(project, locale, themeTracks)
     this.engine.setProject(project, this.tl)
     this.engine.resize(req.width, req.height)
     this.total = frameCount(this.tl.duration, req.fps)
@@ -238,10 +241,11 @@ export async function exportShow(
   req: ExportRequest,
   locale: string,
   onTick: (p: ExportTick) => void,
-  signal: AbortSignal
+  signal: AbortSignal,
+  themeTracks: readonly ThemeTrack[] = useStore.getState().themeTracks
 ): Promise<string> {
   await loadFonts()
-  const r = new FrameRenderer(project, req, locale)
+  const r = new FrameRenderer(project, req, locale, themeTracks)
   try {
     const audio = buildAudioPlan(project, r.tl)
     const config = await webCodecsConfig(req)
@@ -263,12 +267,19 @@ export async function exportShow(
 /**
  * Queues an export of a snapshot of the project; the audio plan and the chapter marks are built here
  * like the timeline. Chapters go into the MP4 when `chapters` is on and the show has at least two.
+ * The job keeps the theme song the show plays, so the worker builds the same timeline from it.
  */
-export function queueExport(project: Project, request: ExportJobRequest, name: string, chapters = true): Promise<ExportJobInfo> {
-  const tl = buildTimeline(project, request.locale)
+export function queueExport(
+  project: Project,
+  request: ExportJobRequest,
+  name: string,
+  chapters = true,
+  themeTracks: readonly ThemeTrack[] = useStore.getState().themeTracks
+): Promise<ExportJobInfo> {
+  const tl = buildTimeline(project, request.locale, themeTracks)
   const audio = buildAudioPlan(project, tl)
   const marks = chapters ? buildChapters(project, tl).filter((c) => c.start < audio.duration) : []
-  return window.api.queueAdd({ name, project, request, audio, ...(marks.length >= 2 ? { chapters: marks } : {}) })
+  return window.api.queueAdd({ name, project, request, audio, ...(marks.length >= 2 ? { chapters: marks } : {}), ...(tl.themeSong ? { themeSong: tl.themeSong } : {}) })
 }
 
 /** The hidden export window (#export-worker): takes jobs from the queue and renders their segments. */
@@ -292,7 +303,7 @@ async function renderTask(task: ExportTask): Promise<void> {
   // a resumed job keeps the input of its finished segments
   const config = !task.input || task.input === q.codec ? await webCodecsConfig(req) : null
   const input = task.input ?? chooseInput(req, config)
-  const r = new FrameRenderer(project, req, q.locale)
+  const r = new FrameRenderer(project, req, q.locale, task.themeSong ? [task.themeSong] : [])
   try {
     if (r.total !== task.totalFrames) throw new Error(`the show has ${r.total} frames, the export expects ${task.totalFrames}`)
     for (const k of task.segments) {

@@ -331,6 +331,13 @@ export interface ProjectSettings {
   maxVideoSeconds?: number
   /** Animation of title and chapter slides. */
   titleStyle?: TitleStyle
+  /**
+   * Play a bundled theme song while the show has no songs of its own (shared/themeMusic.ts). New
+   * shows have it on; missing (older projects) means off, so their sound stays as it was.
+   */
+  themeMusic?: boolean
+  /** Which theme song: 'auto' (or missing) follows the show's theme. */
+  themeSong?: ThemeId | 'auto'
 }
 
 export const DEFAULT_TEXT_STYLE: TextStyle = { font: 'theme', scale: 1, color: '', position: 'theme', uppercase: 'theme' }
@@ -488,6 +495,8 @@ export const DEFAULT_SETTINGS: ProjectSettings = {
   playLivePhotos: false,
   loop: false,
   showTitle: true,
+  themeMusic: true,
+  themeSong: 'auto',
   audio: {
     musicVolume: 0.8,
     videoSound: true,

@@ -33,7 +33,7 @@ export function TimingPanel() {
             <span>{t('fitToMusic')}</span>
           </label>
           <p className="hint" style={{ marginLeft: 22, marginTop: 0 }}>
-            {hasMusic ? t('fitToMusicHint') : t('fitToMusicNoMusic')}
+            {hasMusic ? t('fitToMusicHint') : tl.themeSong ? t('fitToMusicTheme') : t('fitToMusicNoMusic')}
           </p>
           <label className="check">
             <input type="radio" name="timing-mode" checked={st.timing.mode === 'custom'} onChange={() => setSettings({ timing: { mode: 'custom', customTotal: Math.round(tl.duration) || st.timing.customTotal } })} />
@@ -62,7 +62,7 @@ export function TimingPanel() {
         <Check checked={!!st.timing.beatSync} onChange={(v) => setSettings({ timing: { ...st.timing, beatSync: v } })}>
           {t('beatSync')}
         </Check>
-        {st.timing.beatSync && !project.music.some((m) => m.beats?.length) && <p className="hint">{t('beatSyncHint')}</p>}
+        {st.timing.beatSync && !tl.music.some((m) => m.beats?.length) && <p className="hint">{t('beatSyncHint')}</p>}
       </Section>
       <Section title={t('themeOptions')}>
         {meta.freeTransition ? (

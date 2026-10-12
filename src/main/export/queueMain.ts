@@ -35,7 +35,7 @@ export interface ExportQueueMain {
   forget(id: string): Promise<void>
 }
 
-export function registerExportQueue(cfg: { dir: string; ffmpegDir: string; encoders: () => Promise<EncoderInfo> }): ExportQueueMain {
+export function registerExportQueue(cfg: { dir: string; ffmpegDir: string; themeMusicDir?: string; encoders: () => Promise<EncoderInfo> }): ExportQueueMain {
   let queue: ExportQueue | null = null
   let worker: BrowserWindow | null = null
   let workerContents = -1
@@ -67,6 +67,7 @@ export function registerExportQueue(cfg: { dir: string; ffmpegDir: string; encod
   const ready = openExportQueue({
     dir: cfg.dir,
     ffmpegDir: cfg.ffmpegDir,
+    themeMusicDir: cfg.themeMusicDir,
     encoders: cfg.encoders,
     onChange: () => {
       sendUpdate()

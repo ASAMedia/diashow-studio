@@ -7,6 +7,7 @@
 // What it covers:
 // - FFmpeg (GPL): exact version, configuration, the BtbN release and the source of that version;
 // - Electron / Chromium; the fonts (SIL OFL); the face models (MediaPipe, dlib, face-api.js);
+// - the theme songs (resources/theme-music/theme-music.json, written by scripts/theme-music.mjs);
 // - every npm package in the app: the production dependencies (packed into the app) and the
 //   packages the source imports (bundled into main/renderer by Vite), with their dependencies.
 import { execFileSync } from 'node:child_process'
@@ -186,6 +187,34 @@ function wrap(text, width) {
   return lines
 }
 
+// ---------- theme songs
+const THEME_NAMES = {
+  kenburns: 'Ken Burns', origami: 'Origami', reflections: 'Reflections', panels: 'Sliding Panels', vintage: 'Vintage Prints',
+  classic: 'Classic', magazine: 'Magazine', retro: 'Retro Film', scrapbook: 'Scrapbook', snapshots: 'Snapshots', shatter: 'Shatter'
+}
+
+function themeMusicSection() {
+  const file = join(root, 'resources', 'theme-music', 'theme-music.json')
+  let songs = {}
+  try {
+    songs = readJson(file).songs ?? {}
+  } catch {
+    return ['No theme songs are bundled in this build.']
+  }
+  const lines = [
+    'Every theme has its own song, played while a slideshow has no music of its own. The songs are',
+    'free to use (CC0 / public domain), also in exported and shared videos. They are installed in',
+    'resources\\theme-music of the installation folder.',
+    ''
+  ]
+  for (const [theme, s] of Object.entries(songs)) {
+    lines.push(`${THEME_NAMES[theme] ?? theme}: "${s.title}"${s.artist ? ` by ${s.artist}` : ''}`, `  licence: ${s.licence}`, `  source: ${s.source}`)
+    if (s.placeholder) lines.push('  (a placeholder generated for development, no third-party content)')
+    lines.push('')
+  }
+  return lines
+}
+
 // ---------- assemble
 const packages = collectPackages()
 const fonts = packages.filter((p) => p.pkg.name.startsWith('@fontsource/'))
@@ -211,8 +240,9 @@ parts.push(
   '  3. Electron and Chromium',
   `  4. Fonts (${fontLicences})`,
   '  5. Face detection and recognition models',
-  `  6. npm packages (${npm.length})`,
-  '  7. Apache License 2.0'
+  '  6. Theme music',
+  `  7. npm packages (${npm.length})`,
+  '  8. Apache License 2.0'
 )
 
 section('1. Diashow Studio', [existsSync(join(root, 'LICENSE')) ? readFileSync(join(root, 'LICENSE'), 'utf8').replace(/\r\n/g, '\n').trim() : 'MIT'])
@@ -243,8 +273,9 @@ section('5. Face detection and recognition models', [
   '',
   'All models run offline on this computer; no picture leaves it.'
 ])
+section('6. Theme music', themeMusicSection())
 section(
-  `6. npm packages`,
+  `7. npm packages`,
   npm.flatMap(({ dir, pkg }) => {
     const files = licenceFiles(dir)
     const id = licenseId(pkg)
@@ -254,12 +285,12 @@ section(
     if (BUNDLED[pkg.name]) head.push('', ...wrap(BUNDLED[pkg.name], 78))
     head.push('')
     if (files.length) return [...head, ...files.flatMap((f) => [f.text, ''])]
-    if (/^Apache-2\.0$/.test(id)) return [...head, 'Licensed under the Apache License 2.0 (text in section 7).', '']
+    if (/^Apache-2\.0$/.test(id)) return [...head, 'Licensed under the Apache License 2.0 (text in section 8).', '']
     const who = author(pkg)
     return [...head, `${id} licence${who ? `, Copyright ${who}` : ''}. The package includes no licence file; see ${repo || `https://www.npmjs.com/package/${pkg.name}`}.`, '']
   })
 )
-section('7. Apache License 2.0', [apache || 'https://www.apache.org/licenses/LICENSE-2.0'])
+section('8. Apache License 2.0', [apache || 'https://www.apache.org/licenses/LICENSE-2.0'])
 
 const text = `${parts.join('\n').replace(/\n{3,}/g, '\n\n')}\n`
 mkdirSync(dirname(out), { recursive: true })

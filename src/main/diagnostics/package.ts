@@ -6,6 +6,7 @@
 import type { DiagnosticsFile, DiagnosticsInput } from '@shared/diagnostics'
 import { classifyError } from '@shared/friendlyError'
 import type { SystemInfo } from '@shared/systemCheck'
+import { effectiveMusic, themeSongId, type ThemeTrack } from '@shared/themeMusic'
 import type { Project } from '@shared/types'
 import { redact } from './redact'
 import { buildZip } from './zip'
@@ -22,6 +23,8 @@ export interface PackageSources {
   project: Project | null
   /** Sizes in bytes of the open project's original files (by media id), where known. */
   sizes?: Map<string, number>
+  /** The bundled theme songs (whether the open project plays one). */
+  themeTracks?: ThemeTrack[]
   /** All saved projects: slide counts only. */
   projects: { slides: number }[]
   /** Damaged / too-new project files in the projects folder. */
@@ -56,7 +59,7 @@ function sizeClass(width: number, height: number, kind: string): string {
 }
 
 /** Counts, formats and sizes of a project: nothing that names a pupil or a file. */
-export function projectSummary(p: Project, sizes?: Map<string, number>): Record<string, unknown> {
+export function projectSummary(p: Project, sizes?: Map<string, number>, themeTracks: ThemeTrack[] = []): Record<string, unknown> {
   const slides = { total: p.entries.length, photo: 0, video: 0, text: 0, excluded: 0, withTextBoxes: 0, withPixelation: 0 }
   for (const e of p.entries) {
     slides[e.type]++
@@ -96,7 +99,17 @@ export function projectSummary(p: Project, sizes?: Map<string, number>): Record<
       sized++
     }
   }
-  const music = { tracks: p.music.length, seconds: Math.round(p.music.reduce((s, t) => s + (Number.isFinite(t.duration) ? t.duration : 0), 0)), formats: {} as Record<string, number>, errors: 0 }
+  // which songs play: its own, the theme song (and which), or none (theme music off or not bundled)
+  const theme = p.settings ? effectiveMusic(p, themeTracks).theme : undefined
+  const music = {
+    tracks: p.music.length,
+    seconds: Math.round(p.music.reduce((s, t) => s + (Number.isFinite(t.duration) ? t.duration : 0), 0)),
+    formats: {} as Record<string, number>,
+    errors: 0,
+    plays: p.music.length ? 'own' : theme ? 'theme' : 'none',
+    themeMusic: p.settings && themeSongId(p.settings) ? (p.settings.themeSong ?? 'auto') : 'off',
+    ...(theme ? { themeSong: theme.theme } : {})
+  }
   for (const t of p.music) {
     count(music.formats, /\.([a-z0-9]{1,5})$/i.exec(t.path)?.[1]?.toLowerCase() ?? '?')
     if (t.status === 'error') music.errors++
@@ -191,7 +204,7 @@ export function packageFiles(src: PackageSources): PackageFile[] {
       name: 'project-summary.json',
       about: 'project',
       text: json({
-        openProject: src.project ? projectSummary(src.project, src.sizes) : null,
+        openProject: src.project ? projectSummary(src.project, src.sizes, src.themeTracks) : null,
         savedProjects: { count: src.projects.length, slides: src.projects.map((p) => p.slides) },
         damagedProjectFiles: src.damaged
       })

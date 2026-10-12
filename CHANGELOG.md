@@ -2,6 +2,29 @@
 
 All notable changes to Diashow Studio. Versions follow [Semantic Versioning](https://semver.org). The release workflow publishes the section of a version as its release notes.
 
+## [1.2.0] - 2026-10-12
+
+**Downloads**
+
+- `Diashow.Studio-Setup-1.2.0.exe`: installer (no admin rights needed); it updates an installed version and keeps your slideshows and settings.
+- `Diashow.Studio-1.2.0-portable.exe`: runs without installing, e.g. from a USB stick.
+- The installer is not code-signed. If Windows SmartScreen says "Windows protected your PC", choose "More info" and then "Run anyway".
+- `THIRD_PARTY_NOTICES.txt` lists the licences of everything bundled, including the theme music. The `ffmpeg-*` archives contain the source code of the bundled FFmpeg build and of every library compiled into it (GPL), listed in `ffmpeg-deps-sources-*.txt`.
+
+**New**
+
+- Theme music, like in Photos: every theme has its own song, and a new slideshow plays it right away. The songs are CC0 or public domain, so they are free to use, also in videos you share, without naming anyone.
+  - Ken Burns: "Falling stars" (Ondrosik). Origami: "Yippee !" (Loyalty Freak Music). Reflections: "Above the Earth" (TRG Banks). Sliding Panels: "Back In The 80s" (HoliznaCC0).
+  - Vintage Prints: "Journey with Russ" (TRG Banks). Classic: Haydn, "The Lark", Menuetto (Musopen String Quartet). Magazine: "Classic" (HoliznaCC0). Retro Film: "Roger Moore" (TRG Banks).
+  - Scrapbook: "Red Hair, Blue Sky" (Monplaisir). Snapshots: "Go to the Picnic" (Loyalty Freak Music). Shatter: "Drama" (HoliznaCC0).
+- Your own music replaces the theme song; remove it and the theme song comes back. The Music tab switches theme music off or picks another theme's song. Long slideshows loop the song with a crossfade instead of squeezing the photos into its length; beat sync and loudness levelling work as with your own music.
+- Existing slideshows stay as they were and can switch theme music on.
+
+**Fixes**
+
+- Saving settings or a slideshow no longer fails with "file is locked" when Windows or a virus scanner holds the file for a moment.
+- An export could be refused with "invalid gain point" when a music fade ended on a rounding error.
+
 ## [1.1.0] - 2026-10-12
 
 **Downloads**

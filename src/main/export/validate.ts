@@ -5,6 +5,8 @@ import { dirname, isAbsolute, resolve } from 'node:path'
 import type { ExportJobRequest, NewExportJob, SegmentInput } from '@shared/exportQueue'
 import type { AudioPlan, AudioPlanClip, ExportQuality, Project } from '@shared/types'
 import { MAX_CHAPTER_TITLE, oneLine, type Chapter } from '@shared/chapters'
+import { THEMES } from '@shared/themes'
+import type { ThemeTrack } from '@shared/themeMusic'
 
 /** Job ids, also the names of the job folders. */
 export const ID_RE = /^[0-9a-z]{6,12}-[0-9a-f]{8}$/
@@ -98,6 +100,33 @@ export function validateChapters(raw: unknown, duration: number): Chapter[] | un
   })
 }
 
+/** The theme song of a job: only what the worker's timeline needs (length, beats), as a clean copy. */
+export function validateThemeSong(raw: unknown): ThemeTrack | undefined {
+  if (raw === undefined) return undefined
+  if (!isObject(raw)) throw new Error('invalid theme song')
+  const { id, theme, path, title, duration, beats, bpm, loudness } = raw
+  if (typeof id !== 'string' || !id || id.length > 200) throw new Error('theme song: invalid id')
+  if (!THEMES.some((t) => t.id === theme)) throw new Error('theme song: unknown theme')
+  if (typeof path !== 'string' || !path || path.length > 2000 || path.includes('\0') || !isAbsolute(path)) throw new Error('theme song: invalid path')
+  if (!(finite(duration) && duration > 0)) throw new Error('theme song: invalid duration')
+  if (beats !== undefined && !(Array.isArray(beats) && beats.length <= 100_000 && beats.every(finite))) throw new Error('theme song: invalid beats')
+  const text = (v: unknown, max: number): string => (typeof v === 'string' ? v.slice(0, max) : '')
+  return {
+    id,
+    theme: theme as ThemeTrack['theme'],
+    path,
+    playback: path,
+    title: text(title, 300),
+    duration,
+    status: 'ready',
+    ...(beats ? { beats: beats as number[] } : {}),
+    ...(finite(bpm) ? { bpm } : {}),
+    ...(finite(loudness) ? { loudness } : {}),
+    licence: text(raw.licence, 100),
+    source: text(raw.source, 500)
+  }
+}
+
 /** Checks a job coming from the renderer; returns a clean copy. */
 export function validateNewJob(raw: unknown): NewExportJob {
   if (!isObject(raw)) throw new Error('invalid export job')
@@ -110,7 +139,8 @@ export function validateNewJob(raw: unknown): NewExportJob {
   const request = validateRequest(raw.request)
   const audio = validateAudio(raw.audio)
   const chapters = validateChapters(raw.chapters, audio.duration)
-  return { name, project: project as unknown as Project, request, audio, ...(chapters?.length ? { chapters } : {}) }
+  const themeSong = validateThemeSong(raw.themeSong)
+  return { name, project: project as unknown as Project, request, audio, ...(chapters?.length ? { chapters } : {}), ...(themeSong ? { themeSong } : {}) }
 }
 
 export function validateId(id: unknown): string {

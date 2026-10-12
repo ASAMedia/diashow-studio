@@ -5,10 +5,12 @@
 // cache's thumbnails, display images and proxies included, has such an extension), never documents,
 // keys or browser data, and never SVG (a document that can run scripts). Device paths (\\?\, \\.\),
 // alternate data streams (file.txt:x.jpg) and requests from web pages other than the app's are refused.
+// The bundled theme songs (resources/theme-music) are served wherever the app is installed, also when
+// that is a network share the user has not trusted.
 import { protocol } from 'electron'
 import { createReadStream } from 'node:fs'
 import { stat } from 'node:fs/promises'
-import { isAbsolute } from 'node:path'
+import { dirname, isAbsolute, resolve } from 'node:path'
 import { Readable } from 'node:stream'
 import type { ReadableStream as WebReadableStream } from 'node:stream/web'
 import { MEDIA_SCHEME, pathFromMediaUrl } from '@shared/api'
@@ -20,6 +22,18 @@ const SERVED_EXT = new Set([...IMAGE_EXT, ...VIDEO_EXT, ...AUDIO_EXT])
 let pathPolicy: (path: string) => boolean = () => true
 export function setMediaPathPolicy(allow: (path: string) => boolean): void {
   pathPolicy = allow
+}
+
+/** The folder of the bundled theme songs (src/main/themeMusic.ts), set by ipc.ts. */
+let themeMusicDir = ''
+export function setThemeMusicDir(dir: string): void {
+  themeMusicDir = dir
+}
+
+/** A file right in the theme-music folder (not in a folder below it, nor next to it). */
+export function inThemeMusicDir(path: string, dir = themeMusicDir): boolean {
+  if (!dir || typeof path !== 'string' || !isAbsolute(path)) return false
+  return resolve(dirname(path)).toLowerCase() === resolve(dir).toLowerCase()
 }
 
 /** May the renderer read this file through dsmedia://? (See the access limits above.) */
@@ -121,7 +135,7 @@ export async function handleMediaRequest(request: Request): Promise<Response> {
   } catch {
     return new Response('bad url', { status: 400 })
   }
-  if (!mediaPathAllowed(path) || !pathPolicy(path)) return new Response('not found', { status: 404 })
+  if (!mediaPathAllowed(path) || !(pathPolicy(path) || inThemeMusicDir(path))) return new Response('not found', { status: 404 })
   let size: number
   try {
     const st = await stat(path)

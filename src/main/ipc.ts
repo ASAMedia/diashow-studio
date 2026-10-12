@@ -26,7 +26,8 @@ import { registerProjectRepair } from './projectRepair'
 import { collectSystemInfo, gpuDevices } from './systemCheck'
 import { gpuOverride, runningGpuPreference } from './gpuChoice'
 import { uncHost, validHost } from '@shared/netPaths'
-import { setMediaPathPolicy } from './protocol'
+import { setMediaPathPolicy, setThemeMusicDir } from './protocol'
+import { loadThemeMusic, resolveThemeMusicDir } from './themeMusic'
 
 function broadcast(channel: string, payload: unknown): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -55,6 +56,10 @@ export function registerIpc(): void {
     appPath: app.getAppPath(),
     packaged: app.isPackaged
   })
+  // the bundled theme songs: dsmedia:// serves them wherever the app is installed (protocol.ts)
+  const themeMusicDir = resolveThemeMusicDir({ resourcesPath: process.resourcesPath, appPath: app.getAppPath(), packaged: app.isPackaged })
+  setThemeMusicDir(themeMusicDir)
+  const themeMusic = loadThemeMusic(themeMusicDir)
   // DIASHOW_DATA_DIR (used by the e2e tests) keeps cache and projects out of the user's folders
   const dataDir = process.env.DIASHOW_DATA_DIR
   const cacheDir = join(dataDir || app.getPath('userData'), 'cache')
@@ -115,6 +120,7 @@ export function registerIpc(): void {
   const exportQueue = registerExportQueue({
     dir: join(app.getPath('userData'), 'exports'),
     ffmpegDir,
+    themeMusicDir,
     encoders: () => service.ffmpeg.encoders()
   })
 
@@ -137,6 +143,7 @@ export function registerIpc(): void {
     await hostsLoaded
     return service.restoreMusic(tracks)
   })
+  ipcMain.handle('music:theme-songs', () => themeMusic)
   // the user agreed to open files on these network hosts (banner in the editor)
   ipcMain.handle('net:trust-hosts', async (_e, hosts: unknown) => {
     const list = Array.isArray(hosts) ? hosts.filter(validHost).map((h) => h.toLowerCase()) : []
@@ -168,6 +175,7 @@ export function registerIpc(): void {
   registerProjectRepair({ projects, onReport })
   registerDiagnostics({
     loadProject: (id) => projects.peek(id),
+    themeMusic: () => themeMusic,
     projectCounts: async () => (await projects.list()).map((p) => ({ slides: p.slideCount })),
     damaged: async () => (await projects.damaged()).map((d) => ({ reason: d.reason, bytes: d.bytes, backups: d.backups })),
     settings: () => appSettings.get(),

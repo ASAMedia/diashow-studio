@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { AspectRatio, EncoderInfo, ExportQuality, Project, VideoCodec } from '@shared/types'
-import { aspectValue, buildTimeline } from '@shared/timeline'
+import { aspectValue } from '@shared/timeline'
 import { buildChapters } from '@shared/chapters'
 import { queueExport } from '../engine/exporter'
 import { useStore } from '../store'
@@ -63,7 +63,7 @@ export function ExportDialog() {
   // chapter marks (title + chapter slides) in the MP4; offered from two chapters on
   const chapters = useMemo(() => {
     const snapshot: Project = aspectId === project.settings.aspect ? project : { ...project, settings: { ...project.settings, aspect: aspectId } }
-    return buildChapters(snapshot, snapshot === project ? timelineOf(project) : buildTimeline(snapshot, localeTag()))
+    return buildChapters(snapshot, timelineOf(snapshot))
   }, [project, aspectId])
   const [withChapters, setWithChapters] = useState(true)
   const job = useStore((s) => s.exportJobs.find((j) => j.id === jobId))

@@ -12,6 +12,7 @@ import { useStore } from '../store'
 import { useTimeline } from '../timeline'
 import { fmtTime, pick, t } from '../i18n'
 import { ThemeThumb } from './ThemesPanel'
+import { WizardThemeSong } from './ThemeMusic'
 import { Modal, useDialogTitleId } from './Modal'
 import './help.css'
 
@@ -176,7 +177,7 @@ function StepLook() {
             ))}
           </ul>
         ) : (
-          <p className="empty-note">{t('wizardNoMusic')}</p>
+          <WizardThemeSong />
         )}
       </div>
     </>
@@ -188,6 +189,11 @@ function StepFinish() {
   const tl = useTimeline()
   if (!project) return null
   const slides = tl?.slides.length ?? 0
+  const music = project.music.length
+    ? t('wizardSongs').replace('{n}', String(project.music.length))
+    : tl?.themeSong
+      ? t('wizardThemeSong').replace('{t}', tl.themeSong.title)
+      : t('wizardSilent')
   const finish = (patch: Parameters<ReturnType<typeof useStore.getState>['set']>[0]): void => {
     closeWizard()
     useStore.getState().set(patch)
@@ -210,7 +216,7 @@ function StepFinish() {
         {t('wizardSummary')
           .replace('{n}', String(slides))
           .replace('{theme}', pick(themeMeta(project.settings.theme).name))
-          .replace('{songs}', String(project.music.length))}
+          .replace('{music}', music)}
       </p>
     </>
   )

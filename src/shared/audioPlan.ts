@@ -1,8 +1,10 @@
 // Builds the audio mix for a timeline: the music playlist (repeated if needed, with
 // crossfades and fades) and the sound of video clips, with the music ducked while a
 // clip with sound plays. Preview (Web Audio) and export (FFmpeg mixer) both consume it.
+// The songs are the timeline's (its own, or the theme song, which loops: shared/themeMusic.ts).
 import type { AudioPlan, AudioPlanClip, GainPoint, MediaItem, Project, VideoEntry } from './types'
 import { playableTrack, speedHasSound, trackSpan, type Timeline, type TimelineSlide } from './timeline'
+import { placementAudio } from './themeMusic'
 
 /** Linear interpolation of gain points; clamps before the first and after the last point. */
 export function gainAt(points: GainPoint[], t: number): number {
@@ -92,18 +94,19 @@ export function duckPoints(intervals: DuckInterval[], level: number, fade: numbe
 function product(a: GainPoint[], b: GainPoint[], from: number, to: number): GainPoint[] {
   const times = new Set<number>([from, to])
   for (const p of [...a, ...b]) if (p.t > from && p.t < to) times.add(p.t)
-  return [...times].sort((x, y) => x - y).map((t) => ({ t, g: gainAt(a, t) * (b.length ? gainAt(b, t) : 1) }))
+  // interpolating down to 0 can round to -1e-16, which the export refuses as a gain
+  return [...times].sort((x, y) => x - y).map((t) => ({ t, g: Math.max(0, gainAt(a, t) * (b.length ? gainAt(b, t) : 1)) }))
 }
 
 export function buildAudioPlan(project: Project, tl: Timeline): AudioPlan {
-  const a = project.settings.audio
+  const a = placementAudio(project.settings.audio, !!tl.themeSong)
   const L = tl.duration
   const clips: AudioPlanClip[] = []
   const duck = duckPoints(duckIntervals(project, tl), a.duckLevel, a.duckFade)
 
   // Each stretch of music plays its own songs from its first slide on; the songs of the stretch
   // before fade out over the crossfade time while the next ones fade in.
-  const songs = new Map(project.music.map((m) => [m.id, m]))
+  const songs = new Map(tl.music.map((m) => [m.id, m]))
   const xf = a.crossfade
   let n = 0
   tl.musicSegments.forEach((seg, k) => {

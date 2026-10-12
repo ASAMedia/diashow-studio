@@ -67,9 +67,11 @@ export function Viewer() {
     }
   }, [])
 
+  // the theme songs arrive once at start (store.themeTracks): the timeline is rebuilt with them
+  const themeTracks = useStore((s) => s.themeTracks)
   useEffect(() => {
     playerRef.current?.setProject(project, timelineOf(project))
-  }, [project])
+  }, [project, themeTracks])
 
   // The fullscreen player has its own engine; keep the preview quiet meanwhile.
   useEffect(() => {

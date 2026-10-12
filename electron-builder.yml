@@ -20,6 +20,10 @@ extraResources:
   - from: vendor/ffmpeg
     to: ffmpeg
     filter: ['LICENSE.txt', 'build.json']
+  # the theme songs (scripts/theme-music.mjs), found by src/main/themeMusic.ts in resources/theme-music
+  - from: resources/theme-music
+    to: theme-music
+    filter: ['*.m4a', 'theme-music.json']
 # next to the exe: the app's licence and every third-party licence (scripts/third-party-notices.mjs)
 extraFiles:
   - from: vendor/THIRD_PARTY_NOTICES.txt

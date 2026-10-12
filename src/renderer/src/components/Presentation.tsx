@@ -2,7 +2,7 @@
 // itself plays in a separate window (#present). Both talk over a BroadcastChannel.
 import { useEffect, useRef, useState } from 'react'
 import { MonitorX, Pause, Play, SkipBack, SkipForward } from 'lucide-react'
-import { aspectValue, buildTimeline, slideIndexAt } from '@shared/timeline'
+import { aspectValue, slideIndexAt } from '@shared/timeline'
 import type { MediaItem, Project } from '@shared/types'
 import { Player } from '../engine/player'
 import { useStore } from '../store'
@@ -46,7 +46,7 @@ export function PresentView() {
       const m = ev.data
       if (m.type === 'project') {
         aspect = aspectValue(m.project.settings.aspect)
-        player.setProject(m.project, buildTimeline(m.project, localeTag()))
+        player.setProject(m.project, timelineOf(m.project))
         fit()
         if (!started) {
           started = true

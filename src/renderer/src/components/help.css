@@ -117,6 +117,12 @@
 .wizard-music li { background: var(--bg-2); border: 1px solid var(--line-soft); border-radius: 6px; padding: 5px 9px; display: flex; gap: 8px; align-items: center; font-size: 12.5px; min-width: 0; }
 .wizard-music li .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wizard-music li .d { color: var(--text-3); font-variant-numeric: tabular-nums; }
+/* the theme song, the default music of a new show */
+.wizard-theme-song { margin-top: 8px; background: var(--bg-2); border: 1px solid var(--line-soft); border-radius: 6px; padding: 2px 4px 2px 9px; display: flex; gap: 8px; align-items: center; font-size: 12.5px; min-width: 0; }
+.wizard-theme-song .t { flex: 1; min-width: 0; }
+.wizard-theme-song .t > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wizard-theme-song .listen { border: none; background: none; color: var(--text-3); width: 26px; height: 26px; padding: 0; border-radius: 5px; display: grid; place-items: center; flex: none; }
+.wizard-theme-song .listen:hover { color: var(--text); background: var(--btn-hover); }
 .wizard-finish { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .wizard-finish button {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; height: 120px; text-align: center;

@@ -49,7 +49,12 @@ if (route === '#export-worker') {
 if (route !== '#export-worker') {
   // light or dark before the first paint (Settings → Appearance)
   watchAppearance()
-  void window.api.locale().then((l) => {
+  // the theme songs before the first render: every timeline of the window plays them
+  const themeSongs = window.api.themeSongs().then(
+    (themeTracks) => useStore.setState({ themeTracks }),
+    () => {}
+  )
+  void Promise.all([window.api.locale(), themeSongs]).then(([l]) => {
     setLocale(l)
     document.documentElement.lang = l.slice(0, 2)
     // the presentation window loads the same page with #present

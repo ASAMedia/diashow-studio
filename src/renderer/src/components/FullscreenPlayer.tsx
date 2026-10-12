@@ -10,6 +10,7 @@ import { keyForFocus } from '../keys'
 export function FullscreenPlayer() {
   const project = useStore((s) => s.project)
   const kiosk = useStore((s) => s.kiosk)
+  const themeTracks = useStore((s) => s.themeTracks)
   const set = useStore((s) => s.set)
   const rootRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -80,7 +81,7 @@ export function FullscreenPlayer() {
     playerRef.current.setProject(project, timelineOf(project))
     // kiosk mode loops whatever the project says
     if (kiosk) playerRef.current.loop = true
-  }, [project, kiosk])
+  }, [project, kiosk, themeTracks])
 
   useEffect(() => {
     const key = (e: KeyboardEvent): void => {
