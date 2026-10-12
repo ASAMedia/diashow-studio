@@ -24,6 +24,7 @@ All notable changes to Diashow Studio. Versions follow [Semantic Versioning](htt
 
 **Fixes**
 
+- Vintage Prints: each new print now falls onto the pile from above, turning and landing with its shadow. The prints below stay where they landed and get darker and softer as they are covered. Before, the new print zoomed in and faded, and the old one grew bigger in the background.
 - Faces in a photo were not searched again when a slideshow was closed during its face search.
 - Photos without camera details no longer show their colour profile's maker as the device ("Unknown (saws)").
 - The theme previews show "TITLE" and "Sunday" in the English UI.

@@ -173,17 +173,18 @@ interface PrintGeo {
   rot: number
 }
 
+/** Where a slide's print lies on the table: a little off centre and turned, the same every time. */
 function printGeo(ctx: Ctx, sl: TimelineSlide, aspect: number): PrintGeo {
   const { W, H } = ctx
   const r = rng(`print${sl.id}`)
   const inner = containBox(aspect, { x: 0, y: 0, w: W * 0.6, h: H * 0.7 })
   const border = Math.min(inner.w, inner.h) * 0.045
   return {
-    cx: W / 2 + (r() - 0.5) * W * 0.07,
-    cy: H / 2 + (r() - 0.5) * H * 0.05,
+    cx: W / 2 + (r() - 0.5) * W * 0.09,
+    cy: H / 2 + (r() - 0.5) * H * 0.06,
     w: inner.w + border * 2,
     h: inner.h + border * 2,
-    rot: (r() - 0.5) * 0.13
+    rot: (r() - 0.5) * 0.16
   }
 }
 
@@ -192,43 +193,83 @@ function drawPrint(
   g: PrintGeo,
   tex: Tex | null,
   aspect: number,
-  o: { scale: number; opacity: number; blur: number; shade: number; rot?: number; dx?: number; dy?: number }
+  o: { scale: number; blur: number; shade: number; rot?: number; dx?: number; dy?: number; lift?: number; opacity?: number }
 ): void {
+  const { H } = ctx
   const w = g.w * o.scale
   const h = g.h * o.scale
   const x = g.cx - w / 2 + (o.dx ?? 0)
   const y = g.cy - h / 2 + (o.dy ?? 0)
   const rot = o.rot ?? g.rot
-  if (o.blur < 1) ctx.c.shadow({ x: x + ctx.H * 0.01, y: y + ctx.H * 0.016, w, h, blur: ctx.H * 0.03, opacity: 0.55 * o.opacity, rotZ: rot })
-  ctx.c.quad({ x, y, w, h, rotZ: rot, color: [0.95, 0.94, 0.9, 1], opacity: o.opacity, shade: o.shade })
+  const opacity = o.opacity ?? 1
+  // the higher above the table, the further away, softer and fainter the shadow
+  const lift = o.lift ?? 0
+  ctx.c.shadow({
+    x: x + H * (0.01 + 0.05 * lift),
+    y: y + H * (0.016 + 0.07 * lift),
+    w,
+    h,
+    blur: H * 0.03 * (1 + 2.5 * lift),
+    opacity: 0.55 * (1 - 0.6 * lift) * (1 - o.shade) * opacity,
+    rotZ: rot
+  })
+  ctx.c.quad({ x, y, w, h, rotZ: rot, color: [0.95, 0.94, 0.9, 1], opacity, shade: o.shade })
   const b = Math.min(w, h) * 0.045 / 1.09
   const inner = { x: x + b, y: y + b, w: w - 2 * b, h: h - 2 * b }
-  drawMedia(ctx, tex, aspect, inner, { rotZ: rot, pivot: [0.5, 0.5], opacity: o.opacity, blur: o.blur, shade: o.shade })
+  drawMedia(ctx, tex, aspect, inner, { rotZ: rot, pivot: [0.5, 0.5], opacity, blur: o.blur, shade: o.shade })
 }
 
-const PILE = { scale: 1.3, blur: 3.6, shade: 0.5, opacity: 0.6 }
+/**
+ * A print under `depth` newer ones (continuous: 0 on top, 1 right below it): it stays where it
+ * landed and only gets darker, softer and a little smaller with depth (further from the camera), so
+ * the pile never jumps. The sixth one fades into the table.
+ */
+function pileLook(depth: number): { scale: number; blur: number; shade: number; opacity: number } {
+  return {
+    scale: 1 - 0.012 * depth,
+    blur: depth <= 1 ? 3 * depth : 3 + 0.4 * (depth - 1),
+    shade: depth <= 1 ? 0.38 * depth : Math.min(0.92, 0.38 + 0.12 * (depth - 1)),
+    opacity: clamp01(6 - depth)
+  }
+}
+
+/** How far the top print has sunk into the pile while the next one falls: it darkens as it gets covered. */
+const sink = (p: number): number => smooth(clamp01((p - 0.3) / 0.7))
+
+/** The incoming print falls onto the pile: lifted (0..1), how far it still has to travel, landed. */
+const LAND = 0.78
+function fall(q: number): { lift: number; travel: number } {
+  if (q < LAND) {
+    const t = q / LAND
+    // like gravity: slow at first, fastest at the landing; the last 4 % of the way it slides
+    return { lift: 1 - t * t, travel: 1 - (1 - 0.04) * t * t }
+  }
+  return { lift: 0, travel: 0.04 * (1 - easeOut((q - LAND) / (1 - LAND))) }
+}
 
 export const vintage: Theme = {
   mode: 'scene',
   clear: [0.09, 0.08, 0.07],
   background(ctx, states) {
-    const anchor = states.length ? states[states.length - 1].slide.index : 0
+    const newest = states.length ? states[states.length - 1] : null
+    const anchor = newest ? newest.slide.index : 0
+    // one more print lands on the pile while the newest slide comes in
+    const landing = newest ? sink(newest.inP) : 1
     const active = new Set(states.map((s) => s.slide.index))
     for (let age = 6; age >= 1; age--) {
       const sl = ctx.tl.slides[anchor - age]
       if (!sl || active.has(sl.index) || sl.media.length === 0) continue
+      const look = pileLook(age - 1 + landing)
+      if (look.opacity <= 0.001) continue
       const m = sl.media[0]
       const tex = ctx.image(m)
       const a = aspectOf(m, tex)
-      const r = rng(`pile${sl.id}`)
-      const g = printGeo(ctx, sl, a)
-      const fadeAge = 1 - (age - 1) / 6
-      drawPrint(ctx, g, tex, a, { ...PILE, opacity: PILE.opacity * fadeAge, dx: (r() - 0.5) * ctx.W * 0.25 * (age - 1) / 5, dy: (r() - 0.5) * ctx.H * 0.2 * (age - 1) / 5 })
+      drawPrint(ctx, printGeo(ctx, sl, a), tex, a, look)
     }
   },
   drawSlide(ctx, s) {
     const sl = s.slide
-    const { H } = ctx
+    const { W } = ctx
     if (sl.kind === 'title' || sl.kind === 'text') {
       drawCenteredText(ctx, s, 'serif', '#f6f1e6', { opacity: smooth(s.inP) * (1 - smooth(s.outP)), uppercase: true, tracking: 0.12, shadow: true })
       return
@@ -237,16 +278,24 @@ export const vintage: Theme = {
     const tex = slideTexture(ctx, s, 0)
     const a = aspectOf(m, tex)
     const g = printGeo(ctx, sl, a)
-    const qi = easeOut(s.inP)
-    const qo = smooth(s.outP)
-    const scale = lerp(1.32, 1, qi) * lerp(1, 1.035, s.p)
+    // from just above the picture's top edge (lifted, so 1.25× its size), a little to one side and
+    // turned, onto the pile
+    const r = rng(`drop${sl.id}`)
+    const from = { dx: (r() - 0.5) * W * 0.5, dy: -(g.cy + g.h * 0.63), rot: (r() < 0.5 ? -1 : 1) * (0.18 + r() * 0.14) }
+    const { lift, travel } = fall(s.inP)
+    // the camera drifts a little closer while the print lies on top
+    const drift = lerp(1, 1.025, s.p)
+    // once the next print falls, this one becomes the top of the pile
+    const sunk = sink(s.outP)
+    const pile = pileLook(sunk)
     drawPrint(ctx, g, tex, a, {
-      scale: lerp(scale, PILE.scale, qo),
-      opacity: lerp(smooth(s.inP * 1.6), PILE.opacity, qo),
-      blur: PILE.blur * qo,
-      shade: PILE.shade * qo,
-      rot: g.rot + (1 - qi) * 0.06,
-      dy: (1 - qi) * -H * 0.04
+      scale: lerp(drift * (1 + 0.25 * lift), pile.scale, sunk),
+      blur: pile.blur,
+      shade: pile.shade,
+      rot: g.rot + from.rot * travel,
+      dx: from.dx * travel,
+      dy: from.dy * travel,
+      lift
     })
     if (sl.titleOverlay) drawCenteredText(ctx, s, 'serif', '#f6f1e6', { opacity: titleOpacity(s.local), uppercase: true, tracking: 0.12, shadow: true, overlay: true })
   },
