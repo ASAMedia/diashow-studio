@@ -49,6 +49,12 @@ jobs:
           mkdir -p release
           curl -fsSL --retry 3 -o "release/ffmpeg-source-$commit.tar.gz" "https://github.com/FFmpeg/FFmpeg/archive/$commit.tar.gz"
           curl -fsSL --retry 3 -o "release/ffmpeg-build-scripts-$tag.tar.gz" "https://github.com/BtbN/FFmpeg-Builds/archive/refs/tags/$tag.tar.gz"
+      # the source of every library compiled into that FFmpeg build, at the revision BtbN built, with a
+      # manifest: release/ffmpeg-deps-sources-<tag>.tar (.partN.tar above 1.9 GB) and .txt. About 1 GB
+      # and 5-10 minutes; it fails when any source can't be fetched
+      - name: Library sources (GPL) of the bundled FFmpeg build
+        timeout-minutes: 30
+        run: node scripts/gpl-sources.mjs release --work "$RUNNER_TEMP/gpl-sources"
       - name: Create the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
