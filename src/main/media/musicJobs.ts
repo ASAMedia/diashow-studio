@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { MusicTrack } from '@shared/types'
+import { rebaseBundledPath } from '../themeMusic'
 import { analyzeMusic, computeWaveform, transcodeMusic } from './audio'
 import { detectBeatsInFile } from './beats'
 import { MUSIC_META, persistTrack, readJson } from './cacheMeta'
@@ -136,6 +137,9 @@ export async function restoreMusic(ctx: ServiceContext, list: MusicTrack[]): Pro
       const current = ctx.tracks.get(t.id)
       if (current && current.status !== 'error') return { ...current }
       const allow = ctx.config.allowPath ?? (() => true)
+      // a song from the bundled music library: in today's theme-music folder (portable exe, another PC)
+      const bundled = rebaseBundledPath(t.path, ctx.config.themeMusicDir ?? '', allow)
+      if (bundled !== t.path) t = { ...t, path: bundled, ...(t.playback === t.path ? { playback: bundled } : {}) }
       if (!allow(t.path)) return { ...t, status: 'error' as const, error: 'network-blocked' }
       if (t.playback && t.playback !== t.path && !allow(t.playback)) t = { ...t, playback: undefined, status: 'pending' as const }
       if (!existsSync(t.path)) return { ...t, status: 'error' as const, error: 'missing' }

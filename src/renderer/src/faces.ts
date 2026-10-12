@@ -241,12 +241,15 @@ export function startFaceQueue(): () => void {
     const started = epoch
     const cancelled = (): boolean => stopped || started !== epoch || useStore.getState().project?.id !== projectId
     try {
+      // a cancelled run (show closed or switched) leaves the item to be tried again, as for videos
       if (work === 'detect') {
         const { faces, desc } = await analyzePicture(m.display!)
         if (!cancelled()) await saveFaces(m.id, faces, desc)
+        else tried.delete(m.id)
       } else if (work === 'describe') {
         const desc = await describeFaces(m.display!, m.faces!)
         if (!cancelled() && desc) await saveFaces(m.id, m.faces!, desc)
+        else if (cancelled()) tried.delete(m.id)
       } else {
         const samples = await analyzeVideo(m, cancelled)
         if (samples && !cancelled()) {

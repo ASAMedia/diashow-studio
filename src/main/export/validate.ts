@@ -6,7 +6,7 @@ import type { ExportJobRequest, NewExportJob, SegmentInput } from '@shared/expor
 import type { AudioPlan, AudioPlanClip, ExportQuality, Project } from '@shared/types'
 import { MAX_CHAPTER_TITLE, oneLine, type Chapter } from '@shared/chapters'
 import { THEMES } from '@shared/themes'
-import type { ThemeTrack } from '@shared/themeMusic'
+import { isMood, isSongId, type ThemeTrack } from '@shared/themeMusic'
 
 /** Job ids, also the names of the job folders. */
 export const ID_RE = /^[0-9a-z]{6,12}-[0-9a-f]{8}$/
@@ -100,20 +100,34 @@ export function validateChapters(raw: unknown, duration: number): Chapter[] | un
   })
 }
 
-/** The theme song of a job: only what the worker's timeline needs (length, beats), as a clean copy. */
+const isTheme = (v: unknown): v is ThemeTrack['themes'][number] => THEMES.some((t) => t.id === v)
+
+/**
+ * The theme song of a job: only what the worker's timeline needs (song, themes, length, beats), as a
+ * clean copy. A job queued by 1.2 names it by its theme, which is also the id of that theme's song.
+ */
 export function validateThemeSong(raw: unknown): ThemeTrack | undefined {
   if (raw === undefined) return undefined
   if (!isObject(raw)) throw new Error('invalid theme song')
-  const { id, theme, path, title, duration, beats, bpm, loudness } = raw
+  const { id, path, title, duration, beats, bpm, loudness } = raw
+  const legacy = raw.song === undefined
   if (typeof id !== 'string' || !id || id.length > 200) throw new Error('theme song: invalid id')
-  if (!THEMES.some((t) => t.id === theme)) throw new Error('theme song: unknown theme')
+  if (legacy && !isTheme(raw.theme)) throw new Error('theme song: unknown theme')
+  const song = legacy ? raw.theme : raw.song
+  const themes = legacy ? [raw.theme] : raw.themes
+  const moods = raw.moods ?? []
+  if (!isSongId(song)) throw new Error('theme song: invalid song id')
+  if (!(Array.isArray(themes) && themes.length <= THEMES.length && themes.every(isTheme))) throw new Error('theme song: unknown theme')
+  if (!(Array.isArray(moods) && moods.length <= 20 && moods.every(isMood))) throw new Error('theme song: unknown mood')
   if (typeof path !== 'string' || !path || path.length > 2000 || path.includes('\0') || !isAbsolute(path)) throw new Error('theme song: invalid path')
   if (!(finite(duration) && duration > 0)) throw new Error('theme song: invalid duration')
   if (beats !== undefined && !(Array.isArray(beats) && beats.length <= 100_000 && beats.every(finite))) throw new Error('theme song: invalid beats')
   const text = (v: unknown, max: number): string => (typeof v === 'string' ? v.slice(0, max) : '')
   return {
     id,
-    theme: theme as ThemeTrack['theme'],
+    song,
+    themes: [...themes],
+    moods: [...moods],
     path,
     playback: path,
     title: text(title, 300),

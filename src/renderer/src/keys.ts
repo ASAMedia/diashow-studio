@@ -9,6 +9,8 @@ const ACTIVATE = 'button, a[href], summary, [role="button"], [role="tab"], [role
 export function keyForFocus(e: KeyboardEvent): boolean {
   const el = e.target instanceof Element ? e.target : null
   if (!el) return false
+  // a slider keeps its arrow keys, but has no undo of its own: Ctrl+Z / Ctrl+Y stay the app's
+  if (el.matches('input[type="range"]') && e.ctrlKey && !e.altKey && /^[zy]$/i.test(e.key)) return false
   if (el.closest(TEXT)) return true
   if (e.key === ' ' || e.key === 'Enter' || e.code === 'Space') {
     const control = el.closest<HTMLElement>(ACTIVATE)

@@ -1,7 +1,7 @@
 // Real-time playback for the editor and the fullscreen player. The clock drives the
 // render loop; videos and audio elements follow it, gains come from the audio plan.
 import { mediaUrl } from '@shared/api'
-import type { AudioPlan, AudioPlanClip, Project } from '@shared/types'
+import type { AudioPlan, AudioPlanClip, MediaAdjust, Project } from '@shared/types'
 import { buildTimeline, slideIndexAt, type Timeline } from '@shared/timeline'
 import { buildAudioPlan, gainAt } from '@shared/audioPlan'
 import { Engine, loadFonts } from './engine'
@@ -26,6 +26,7 @@ export class Player {
   private raf = 0
   private lastPausedRender = 0
   private dirty = true
+  private draftEnds = false
   private actx = new AudioContext({ latencyHint: 'playback' })
   private master = this.actx.createGain()
   private nodes = new Map<string, AudioNodeSet>()
@@ -50,6 +51,10 @@ export class Player {
   setProject(project: Project, tl?: Timeline): void {
     this.tl = tl ?? buildTimeline(project, this.locale)
     this.engine.setProject(project, this.tl)
+    if (this.draftEnds) {
+      this.engine.adjustDraft = null
+      this.draftEnds = false
+    }
     this.plan = buildAudioPlan(project, this.tl)
     this.loop = project.settings.loop
     const keys = new Set(this.plan.clips.map((c) => this.key(c)))
@@ -67,6 +72,18 @@ export class Player {
 
   setVolume(v: number): void {
     this.master.gain.value = v
+  }
+
+  /** Live preview of light and colour sliders while they are dragged (null: back to what is stored). */
+  setAdjustDraft(draft: { ids: ReadonlySet<string>; patch: MediaAdjust } | null): void {
+    this.engine.adjustDraft = draft
+    this.draftEnds = false
+    this.dirty = true
+  }
+
+  /** The draft was stored: it goes with the next project (until then it shows the same values). */
+  endAdjustDraft(): void {
+    this.draftEnds = !!this.engine.adjustDraft
   }
 
   resize(w: number, h: number): void {

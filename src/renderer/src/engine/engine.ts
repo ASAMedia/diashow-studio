@@ -1,5 +1,6 @@
-import type { LookId, MediaEdit, MediaItem, Project, TextEntry, ThemeId } from '@shared/types'
+import type { LookId, MediaAdjust, MediaEdit, MediaItem, Project, TextEntry, ThemeId } from '@shared/types'
 import { editedSize, editToSource, isEdited, sourceAspect, type Affine } from '@shared/mediaEdit'
+import { adjustParams, type AdjustParams } from '@shared/adjust'
 import { buildTimeline, clipSeconds, slidesAt, titleStyleOf, type Timeline, type TimelineSlide } from '@shared/timeline'
 import { Compositor, NEUTRAL_LOOK, NEUTRAL_POST, type Look, type PostParams, type Tex } from './gl'
 import { ExportVideoStore, ImageStore, TextStore, VideoPool } from './media'
@@ -44,6 +45,10 @@ export class Engine {
   private privacy = new PrivacyIndex()
   /** Texture maps of edited media, per edit (edits are replaced, never changed in place). */
   private views = new WeakMap<MediaEdit, Affine>()
+  /** Shader numbers of adjusted media, per adjustment (replaced, never changed in place). */
+  private adjusts = new WeakMap<MediaAdjust, AdjustParams | null>()
+  /** Preview only: sliders being dragged (not stored yet) set these values on these media. */
+  adjustDraft: { ids: ReadonlySet<string>; patch: MediaAdjust } | null = null
 
   constructor(
     canvas: HTMLCanvasElement | OffscreenCanvas,
@@ -76,14 +81,27 @@ export class Engine {
   /**
    * The picture as edited (rotate, straighten, crop): the same texture, sampled through an affine
    * map and with the edited size, so every theme crops and fits it like any other picture. The
-   * pixelated areas stay on the texture (original coordinates) and so on the same faces.
+   * pixelated areas stay on the texture (original coordinates) and so on the same faces. Light and
+   * colour ride along as uniforms of the same draw (shared/adjust.ts).
    */
   private edited(m: MediaItem | undefined, tex: Tex | null): Tex | null {
-    if (!tex || !m || !isEdited(m.edit)) return tex
+    if (!tex || !m) return tex
+    const adjust = this.adjustOf(m)
+    if (!isEdited(m.edit)) return adjust ? { ...tex, adjust } : tex
     let map = this.views.get(m.edit)
     if (!map) this.views.set(m.edit, (map = editToSource(m.edit, sourceAspect(m))))
     const size = editedSize(tex.w, tex.h, m.edit)
-    return { ...tex, w: size.w, h: size.h, view: { m: map, tw: tex.w, th: tex.h } }
+    return { ...tex, w: size.w, h: size.h, view: { m: map, tw: tex.w, th: tex.h }, ...(adjust ? { adjust } : {}) }
+  }
+
+  /** Light and colour of a media item for the shader (a slider's draft first), undefined when there is none. */
+  private adjustOf(m: MediaItem): AdjustParams | undefined {
+    const stored = m.edit?.adjust
+    if (this.adjustDraft?.ids.has(m.id)) return adjustParams({ ...stored, ...this.adjustDraft.patch }) ?? undefined
+    if (!stored) return undefined
+    let p = this.adjusts.get(stored)
+    if (p === undefined) this.adjusts.set(stored, (p = adjustParams(stored)))
+    return p ?? undefined
   }
 
   resize(W: number, H: number): void {

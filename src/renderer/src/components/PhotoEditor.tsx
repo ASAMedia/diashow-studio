@@ -1,26 +1,32 @@
-// The edit view over the preview, like the one of macOS Photos: turn a photo (or video) by quarters,
-// straighten it (it zooms so no corner stays empty) and crop it, freely or to an aspect preset.
+// The edit view over the preview, like the one of macOS Photos, with two tools:
+// - Crop: turn a photo (or video) by quarters, straighten it (it zooms so no corner stays empty) and
+//   crop it, freely or to an aspect preset.
+// - Light and colour: brightness, contrast, warmth and saturation sliders (AdjustSliders), on the
+//   picture as it is cropped.
 // - Every finished gesture is one undo step (photoEdit.ts); a drag only shows a draft until it ends.
-// - Cancel puts back the edit the view opened with; Reset goes back to the original picture.
+// - Cancel puts back the edit the view opened with; Reset sets the current tool's part back to the original.
 // - Keys: Esc cancels, Enter applies, the arrow keys move the crop frame (Shift: its size), Ctrl+R turns
-//   left, Ctrl+Z / Ctrl+Y undo and redo. The bar's controls are labelled buttons, a slider and a select.
+//   left, Ctrl+Z / Ctrl+Y undo and redo. The bar's controls are labelled buttons, sliders and a select.
 import { useEffect, useId, useRef, useState } from 'react'
 import { RectangleHorizontal, RectangleVertical, RotateCcw, RotateCw } from 'lucide-react'
 import { mediaUrl } from '@shared/api'
-import type { MediaEdit, Rect } from '@shared/types'
+import type { MediaAdjust, MediaEdit, Rect } from '@shared/types'
 import {
-  CROP_PRESETS, cropToRatio, dragCrop, editKey, MAX_STRAIGHTEN, presetOf, presetRatio, rotateEdit, sourceAspect, type CropHandle, type CropPreset
+  CROP_PRESETS, cropToRatio, dragCrop, editedAspect, editKey, isEdited, MAX_STRAIGHTEN, presetOf, presetRatio, rotateEdit, sourceAspect, type CropHandle, type CropPreset
 } from '@shared/mediaEdit'
+import { isAdjusted } from '@shared/adjust'
 import { useStore } from '../store'
 import { closePhotoEdit, setMediaEdit } from '../photoEdit'
 import { localeTag, t } from '../i18n'
 import { EditedPicture } from './EditedPicture'
+import { AdjustSliders } from './AdjustSliders'
 import { stillTime } from './PrivacyEditor'
+import { Seg } from './ui'
 import './photoEdit.css'
 
 const NONE: MediaEdit = { rotate: 0, straighten: 0 }
 const FULL: Rect = { x: 0, y: 0, w: 1, h: 1 }
-/** Room for the tool bar under the picture (it wraps to two rows in a narrow preview). */
+/** Least room for the tool bar under the picture (it wraps to two rows in a narrow preview; more when taller). */
 const BAR = 104
 const HANDLES: CropHandle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
 
@@ -72,6 +78,19 @@ export function PhotoEditor({ w, h }: { w: number; h: number }) {
   const [guides, setGuides] = useState(false)
   const sliding = useRef(false)
   const cropRef = useRef<HTMLDivElement>(null)
+  const [tool, setTool] = useState<'crop' | 'adjust'>('crop')
+  // a light and colour slider being dragged (stored when it is let go)
+  const [adjDraft, setAdjDraft] = useState<MediaAdjust | null>(null)
+  // the bar's height: the picture fits above it
+  const barRef = useRef<HTMLDivElement>(null)
+  const [barH, setBarH] = useState(BAR)
+  useEffect(() => {
+    const el = barRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setBarH(Math.max(BAR, el.offsetHeight + 18)))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [!!media]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const aspect = sourceAspect(media)
   const edit: MediaEdit = draft ?? media?.edit ?? NONE
@@ -101,12 +120,16 @@ export function PhotoEditor({ w, h }: { w: number; h: number }) {
 
   const commit = (next: MediaEdit, key?: string): void => setMediaEdit(media.id, next, key)
   const crop = edit.crop ?? FULL
+  const adjusting = tool === 'adjust'
+  const shown: MediaEdit = adjDraft ? { ...edit, adjust: { ...edit.adjust, ...adjDraft } } : edit
 
-  // the frame, fitted above the bar
+  // the frame, fitted above the bar: the straightened picture with the crop on top, or (light and
+  // colour) the picture as it is cropped
+  const shape = adjusting ? editedAspect(aspect, edit) : fa
   const maxW = Math.max(40, w - 32)
-  const maxH = Math.max(40, h - BAR - 16)
-  const fw = Math.min(maxW, maxH * fa)
-  const fh = fw / fa
+  const maxH = Math.max(40, h - barH - 16)
+  const fw = Math.min(maxW, maxH * shape)
+  const fh = fw / shape
   const frame = { x: (w - fw) / 2, y: 8 + (maxH - fh) / 2, w: fw, h: fh }
   const cropBox = { left: frame.x + crop.x * fw, top: frame.y + crop.y * fh, width: crop.w * fw, height: crop.h * fh }
 
@@ -187,12 +210,13 @@ export function PhotoEditor({ w, h }: { w: number; h: number }) {
   const isVideo = media.kind === 'video'
   return (
     <div className="photo-edit" role="dialog" aria-modal="false" aria-label={isVideo ? t('peTitleVideo') : t('peTitle')} onKeyDown={onKey}>
-      <EditedPicture src={src} edit={edit} aspect={aspect} box={frame} crop={false} className="pe-picture" />
-      <div className="pe-dim" style={{ left: frame.x, top: frame.y, width: fw, height: fh }} aria-hidden>
+      <EditedPicture src={src} edit={shown} aspect={aspect} box={frame} crop={adjusting} className="pe-picture" />
+      <div className="pe-dim" hidden={adjusting} style={{ left: frame.x, top: frame.y, width: fw, height: fh }} aria-hidden>
         <div className="pe-hole" style={{ left: crop.x * fw, top: crop.y * fh, width: crop.w * fw, height: crop.h * fh }} />
       </div>
       <div
         ref={cropRef}
+        hidden={adjusting}
         className={`pe-crop ${guides ? 'guides' : ''}`}
         style={cropBox}
         tabIndex={0}
@@ -211,8 +235,19 @@ export function PhotoEditor({ w, h }: { w: number; h: number }) {
       <p id={hintId} className="sr-only">
         {t('peHint')}
       </p>
-      <div className="pe-bar">
-        <div className="pe-group" role="group" aria-label={t('peRotate')}>
+      <div className="pe-bar" ref={barRef}>
+        <Seg
+          className="pe-tools"
+          label={t('peModes')}
+          value={tool}
+          options={[
+            { id: 'crop', label: t('peModeCrop') },
+            { id: 'adjust', label: t('adjTitle') }
+          ]}
+          onChange={setTool}
+        />
+        {adjusting && <AdjustSliders media={[media]} onDraft={setAdjDraft} className="pe-adjust" />}
+        <div className="pe-group" hidden={adjusting} role="group" aria-label={t('peRotate')}>
           <button className="btn small icon" title={`${t('peRotateLeft')} (${t('kbdRotate')})`} aria-label={t('peRotateLeft')} aria-keyshortcuts="Control+R" onClick={() => rotate(-1)}>
             <RotateCcw size={15} />
           </button>
@@ -220,7 +255,7 @@ export function PhotoEditor({ w, h }: { w: number; h: number }) {
             <RotateCw size={15} />
           </button>
         </div>
-        <div className="pe-group pe-straighten">
+        <div className="pe-group pe-straighten" hidden={adjusting}>
           <label htmlFor={straightenId}>{t('peStraighten')}</label>
           <input
             id={straightenId}
@@ -261,7 +296,7 @@ export function PhotoEditor({ w, h }: { w: number; h: number }) {
             {degrees}
           </span>
         </div>
-        <div className="pe-group">
+        <div className="pe-group" hidden={adjusting}>
           <label htmlFor={aspectId}>{t('peAspect')}</label>
           <select id={aspectId} value={ratio.preset} onChange={(e) => choose(e.target.value as CropPreset, ratio.swap)}>
             {CROP_PRESETS.map((p) => (
@@ -284,10 +319,12 @@ export function PhotoEditor({ w, h }: { w: number; h: number }) {
         <div className="pe-group pe-actions">
           <button
             className="btn small ghost"
-            disabled={!editKey(edit)}
+            disabled={adjusting ? !isAdjusted(edit.adjust) : !isEdited(edit)}
             onClick={() => {
+              // each tool resets its own part: the turn, tilt and crop, or the light and colour
+              if (adjusting) return commit({ ...edit, adjust: undefined })
               setRatio({ preset: 'free', swap: false })
-              commit(NONE)
+              commit({ ...NONE, adjust: edit.adjust })
             }}
           >
             {t('peReset')}

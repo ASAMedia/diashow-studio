@@ -6,8 +6,9 @@
 import type { DiagnosticsFile, DiagnosticsInput } from '@shared/diagnostics'
 import { classifyError } from '@shared/friendlyError'
 import type { SystemInfo } from '@shared/systemCheck'
-import { effectiveMusic, themeSongId, type ThemeTrack } from '@shared/themeMusic'
+import { effectiveMusic, themeMusicOn, type ThemeTrack } from '@shared/themeMusic'
 import type { Project } from '@shared/types'
+import { bundledFileName } from '../themeMusic'
 import { redact } from './redact'
 import { buildZip } from './zip'
 
@@ -107,8 +108,10 @@ export function projectSummary(p: Project, sizes?: Map<string, number>, themeTra
     formats: {} as Record<string, number>,
     errors: 0,
     plays: p.music.length ? 'own' : theme ? 'theme' : 'none',
-    themeMusic: p.settings && themeSongId(p.settings) ? (p.settings.themeSong ?? 'auto') : 'off',
-    ...(theme ? { themeSong: theme.theme } : {})
+    themeMusic: p.settings && themeMusicOn(p.settings) ? (p.settings.themeSong ?? 'auto') : 'off',
+    ...(theme ? { themeSong: theme.song } : {}),
+    // own songs taken from the bundled music library
+    fromLibrary: p.music.filter((t) => bundledFileName(t.path)).length
   }
   for (const t of p.music) {
     count(music.formats, /\.([a-z0-9]{1,5})$/i.exec(t.path)?.[1]?.toLowerCase() ?? '?')

@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect } from 'react'
-import { Clock, Film, FolderPlus, ImagePlus, Plus, Type, Volume2, VolumeX, Trash2, Split, Merge, Move, EyeOff, Crop as CropIcon, RotateCcw } from 'lucide-react'
+import { Clock, Film, FolderPlus, ImagePlus, Plus, Type, Volume2, VolumeX, Trash2, Split, Merge, Move, EyeOff, Crop as CropIcon, RotateCcw, SlidersHorizontal } from 'lucide-react'
+import { isChanged } from '@shared/mediaEdit'
 import type { Timeline, TimelineSlide } from '@shared/timeline'
 import { prioritize } from '../priority'
 import type { VideoEntry } from '@shared/types'
@@ -419,6 +420,11 @@ function SlideCard(props: {
           {m0?.live && <span className="badge">LIVE</span>}
         </span>
         <span>
+          {s.media.some((m) => isChanged(m.edit)) && (
+            <span className="badge edited-mark" title={t('peEditedMark')}>
+              <SlidersHorizontal size={10} />
+            </span>
+          )}
           {s.customDuration && (
             <span className="badge">
               <Clock size={10} />

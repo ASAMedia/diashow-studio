@@ -62,19 +62,19 @@ test('theme music: plays by default, follows the theme, gives way to own music, 
 
     // ---- the Music tab: another theme's song, and listening to it
     await page.getByRole('tab', { name: /^(Musik|Music)$/ }).click()
-    const pick = page.getByTestId('theme-song')
-    await expect(pick).toHaveValue('auto')
+    const row = (song: string) => page.locator(`[data-testid="song-row"][data-song="${song}"]`)
+    await expect(row('auto').getByRole('radio')).toBeChecked()
     await expect(page.getByTestId('theme-music-on')).toBeChecked()
-    await pick.selectOption('vintage')
+    await row('vintage').getByRole('radio').check()
     await expect.poll(async () => (await settings(page)).themeSong).toBe('vintage')
     await expect.poll(() => musicFiles(page)).toEqual(['vintage.m4a'])
     await expect(page.getByTestId('theme-credit')).toContainText(/frei nutzbar \(CC0 \/ gemeinfrei\)|free to use \(CC0 \/ public domain\)/)
-    const listen = page.getByTestId('theme-listen')
+    const listen = row('vintage').getByTestId('song-listen')
     await listen.click()
-    await expect(listen).toHaveText(/Stopp|Stop/)
+    await expect(listen).toHaveAccessibleName(/^(Stopp|Stop): /)
     await listen.click()
-    await expect(listen).toHaveText(/Anhören|Listen/)
-    await pick.selectOption('auto')
+    await expect(listen).toHaveAccessibleName(/^(Anhören|Listen): /)
+    await row('auto').getByRole('radio').check()
     await expect.poll(() => musicFiles(page)).toEqual(['origami.m4a'])
 
     // ---- music of its own replaces the theme song; removing it brings the theme song back
@@ -127,7 +127,7 @@ test('theme music: plays by default, follows the theme, gives way to own music, 
     // the job keeps the theme song with its path, so it can continue after a restart
     const jobFile = join(await app.evaluate(({ app }) => app.getPath('userData')), 'exports', jobId, 'job.json')
     const job = JSON.parse(readFileSync(jobFile, 'utf8'))
-    expect(job.themeSong).toMatchObject({ theme: 'kenburns' })
+    expect(job.themeSong).toMatchObject({ song: 'kenburns', themes: ['kenburns'] })
     expect(existsSync(job.themeSong.path)).toBe(true)
     await expect
       .poll(() => page.evaluate((id) => (window as any).__diashow.store.getState().exportJobs.find((j: any) => j.id === id)?.state, jobId), { timeout: 600_000, intervals: [1000] })

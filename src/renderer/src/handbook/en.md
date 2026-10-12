@@ -39,18 +39,29 @@ The editor has three areas: the **preview** in the middle, the tabs **Themes**, 
 
 > Tip: [[Space]] plays the preview, [[←]] and [[→]] step from slide to slide.
 
-### Rotate, straighten and crop photos
+### Editing photos
 
-Crooked or sideways phone photos are fixed as in Photos on the Mac: select the photo and click **Edit** under **Picture** in the **Slide** tab (or **Edit** in the slide's menu). The preview then shows:
+Crooked or sideways phone photos are fixed as in Photos on the Mac: select the photo and click **Edit** under **Picture** in the **Slide** tab (or **Edit** in the slide's menu). The preview then shows the **Crop** tool:
 
 - **Rotate:** the arrows turn the photo 90° to the left or right. [[Ctrl+R]] turns every selected photo to the left, also on several slides.
 - **Straighten:** the slider tilts the picture by up to 45°. It is zoomed just enough that no empty corners show.
 - **Crop:** drag the corners and edges of the frame, or move the frame. **Aspect** keeps a shape (Free, Original, 1:1, 4:3, 3:2, 16:9, 9:16); the button next to it swaps portrait and landscape.
-- **Reset** brings back the original, **Cancel** ([[Esc]]) drops the changes, **Done** ([[Enter]]) keeps them. Every step can be undone with [[Ctrl+Z]].
+- **Reset** takes back the turn, the tilt and the crop, **Cancel** ([[Esc]]) drops the changes, **Done** ([[Enter]]) keeps them. Every step can be undone with [[Ctrl+Z]].
 
-The edited photo is used everywhere: on every slide, in the Ken Burns motion, in the filmstrip, in the review and in the export. You can still move the framing on the slide as before. Pixelated faces stay on the same faces. Videos are rotated, straightened and cropped the same way.
+The second tool, **Light and colour**, helps with dark phone photos, orange indoor light and flat pictures. The same sliders are also in the **Slide** tab under **Picture**:
 
-> With the keyboard: the arrow keys move the frame; with [[Shift]] they change its size.
+- **Brightness** lifts the shadows and midtones without clipping the bright parts.
+- **Contrast** moves shadows and highlights further apart or closer together.
+- **Warmth** makes the picture warmer or cooler without changing its brightness. Against orange indoor light, drag it to the left.
+- **Saturation** makes the colours stronger or paler.
+
+Each slider goes from −100 to +100; the arrow next to it or a double-click sets it back to 0. With several slides selected, a slider sets its value on all their photos and videos. The slideshow's look comes on top afterwards, so it changes every photo the same way. Edited slides show a small slider mark in the filmstrip.
+
+![Light and colour in the edit view](edit.jpg)
+
+The edited photo is used everywhere: on every slide, in the Ken Burns motion, in the filmstrip, in the review and in the export. You can still move the framing on the slide as before. Pixelated faces stay on the same faces, and stay pixelated however much you brighten the picture. Videos are edited the same way.
+
+> With the keyboard: the arrow keys move the frame; with [[Shift]] they change its size. The light and colour sliders move with the arrow keys, in steps of 10 with [[Shift]].
 
 ## Themes and looks {#themes}
 
@@ -66,7 +77,7 @@ The **theme** decides how slides look and change. There are 11 themes, e.g. **Ke
 
 In the **Music** tab you add your own music files (MP3, M4A, WAV, FLAC and more). Several songs form a playlist that you reorder by dragging.
 
-Each theme has its own music (CC0, free to use, also in shared videos); your own music replaces it.
+Each theme has its own music (CC0 or public domain, free to use, also in shared videos); your own music replaces it. Under **Theme music** you choose another song of the theme, of another theme or from the **music library**, which you filter by **mood** (e.g. **Festive** for a graduation or **Christmas**). **Add to my music** puts the chosen song into the playlist, where you can trim it or give it to a chapter.
 
 ![Music with waveform and beat markers](music.jpg)
 
@@ -137,11 +148,15 @@ When the slideshow is finished, you remove what the app keeps for it in one plac
 - **Cache** (thumbnails, video copies, sound): made again when needed.
 - **Older versions** and **export jobs** (snapshots in the queue).
 
+![Cleaning up after a project](cleanup.jpg)
+
 Your own photos, videos and music and the exported videos are not touched. Deleting is final, not to the recycle bin.
 
 **Deletion date:** in the same dialog (or after the export) you decide when to clean up: in 1, 3, 6 or 12 months, or on a date. When the day has come, the home screen shows a hint on the slideshow and **Deletion date reached: clean up?**; **Remind me in a month** postpones it.
 
 > When you **delete** a slideshow, the app asks whether its cache, the uploaded photos and the export jobs go with it.
+
+A [ZIP archive of the slideshow](#projects) is a copy that the clean-up cannot reach; delete it yourself.
 
 ## Showing it {#present}
 
@@ -154,6 +169,18 @@ Your own photos, videos and music and the exported videos are not touched. Delet
 - **Restore an older version…** (**⋯** menu): before each save the previous version is kept (the last 20).
 - **Pack project…** copies the project with all photos, videos and music into a folder, e.g. for a USB stick. On the other PC, open the `.dshow` file.
 - If originals were moved (another folder, a new drive letter), **Search a folder…** in the yellow banner finds them again.
+
+### Archiving a slideshow as ZIP
+
+When the slideshow is finished, **⋯ → Archive as ZIP…** (or the archive symbol on the slideshow on the home screen) puts everything into one ZIP file, e.g. for the school archive or a USB stick: the project, the original photos and videos, your music or the theme song, the finished exports if you like, and short instructions (`README.txt`).
+
+![Archiving a slideshow as ZIP](archive.jpg)
+
+- The dialog lists each part with its size, the total and the free space at the target. Photos left out of the show only go in if you tick them; **Leave out face data** is on by default, and what is pixelated stays pixelated.
+- Missing originals are named and skipped. After writing, the app reads the archive back and checks it.
+- **Opening it:** extract the ZIP (right-click → **Extract All…**) and double-click the `.dshow` file or choose **Open project…**. The app does not open the slideshow straight from the ZIP.
+
+> The archive holds photos of the pupils. It is a copy that the [clean-up](#cleanup) cannot reach: keep it safe and delete it yourself by the deletion date; the instructions in the archive name it too.
 
 ### Repairing a damaged project
 

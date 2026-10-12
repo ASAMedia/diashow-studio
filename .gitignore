@@ -4,6 +4,7 @@ out-*/
 dist/
 vendor/
 test-media/
+samples/media/
 test-results/
 playwright-report/
 *.log

@@ -2,6 +2,33 @@
 
 All notable changes to Diashow Studio. Versions follow [Semantic Versioning](https://semver.org). The release workflow publishes the section of a version as its release notes.
 
+## [1.3.0] - 2026-10-13
+
+**Downloads**
+
+- `Diashow.Studio-Setup-1.3.0.exe`: installer (no admin rights needed); it updates an installed version and keeps your slideshows and settings.
+- `Diashow.Studio-1.3.0-portable.exe`: runs without installing, e.g. from a USB stick.
+- The installer is not code-signed. If Windows SmartScreen says "Windows protected your PC", choose "More info" and then "Run anyway".
+- `THIRD_PARTY_NOTICES.txt` lists the licences of everything bundled, including all songs. The `ffmpeg-*` archives contain the source code of the bundled FFmpeg build and of every library compiled into it (GPL), listed in `ffmpeg-deps-sources-*.txt`.
+
+**New**
+
+- Light and colour per photo and video: brightness, contrast, warmth and saturation in the edit view (**Light and colour**) and in the Slide tab, also for several slides at once. Live preview, one undo step per drag; edited slides get a mark in the filmstrip. Pixelated faces stay pixelated, however bright you make the picture.
+- More music: every theme now has three songs, and a music library adds songs by mood, among them two festive pieces for graduations (Handel, Sousa) and two Christmas songs. In all there are 38 songs, all CC0 or public domain, at most 2:30 each.
+  - The Music tab has a song chooser: the theme's songs first, then the other themes' and the library, filtered by mood, each with a listen button.
+  - "Add to my music" puts a bundled song into the playlist like a song of your own.
+- Archive as ZIP: a finished slideshow in one file for the school archive or a USB stick. It holds the project, the original photos and videos, the music, exports if wanted, and a read-me with the deletion date. Face data is left out unless you include it, and the archive is checked after writing; archives over 4 GB work too (ZIP64).
+- A project double-clicked inside a ZIP file asks you to extract the ZIP first instead of opening without its photos.
+- Ctrl+Z / Ctrl+Y also work while a slider has the focus.
+- New pictures in the handbook and on the website, made from free sample photos of a class trip (CC0 / public domain, Wikimedia Commons), and a 74-second demo video on the website made with Diashow Studio.
+
+**Fixes**
+
+- Faces in a photo were not searched again when a slideshow was closed during its face search.
+- Photos without camera details no longer show their colour profile's maker as the device ("Unknown (saws)").
+- The theme previews show "TITLE" and "Sunday" in the English UI.
+- The hint in the pixelation editor is no longer cut off in small windows.
+
 ## [1.2.0] - 2026-10-12
 
 **Downloads**

@@ -305,7 +305,7 @@ export function PrivacyEditor({ entryId, w, h }: { entryId: string; w: number; h
       )}
       {draft && <div className="privacy-face draft" style={at(draft)} />}
       <div className="kb-bar">
-        <span className="hint privacy-hint" style={{ margin: 0, flex: 1 }}>
+        <span className="hint privacy-hint" style={{ margin: 0, flex: 1 }} title={note || hint}>
           {note || hint}
           {isVideo && !note ? ` ${t('privacyVideoFollow')}` : ''}
           {analysing ? ` ${t('videoAnalyzing')}` : ''}

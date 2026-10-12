@@ -142,14 +142,23 @@ describe('project validation', () => {
     expect(validateProject(p).project.settings).toMatchObject({ themeMusic: true, themeSong: 'auto' })
     p.settings = { ...p.settings, themeMusic: false, themeSong: 'vintage' }
     expect(validateProject(p).project.settings).toMatchObject({ themeMusic: false, themeSong: 'vintage' })
+    // song ids of the music library, also ones this version doesn't know (they play the theme's own song)
+    for (const themeSong of ['kenburns-2', 'festive-1', 'christmas-12']) {
+      p.settings = { ...p.settings, themeSong }
+      const { project, report } = validateProject(p)
+      expect(report.changes).toEqual([])
+      expect(project.settings.themeSong).toBe(themeSong)
+    }
     // wrong values: off, and the theme's own song
     const s = p.settings as unknown as Record<string, unknown>
-    s.themeMusic = 'yes'
-    s.themeSong = 'hologram'
-    const bad = validateProject(p)
-    expect(codes(bad.report)).toEqual({ settings: 2 })
-    expect(bad.project.settings.themeMusic).toBeUndefined()
-    expect(bad.project.settings.themeSong).toBeUndefined()
+    for (const wrong of ['..\\x', 'Festive 1', '', 42, ['kenburns']]) {
+      s.themeMusic = 'yes'
+      s.themeSong = wrong
+      const bad = validateProject(p)
+      expect(codes(bad.report)).toEqual({ settings: 2 })
+      expect(bad.project.settings.themeMusic).toBeUndefined()
+      expect(bad.project.settings.themeSong).toBeUndefined()
+    }
     // a file from before theme music: the fields stay missing (= off), so the show stays silent
     delete s.themeMusic
     delete s.themeSong

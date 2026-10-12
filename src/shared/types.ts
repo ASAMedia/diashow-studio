@@ -68,8 +68,8 @@ export interface MediaItem {
   /** Videos: bits per second of the original file (size / duration); a re-encode has fewer. */
   bitrate?: number
   /**
-   * Rotation, straightening and crop set by the user (shared/mediaEdit.ts); applies wherever the
-   * picture appears. Face data and pixelated areas stay in coordinates of the original picture.
+   * Rotation, straightening, crop and light/colour set by the user (shared/mediaEdit.ts, adjust.ts);
+   * applies wherever the picture appears. Face data and pixelated areas stay in coordinates of the original.
    */
   edit?: MediaEdit
 }
@@ -82,6 +82,16 @@ export interface MediaEdit {
   straighten: number
   /** The part of the straightened picture that is kept (normalised); all of it when undefined. */
   crop?: Rect
+  /** Light and colour (shared/adjust.ts), applied before the show's colour look. Older versions ignore it. */
+  adjust?: MediaAdjust
+}
+
+/** Brightness, contrast, warmth and saturation of a photo or video, each -100..100; missing or 0 = as shot. */
+export interface MediaAdjust {
+  brightness?: number
+  contrast?: number
+  warmth?: number
+  saturation?: number
 }
 
 /** Faces in one sampled frame of a video. */
@@ -336,9 +346,15 @@ export interface ProjectSettings {
    * shows have it on; missing (older projects) means off, so their sound stays as it was.
    */
   themeMusic?: boolean
-  /** Which theme song: 'auto' (or missing) follows the show's theme. */
-  themeSong?: ThemeId | 'auto'
+  /**
+   * Which bundled song: 'auto' (or missing) is the first song of the show's theme, otherwise a song
+   * id (the first song of every theme has the theme's id; shared/themeMusic.ts chosenSong).
+   */
+  themeSong?: 'auto' | ThemeId | SongId
 }
+
+/** The id of a bundled song (resources/theme-music/theme-music.json). */
+export type SongId = string
 
 export const DEFAULT_TEXT_STYLE: TextStyle = { font: 'theme', scale: 1, color: '', position: 'theme', uppercase: 'theme' }
 

@@ -1,5 +1,6 @@
 // GLSL sources of the compositor (gl.ts): textured quads, full-screen passes for transitions and
 // colour looks, and the I420 packing of exported frames.
+import { ADJUST_GLSL } from '@shared/adjust'
 
 export const QUAD_VS = `#version 300 es
 in vec2 a_pos;
@@ -50,8 +51,11 @@ uniform vec4 u_lk2;  // tint, fade, mono, vignette
 uniform int u_privN;       // areas to pixelate (texture uv, x/y/w/h)
 uniform vec4 u_priv[32];
 uniform vec2 u_texSize;
+uniform int u_adjust;      // light and colour of the picture (shared/adjust.ts): q, m, saturation; warmth
+uniform vec4 u_adj;
+uniform vec3 u_warm;
 out vec4 outColor;
-
+${ADJUST_GLSL}
 // Coarse blocks inside an ellipse: about 8 across, square in pixels, averaged from a mip level.
 bool privacy(inout vec2 uv, out float lod) {
   lod = 0.0;
@@ -118,6 +122,8 @@ void main() {
     float lod;
     if (u_privN > 0 && privacy(uv, lod)) c = textureLod(u_tex, uv, lod + u_blur);
     else c = u_blur > 0.0 ? texture(u_tex, uv, u_blur) : texture(u_tex, uv);
+    // the picture's own adjustment, before the look; per pixel, so a pixelated block stays one colour
+    if (u_adjust == 1) c.rgb = adjustColor(c.rgb, u_adj, u_warm);
     c *= u_color;
     if (u_look == 1) c.rgb = look(c.rgb, v_uv);
   }

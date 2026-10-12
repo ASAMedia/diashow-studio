@@ -1,5 +1,6 @@
 // Minimal WebGL2 compositor: textured quads in a perspective space whose z=0 plane maps
 // 1:1 to output pixels, plus full-screen passes for transitions and colour looks.
+import type { AdjustParams } from '@shared/adjust'
 import { FULL_VS, POST_FS, QUAD_FS, QUAD_VS, TRANSITION_FS, transitionFs, YUV_FS } from './shaders'
 
 export interface Tex {
@@ -12,6 +13,8 @@ export interface Tex {
    * the texture (affine, shared/mediaEdit.ts), w/h are then the edited size and tw/th the texture's.
    */
   view?: { m: readonly [number, number, number, number, number, number]; tw: number; th: number }
+  /** Light and colour of the photo or video (shared/adjust.ts), applied wherever it is drawn. */
+  adjust?: AdjustParams
 }
 
 export interface UvRect {
@@ -324,6 +327,12 @@ export class Compositor {
     }
     gl.uniform4f(this.u(p, 'u_lk1'), lk.saturation, lk.contrast, lk.brightness, lk.warmth)
     gl.uniform4f(this.u(p, 'u_lk2'), lk.tint, lk.fade, lk.mono, lk.vignette)
+    const adj = tex?.adjust
+    gl.uniform1i(this.u(p, 'u_adjust'), adj ? 1 : 0)
+    if (adj) {
+      gl.uniform4f(this.u(p, 'u_adj'), adj.q, adj.m, adj.sat, 0)
+      gl.uniform3f(this.u(p, 'u_warm'), adj.warm[0], adj.warm[1], adj.warm[2])
+    }
     gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_2D, (tex ?? this.white).tex)
     gl.uniform1i(this.u(p, 'u_tex'), 0)

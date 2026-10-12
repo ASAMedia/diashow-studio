@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src https://api.github.com; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'; connect-src https://api.github.com; base-uri 'none'; form-action 'none'">
 <title>Diashow Studio – Diashows wie auf dem Mac, für Windows</title>
 <meta name="description" content="Fotos, Videos und Musik werden zur Diashow, gespeichert als MP4-Video. Kostenlos, ohne Konto, offline und Open Source – gemacht für die Schule.">
 <link rel="canonical" href="https://asamedia.github.io/diashow-studio/">
@@ -68,6 +68,19 @@
       </div>
       <figure class="shot">
         <img src="img/de/editor.jpg" width="1100" height="688" alt="Der Editor von Diashow Studio: in der Mitte die Vorschau, rechts die Themen, unten der Filmstreifen mit den Folien und der Musik">
+      </figure>
+    </div>
+  </section>
+
+  <section class="demo" aria-labelledby="demo-title">
+    <div class="wrap">
+      <h2 id="demo-title">So sieht eine fertige Diashow aus</h2>
+      <figure class="video">
+        <video controls preload="none" poster="media/demo.jpg" width="1280" height="720" aria-describedby="demo-caption">
+          <source src="media/demo.mp4" type="video/mp4">
+          <a href="media/demo.mp4">Beispielvideo herunterladen (MP4)</a>
+        </video>
+        <figcaption id="demo-caption">Dieses Beispielvideo wurde mit Diashow Studio aus freien Fotos erstellt: Thema Ken Burns mit seiner Themenmusik, Kapitel aus Ordnernamen, verpixelte Gesichter und ein Abspann. <a href="https://github.com/ASAMedia/diashow-studio/blob/main/samples/SOURCES.md">Quellen und Lizenzen der Fotos</a></figcaption>
       </figure>
     </div>
   </section>

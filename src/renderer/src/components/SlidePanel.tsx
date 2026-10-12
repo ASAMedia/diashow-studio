@@ -10,7 +10,7 @@ import { useStore } from '../store'
 import { timelineOf } from '../timeline'
 import { fmtTime, localeTag, t } from '../i18n'
 import { Check, Field, Section, Slider, TITLE_STYLES } from './ui'
-import { BatchPanel, EditSection, FreeTextSection, PrivacySection, SpeedSelect } from './SlideTools'
+import { BatchAdjust, BatchPanel, EditSection, FreeTextSection, PrivacySection, SpeedSelect } from './SlideTools'
 import { MediaThumb } from './EditedPicture'
 import { openPhotoEdit } from '../photoEdit'
 import { TrimStrip } from './TrimStrip'
@@ -317,6 +317,9 @@ export function SlidePanel() {
           <button className="btn small" onClick={() => useStore.getState().splitSlide(ids)}>
             {t('split')}
           </button>
+        </Section>
+        <Section title={t('adjTitle')}>
+          <BatchAdjust />
         </Section>
         {slide && <GroupControl slide={slide} />}
         {slide && <LayoutPicker slide={slide} />}

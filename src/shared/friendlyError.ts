@@ -6,6 +6,7 @@
 export type ErrorKind =
   | 'ffmpegMissing'
   | 'diskFull'
+  | 'fileTooLarge'
   | 'outOfMemory'
   | 'fileLocked'
   | 'fileMissing'
@@ -17,6 +18,7 @@ export type ErrorKind =
   | 'noNetwork'
   | 'projectDamaged'
   | 'projectTooNew'
+  | 'openedFromZip'
 
 /** Where the error happened; decides between kinds a message alone leaves open (EACCES on a port or a file). */
 export type ErrorContext = 'import' | 'music' | 'export' | 'share' | 'project' | 'save'
@@ -24,6 +26,8 @@ export type ErrorContext = 'import' | 'music' | 'export' | 'share' | 'project' |
 /** Markers the main process puts into project format errors (an Error's own fields don't survive IPC). */
 export const PROJECT_DAMAGED = 'project-damaged'
 export const PROJECT_TOO_NEW = 'project-too-new'
+/** A .dshow opened from inside a ZIP archive (only that file was extracted, to a temp folder). */
+export const OPENED_FROM_ZIP = 'opened-from-zip'
 
 /** The message of anything thrown, without Electron's "Error invoking remote method 'x': Error:" prefix. */
 export function errorMessage(err: unknown): string {
@@ -33,10 +37,13 @@ export function errorMessage(err: unknown): string {
 }
 
 const RULES: { kind: ErrorKind; re: RegExp; only?: ErrorContext[] }[] = [
+  { kind: 'openedFromZip', re: new RegExp(OPENED_FROM_ZIP) },
   { kind: 'projectTooNew', re: new RegExp(`${PROJECT_TOO_NEW}|unsupported project version|newer version of Diashow`, 'i') },
   { kind: 'projectDamaged', re: new RegExp(`${PROJECT_DAMAGED}|not a Diashow Studio project|backup is damaged`, 'i') },
   { kind: 'ffmpegMissing', re: /spawn\s+\S*ff(mpeg|probe)(\.exe)?\s+ENOENT|ff(mpeg|probe)(\.exe)?\W+(not found|missing)|FFmpeg (is )?missing/i },
   { kind: 'diskFull', re: /ENOSPC|no space left|not enough space|disk (is )?full|\b507\b|Datenträger ist voll/i },
+  // a file over 4 GB on a FAT32 drive (many USB sticks), e.g. a large ZIP archive
+  { kind: 'fileTooLarge', re: /EFBIG|file too large|FILE_TOO_LARGE|larger than the drive allows/i },
   { kind: 'outOfMemory', re: /ENOMEM|out of memory|Cannot allocate memory|Array buffer allocation failed|allocation failed|OOM\b/i },
   { kind: 'noNetwork', re: /^no-network$/i },
   { kind: 'portBlocked', re: /EADDRINUSE|EADDRNOTAVAIL|address already in use|listen E[A-Z]+|unknown address/i },

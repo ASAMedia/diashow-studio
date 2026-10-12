@@ -383,6 +383,38 @@ kbd {
   background: #1c1c1e;
 }
 
+/* ---------- demo video */
+
+.demo {
+  padding: 0 0 72px;
+}
+
+.demo h2 {
+  font-size: clamp(1.4rem, 1.1rem + 1vw, 1.8rem);
+  margin: 0 0 16px;
+}
+
+.video {
+  margin: 0;
+}
+
+.video video {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  background: #000;
+}
+
+.video figcaption {
+  margin-top: 10px;
+  color: var(--text-3);
+  font-size: 0.92rem;
+}
+
 /* ---------- sections */
 
 .block {
@@ -931,6 +963,10 @@ kbd {
 
   .hero {
     padding: 32px 0 44px;
+  }
+
+  .demo {
+    padding-bottom: 52px;
   }
 
   .block {

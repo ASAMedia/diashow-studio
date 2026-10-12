@@ -1,10 +1,11 @@
-import { Eraser, FileUp, FolderOpen, Plus, Trash2, Play, Wand2 } from 'lucide-react'
+import { Eraser, FileArchive, FileUp, FolderOpen, Plus, Trash2, Play, Wand2 } from 'lucide-react'
 import { mediaUrl } from '@shared/api'
 import { useStore } from '../store'
 import { Tip } from './Settings'
 import { openWizard } from './Wizard'
 import { DamagedProjects, importProjectSafely, openProjectSafely } from './ProjectRepair'
 import { CleanupBanner, DeadlineBadge, openCleanup } from './Cleanup'
+import { openArchive } from './Archive'
 import { localeTag, t } from '../i18n'
 
 const FORMATS = 'JPEG · HEIC · HIF · ARW · DNG · PNG · WebP · AVIF — MOV · MP4 · XAVC S/HS/S-I · AVCHD (MTS) · MKV · WebM'
@@ -76,6 +77,9 @@ export function Home() {
                     </span>
                   </button>
                   <DeadlineBadge project={p} />
+                  <button className="btn small icon archive" title={t('archive')} aria-label={`${t('archive')}: ${p.name}`} onClick={() => openArchive(p.id)}>
+                    <FileArchive size={14} />
+                  </button>
                   <button className="btn small icon clean" title={t('cleanupMenu')} aria-label={`${t('cleanupMenu')}: ${p.name}`} onClick={() => openCleanup(p.id)}>
                     <Eraser size={14} />
                   </button>

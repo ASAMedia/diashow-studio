@@ -1,7 +1,7 @@
 {
   "name": "diashow-studio",
   "productName": "Diashow Studio",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Photo and video slideshows for Windows, inspired by the macOS Photos slideshow feature",
   "main": "./out/main/index.js",
   "author": "ASAMedia",
@@ -21,6 +21,7 @@
     "theme-music": "node --disable-warning=ExperimentalWarning scripts/theme-music.mjs",
     "gpl-sources": "node scripts/gpl-sources.mjs",
     "icon": "node scripts/make-icon.mjs",
+    "samples": "node scripts/samples.mjs",
     "site": "node --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/build-site.mjs"
   },
   "dependencies": {

@@ -62,7 +62,7 @@ export function ThemeThumb({ id, thumbs }: { id: ThemeId; thumbs: string[] }) {
           {img(1, abs(63, 6, 33.5, 42.5))}
           {img(2, abs(63, 51.5, 33.5, 42.5))}
           <div style={{ position: 'absolute', right: '43%', bottom: '11%', fontFamily: "'Nunito Sans'", fontWeight: 800, fontSize: 9, color: '#fff', textShadow: '0 1px 3px rgba(0,0,0,.5)' }}>
-            TITEL
+            {t('themeThumbTitle')}
           </div>
         </div>
       )
@@ -80,7 +80,7 @@ export function ThemeThumb({ id, thumbs }: { id: ThemeId; thumbs: string[] }) {
           <div style={{ position: 'absolute', ...abs(10, 30, 26, 48), background: '#f7f5ee', transform: 'rotate(-18deg)', opacity: 0.9 }}>{img(1, abs(7, 6, 86, 64))}</div>
           <div style={{ position: 'absolute', ...abs(34, 10, 34, 80), background: '#f7f5ee', transform: 'rotate(4deg)', boxShadow: '0 4px 10px rgba(0,0,0,.5)' }}>
             {img(0, abs(7, 5, 86, 64))}
-            <div style={{ position: 'absolute', left: 0, right: 0, bottom: '6%', textAlign: 'center', fontFamily: 'Caveat', fontSize: 10, color: '#333' }}>Sonntag</div>
+            <div style={{ position: 'absolute', left: 0, right: 0, bottom: '6%', textAlign: 'center', fontFamily: 'Caveat', fontSize: 10, color: '#333' }}>{t('themeThumbDay')}</div>
           </div>
         </div>
       )

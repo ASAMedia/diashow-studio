@@ -12,6 +12,7 @@ import { t, type StringKey } from './i18n'
 const TEXT: Record<ErrorKind, StringKey> = {
   ffmpegMissing: 'errFfmpegMissing',
   diskFull: 'errDiskFull',
+  fileTooLarge: 'errFileTooLarge',
   outOfMemory: 'errOutOfMemory',
   fileLocked: 'errFileLocked',
   fileMissing: 'errFileMissing',
@@ -22,7 +23,8 @@ const TEXT: Record<ErrorKind, StringKey> = {
   portBlocked: 'errPortBlocked',
   noNetwork: 'shareNoNetwork',
   projectDamaged: 'errProjectDamaged',
-  projectTooNew: 'errProjectTooNew'
+  projectTooNew: 'errProjectTooNew',
+  openedFromZip: 'errOpenedFromZip'
 }
 
 export interface Friendly {

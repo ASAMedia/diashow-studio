@@ -56,6 +56,8 @@ export interface MediaServiceConfig {
   hdrGpu?: boolean
   /** Whether a path from a saved project may be opened (network shares the user hasn't trusted may not); default all. */
   allowPath?: (path: string) => boolean
+  /** Today's folder of the bundled songs: own songs taken from the music library are found there again (themeMusic.ts). */
+  themeMusicDir?: string
 }
 
 /** What saved projects use (ProjectStore.references()). */

@@ -66,10 +66,18 @@ function str(v: unknown): string | undefined {
 }
 
 /** "iPhone 15 Pro", "ILCE-7M4", "Pixel 8"; Make + Model only when the model is a bare number. */
+/**
+ * DeviceManufacturer is Sony's (XAVC XML, next to DeviceModelName), but an embedded colour profile has
+ * a tag of that name too ("IEC", "Unknown (saws)"): it only counts together with a device model.
+ */
+function deviceMaker(t: Record<string, unknown>): string | undefined {
+  return str(t.DeviceModelName) ? str(t.DeviceManufacturer) : undefined
+}
+
 export function deviceOf(tags: Tags): string | undefined {
   const t = tags as Record<string, unknown>
   const model = str(t.Model) ?? str(t.AndroidModel) ?? str(t.DeviceModelName) ?? str(t.CameraModelName)
-  const make = str(t.Make) ?? str(t.AndroidMake) ?? str(t.AndroidManufacturer) ?? str(t.DeviceManufacturer)
+  const make = str(t.Make) ?? str(t.AndroidMake) ?? str(t.AndroidManufacturer) ?? deviceMaker(t)
   if (model && make && /^[\d\s-]+$/.test(model)) return `${make} ${model}`
   return model ?? make
 }
@@ -81,5 +89,5 @@ export function orientationOf(tags: Tags): number {
 
 export function makeOf(tags: Tags): string | undefined {
   const t = tags as Record<string, unknown>
-  return str(t.Make) ?? str(t.DeviceManufacturer)
+  return str(t.Make) ?? deviceMaker(t)
 }

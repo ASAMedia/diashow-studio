@@ -107,6 +107,8 @@ describe('dsmedia and the theme songs', () => {
     mkdirSync(join(dir, 'resources', 'theme-music-x'), { recursive: true })
     const files = {
       song: join(songs, 'kenburns.m4a'),
+      // more songs per theme and the music library: the same folder
+      library: join(songs, 'festive-1.m4a'),
       index: join(songs, 'theme-music.json'),
       below: join(songs, 'sub', 'a.m4a'),
       sibling: join(dir, 'resources', 'theme-music-x', 'a.m4a'),
@@ -115,6 +117,7 @@ describe('dsmedia and the theme songs', () => {
     for (const f of Object.values(files)) writeFileSync(f, 'x')
     const status = async (p: string): Promise<number> => (await handleMediaRequest(new Request(mediaUrl(p)))).status
     expect(inThemeMusicDir(files.song, songs)).toBe(true)
+    expect(inThemeMusicDir(files.library, songs)).toBe(true)
     expect(inThemeMusicDir(files.song.toUpperCase(), songs)).toBe(true)
     expect(inThemeMusicDir(files.below, songs)).toBe(false)
     expect(inThemeMusicDir(files.sibling, songs)).toBe(false)
@@ -124,6 +127,7 @@ describe('dsmedia and the theme songs', () => {
     setThemeMusicDir(songs)
     try {
       expect(await status(files.song)).toBe(200)
+      expect(await status(files.library)).toBe(200)
       expect(await status(files.index)).toBe(404)
       expect(await status(files.below)).toBe(404)
       expect(await status(files.sibling)).toBe(404)

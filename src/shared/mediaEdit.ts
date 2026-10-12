@@ -6,8 +6,10 @@
 //
 // The edit, in order: quarter turns clockwise (`rotate`), then `straighten` degrees clockwise around
 // the centre with the zoom that keeps the turned frame free of empty corners, then `crop` (normalised
-// to that straightened frame).
+// to that straightened frame). `adjust` (light and colour, adjust.ts) changes no geometry: isEdited
+// and the maps here ignore it; editKey, normalizeEdit and sanitizeEdit carry it along.
 import type { MediaEdit, MediaItem, Rect } from './types'
+import { adjustKey, isAdjusted, normalizeAdjust, sanitizeAdjust } from './adjust'
 
 /** Straightening goes from -45° to +45°. */
 export const MAX_STRAIGHTEN = 45
@@ -23,16 +25,21 @@ const FULL: Rect = { x: 0, y: 0, w: 1, h: 1 }
 const clamp = (v: number, a: number, b: number): number => Math.min(b, Math.max(a, v))
 const isFull = (r: Rect): boolean => Math.abs(r.x) < 1e-6 && Math.abs(r.y) < 1e-6 && Math.abs(r.w - 1) < 1e-6 && Math.abs(r.h - 1) < 1e-6
 
-/** True when the edit changes anything (a turn, a tilt or a crop smaller than the picture). */
+/** True when the edit changes the geometry (a turn, a tilt or a crop smaller than the picture). */
 export function isEdited(e: MediaEdit | undefined | null): e is MediaEdit {
   return !!e && (e.rotate !== 0 || Math.abs(e.straighten) > 1e-6 || (!!e.crop && !isFull(e.crop)))
 }
 
-/** Short key of an edit for caches ('' when unedited). */
+/** True when the edit changes the picture in any way: its geometry or its light and colour. */
+export const isChanged = (e: MediaEdit | undefined | null): e is MediaEdit => isAdjusted(e?.adjust) || isEdited(e)
+
+/** Short key of an edit for caches, with its light and colour ('' when the picture is as shot). */
 export function editKey(e: MediaEdit | undefined): string {
-  if (!isEdited(e)) return ''
+  const adjust = adjustKey(e?.adjust)
+  if (!isEdited(e)) return adjust && `||${adjust}`
   const c = e.crop ?? FULL
-  return `${e.rotate}|${e.straighten.toFixed(2)}|${[c.x, c.y, c.w, c.h].map((v) => v.toFixed(4)).join(',')}`
+  const geometry = `${e.rotate}|${e.straighten.toFixed(2)}|${[c.x, c.y, c.w, c.h].map((v) => v.toFixed(4)).join(',')}`
+  return adjust ? `${geometry}|${adjust}` : geometry
 }
 
 const quarter = (rotate: number): boolean => rotate === 90 || rotate === 270
@@ -214,16 +221,20 @@ export function rotateEdit(e: MediaEdit | undefined, dir: -1 | 1): MediaEdit {
 
 /** The edit as it is stored: undefined when it changes nothing, numbers rounded (and still inside, as sanitizeEdit wants them). */
 export function normalizeEdit(e: MediaEdit | undefined): MediaEdit | undefined {
-  if (!isEdited(e)) return undefined
+  if (!e) return undefined
+  const adjust = normalizeAdjust(e.adjust)
   const r4 = (v: number): number => Math.round(v * 1e4) / 1e4
-  const straighten = Math.round(clamp(e.straighten, -MAX_STRAIGHTEN, MAX_STRAIGHTEN) * 10) / 10
+  // (|| 0: a tilt rounded away is +0, as it reads back from the file)
+  const straighten = (Number.isFinite(e.straighten) ? Math.round(clamp(e.straighten, -MAX_STRAIGHTEN, MAX_STRAIGHTEN) * 10) / 10 : 0) || 0
   const out: MediaEdit = { ...e, straighten }
   if (e.crop && !isFull(e.crop)) {
     const w = clamp(r4(e.crop.w), MIN_CROP, 1)
     const h = clamp(r4(e.crop.h), MIN_CROP, 1)
     out.crop = { x: clamp(r4(e.crop.x), 0, 1 - w), y: clamp(r4(e.crop.y), 0, 1 - h), w, h }
   } else delete out.crop
-  return isEdited(out) ? out : undefined
+  if (adjust) out.adjust = adjust
+  else delete out.adjust
+  return isEdited(out) || adjust ? out : undefined
 }
 
 // ---------------------------------------------------------------- crop presets and handles
@@ -344,8 +355,9 @@ const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFi
 
 /**
  * A usable edit from stored data (project files): quarter turns (other angles rounded to the nearest),
- * straightening clamped to ±45°, a crop moved and shrunk into the picture. `fixed` tells whether
- * anything had to change; `edit` is undefined when nothing usable was left.
+ * straightening clamped to ±45°, a crop moved and shrunk into the picture, light and colour clamped
+ * to ±100 (adjust.ts). `fixed` tells whether anything had to change; `edit` is undefined when
+ * nothing usable was left.
  */
 export function sanitizeEdit(raw: unknown): { edit: MediaEdit | undefined; fixed: boolean } {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return { edit: undefined, fixed: true }
@@ -373,5 +385,11 @@ export function sanitizeEdit(raw: unknown): { edit: MediaEdit | undefined; fixed
       edit.crop = crop
     } else fixed = true
   }
-  return { edit: isEdited(edit) ? edit : undefined, fixed }
+  delete (edit as { adjust?: unknown }).adjust
+  if (o.adjust !== undefined) {
+    const a = sanitizeAdjust(o.adjust)
+    if (a.adjust) edit.adjust = a.adjust
+    if (a.fixed) fixed = true
+  }
+  return { edit: edit.adjust || isEdited(edit) ? edit : undefined, fixed }
 }

@@ -23,6 +23,7 @@ import { AboutDialog } from './components/AboutDialog'
 import { Wizard } from './components/Wizard'
 import { DiagnosticsHost } from './components/ProjectRepair'
 import { CleanupHost } from './components/Cleanup'
+import { ArchiveHost } from './components/Archive'
 import { watchStabilize } from './stabilize'
 import { timelineOf } from './timeline'
 import { keyForFocus, modalOpen } from './keys'
@@ -208,6 +209,7 @@ export function App() {
       {presenting && <PresenterPanel />}
       <DiagnosticsHost />
       <CleanupHost />
+      <ArchiveHost />
       {dragging && <div className="window-drop">{t('dropHere')}</div>}
     </div>
   )

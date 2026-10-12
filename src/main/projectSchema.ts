@@ -17,6 +17,7 @@ import type { RepairCode, RepairReport } from '@shared/diagnostics'
 import { PROJECT_DAMAGED, PROJECT_TOO_NEW } from '@shared/friendlyError'
 import { LOOKS, THEMES, TRANSITIONS } from '@shared/themes'
 import { sanitizeEdit } from '@shared/mediaEdit'
+import { isSongId } from '@shared/themeMusic'
 import { DEFAULT_SETTINGS, DEFAULT_TEXT_STYLE, type Project } from '@shared/types'
 
 /** Format version this app writes. */
@@ -199,7 +200,7 @@ export function salvageJson(text: string): { value: unknown; usedChars: number }
 
 /** Text of a project file without BOM and without the zero bytes a power loss can leave at the end. */
 export function cleanProjectText(text: string): string {
-  return text.replace(/^﻿/, '').replace(/[\u0000\s]+$/, '')
+  return text.replace(/^\uFEFF/, '').replace(/[\u0000\s]+$/, '')
 }
 
 // ---------------------------------------------------------------- validation
@@ -435,9 +436,10 @@ function validateSettings(raw: unknown, changes: Changes): Project['settings'] {
   for (const key of ['scaleToFill', 'playFullVideos', 'playLivePhotos', 'loop', 'showTitle']) reset(key, s[key] === undefined || typeof s[key] === 'boolean')
   for (const key of ['titleText', 'subtitleText', 'titleStyle']) reset(key, s[key] === undefined || str(s[key]))
   reset('maxVideoSeconds', s.maxVideoSeconds === undefined || (num(s.maxVideoSeconds) && s.maxVideoSeconds >= 0))
-  // a wrong value means off / the theme's own song
+  // a wrong value means off / the theme's own song. Theme ids are song ids too (1.2); an id the
+  // catalogue doesn't know (a song of a newer version) is kept and plays the theme's own song
   reset('themeMusic', s.themeMusic === undefined || typeof s.themeMusic === 'boolean')
-  reset('themeSong', s.themeSong === undefined || s.themeSong === 'auto' || THEMES.some((t) => t.id === s.themeSong))
+  reset('themeSong', s.themeSong === undefined || s.themeSong === 'auto' || isSongId(s.themeSong))
   const timing = s.timing
   if (isObj(timing)) {
     const t: Data = { ...timing }

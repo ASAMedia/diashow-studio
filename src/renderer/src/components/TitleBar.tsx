@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CalendarDays, CircleHelp, Clapperboard, QrCode, ScanFace, ChevronLeft, Download, Eraser, FolderTree, History, LayoutGrid, Loader2, MonitorPlay, MoreHorizontal, Package, Play, Redo2, ScanSearch, Settings, ShieldCheck, SortAsc, Undo2 } from 'lucide-react'
+import { CalendarDays, CircleHelp, Clapperboard, QrCode, ScanFace, ChevronLeft, Download, Eraser, FileArchive, FolderTree, History, LayoutGrid, Loader2, MonitorPlay, MoreHorizontal, Package, Play, Redo2, ScanSearch, Settings, ShieldCheck, SortAsc, Undo2 } from 'lucide-react'
 import { useStore } from '../store'
 import { useTimeline } from '../timeline'
 import { fmtTime, t } from '../i18n'
@@ -8,6 +8,7 @@ import { UpdateChip } from './Updates'
 import { AppIcon } from './AppIcon'
 import { Menu, MenuItem, MenuSeparator } from './Menu'
 import { openCleanup } from './Cleanup'
+import { openArchive } from './Archive'
 
 /** An icon-only button of the title bar; the tooltip is its name for screen readers too. */
 function IconButton(props: { label: string; onClick: () => void; disabled?: boolean; children: React.ReactNode; expanded?: boolean; popup?: boolean }) {
@@ -147,6 +148,9 @@ export function TitleBar() {
             </MenuItem>
             <MenuItem icon={<Package size={15} />} onSelect={() => set({ dialog: 'pack' })}>
               {t('pack')}
+            </MenuItem>
+            <MenuItem icon={<FileArchive size={15} />} onSelect={() => openArchive(project.id)}>
+              {t('archive')}
             </MenuItem>
             <MenuItem icon={<History size={15} />} onSelect={() => set({ dialog: 'backups' })}>
               {t('backups')}

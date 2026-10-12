@@ -1,7 +1,7 @@
 // Slide tab tools: pixelated areas, clip speed, free text boxes, and editing many slides at once.
 import { Crop as CropIcon, EyeOff, Plus, RotateCcw, RotateCw, ScanFace, Trash2, Merge } from 'lucide-react'
-import { isEdited, rotateEdit } from '@shared/mediaEdit'
-import { closePhotoEdit, openPhotoEdit, rotateSelection, setMediaEdit } from '../photoEdit'
+import { isChanged, isEdited, rotateEdit } from '@shared/mediaEdit'
+import { closePhotoEdit, openPhotoEdit, rotateSelection, selectedMediaIds, setMediaEdit } from '../photoEdit'
 import type { Entry, FreeText, MediaItem, PhotoEntry, Rect, VideoEntry } from '@shared/types'
 import { themeMeta } from '@shared/themes'
 import { MAX_SPEED, MIN_SPEED, speedHasSound, type TimelineSlide } from '@shared/timeline'
@@ -11,6 +11,7 @@ import { requestStabilize, useStabilizeRequest } from '../stabilize'
 import { allVideoTracks, faceArea, photoPersonFaces, videoPersonTracks } from '@shared/people'
 import { Check, Field, FONTS, Section, Slider } from './ui'
 import { PeopleList } from './PeopleList'
+import { AdjustSliders } from './AdjustSliders'
 
 /** A detected face grown to cover hair and chin, as the area to pixelate (now in @shared/people). */
 export { faceArea }
@@ -68,7 +69,7 @@ export function PrivacySection({ entry, media }: { entry: PhotoEntry | VideoEntr
 
 // ---------------------------------------------------------------- rotate, straighten, crop
 
-/** The picture of a photo or video: the edit view over the preview, quick quarter turns, back to the original. */
+/** The picture of a photo or video: the edit view over the preview, quick quarter turns, light and colour, back to the original. */
 export function EditSection({ entry, media }: { entry: PhotoEntry | VideoEntry; media: MediaItem }) {
   const open = useStore((s) => s.photoEdit?.entryId === entry.id)
   const edited = isEdited(media.edit)
@@ -90,14 +91,31 @@ export function EditSection({ entry, media }: { entry: PhotoEntry | VideoEntry; 
         <button className="btn small icon" title={t('peRotateRight')} aria-label={t('peRotateRight')} onClick={() => setMediaEdit(media.id, rotateEdit(media.edit, 1))}>
           <RotateCw size={14} />
         </button>
-        {edited && (
+        {isChanged(media.edit) && (
           <button className="btn small ghost" onClick={() => setMediaEdit(media.id, undefined)}>
             {t('peOriginalBack')}
           </button>
         )}
       </div>
       {edited && <p className="hint">{t('peEdited')}</p>}
+      <AdjustSliders media={[media]} />
     </Section>
+  )
+}
+
+/** Light and colour of every selected photo and video (several slides, or several items of one slide). */
+export function BatchAdjust() {
+  const project = useStore((s) => s.project)!
+  // the pictures of the selected slides, as the batch turn takes them (re-read when the selection changes)
+  useStore((s) => s.selection)
+  const ids = new Set(selectedMediaIds())
+  const media = project.media.filter((m) => ids.has(m.id) && m.status !== 'error')
+  if (!media.length) return null
+  return (
+    <>
+      <AdjustSliders media={media} />
+      {media.length > 1 && <p className="hint">{t('adjBatchHint')}</p>}
+    </>
   )
 }
 
@@ -429,6 +447,7 @@ export function BatchPanel({ entries, slides }: { entries: Entry[]; slides: Time
               <RotateCw size={14} /> {t('peRotateRight')}
             </button>
           </div>
+          <BatchAdjust />
         </Section>
       )}
       {visual.length > 0 && (

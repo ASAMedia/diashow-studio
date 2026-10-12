@@ -4,12 +4,14 @@
 //
 //   docs/handbuch.html, docs/en/handbook.html   the in-app handbook (src/renderer/src/handbook/de.md,
 //                                                en.md), parsed by the app's own parser (src/shared/handbook.ts)
-//   docs/img/<de|en>/*.jpg                       its screenshots (src/renderer/public/handbook/<de|en>/),
-//                                                also used by the start pages; recompressed when that helps
+//   docs/img/<de|en>/*.jpg                       its screenshots (src/renderer/public/handbook/<de|en>/), those
+//                                                the handbook or a start page shows; recompressed when that helps
 //   docs/assets/icon.svg, icon-32.png, icon-180.png   logo and favicons from build/icon.svg
 //   docs/assets/og-de.jpg, og-en.jpg            preview pictures for links shared in messengers
 //   header and footer of docs/index.html and docs/en/index.html (between <!-- site:header --> markers);
 //   the rest of those two pages is written by hand.
+// Not made here: docs/media/demo.mp4 and its poster demo.jpg, the demo video on the start pages, made by
+// the app itself from the sample trip (npm run samples, then DIASHOW_DEMO_VIDEO=1 e2e/demo-video.spec.ts).
 //
 // Re-runnable: unchanged files are not rewritten, screenshots no longer in the handbook are removed.
 // Needs Node 22.18 or newer (it imports the TypeScript parser directly).
@@ -116,11 +118,25 @@ async function put(file, data) {
 
 // ---------------------------------------------------------------- screenshots
 
-/** Copies the handbook screenshots of a language; recompressed when that saves at least 10 %. */
+/** Names of the screenshots of a language that its handbook or a start page shows. */
+async function usedScreenshots(lang) {
+  const md = await readFile(join(root, 'src', 'renderer', 'src', 'handbook', `${lang}.md`), 'utf8')
+  const used = new Set([...md.matchAll(/!\[[^\]]*\]\(([\w.-]+)\)/g)].map((m) => m[1]))
+  for (const page of ['index.html', 'en/index.html']) {
+    for (const m of (await readFile(join(docs, page), 'utf8')).matchAll(new RegExp(`img/${lang}/([\\w.-]+)`, 'g'))) used.add(m[1])
+  }
+  return used
+}
+
+/**
+ * Copies the handbook screenshots of a language that the website shows (the app has more); recompressed
+ * when that saves at least 10 %.
+ */
 async function screenshots(lang) {
   const src = join(root, 'src', 'renderer', 'public', 'handbook', lang)
   const dest = join(docs, 'img', lang)
-  const files = (await readdir(src)).filter((f) => /\.(jpe?g|png)$/i.test(f)).sort()
+  const used = await usedScreenshots(lang)
+  const files = (await readdir(src)).filter((f) => /\.(jpe?g|png)$/i.test(f) && used.has(f)).sort()
   const sizes = new Map()
   for (const file of files) {
     const input = await readFile(join(src, file))
@@ -409,7 +425,7 @@ async function checkLinks() {
   const pages = ['index.html', 'handbuch.html', 'en/index.html', 'en/handbook.html']
   for (const page of pages) {
     const html = await readFile(join(docs, page), 'utf8')
-    for (const m of html.matchAll(/\s(?:src|href)="([^"]*)"/g)) {
+    for (const m of html.matchAll(/\s(?:src|href|poster)="([^"]*)"/g)) {
       const ref = m[1]
       if (!ref || /^[a-z][a-z0-9+.-]*:/i.test(ref) || ref.startsWith('#')) continue
       let path = posix.normalize(posix.join(posix.dirname(page), ref.replace(/[?#].*$/, '')))

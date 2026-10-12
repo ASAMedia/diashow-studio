@@ -195,20 +195,25 @@ const THEME_NAMES = {
 
 function themeMusicSection() {
   const file = join(root, 'resources', 'theme-music', 'theme-music.json')
-  let songs = {}
+  let songs = []
   try {
-    songs = readJson(file).songs ?? {}
+    const raw = readJson(file).songs ?? []
+    // version 2 lists the songs; 1.2 had one per theme, keyed by the theme
+    songs = Array.isArray(raw) ? raw : Object.entries(raw).map(([id, s]) => ({ ...s, id, themes: [id] }))
   } catch {
     return ['No theme songs are bundled in this build.']
   }
+  if (!songs.length) return ['No theme songs are bundled in this build.']
   const lines = [
-    'Every theme has its own song, played while a slideshow has no music of its own. The songs are',
-    'free to use (CC0 / public domain), also in exported and shared videos. They are installed in',
-    'resources\\theme-music of the installation folder.',
+    'Every theme has its own songs, and a small music library adds songs by mood. They play while a',
+    'slideshow has no music of its own, or as songs of its own. The songs are free to use (CC0 /',
+    'public domain), also in exported and shared videos. They are installed in resources\\theme-music',
+    'of the installation folder.',
     ''
   ]
-  for (const [theme, s] of Object.entries(songs)) {
-    lines.push(`${THEME_NAMES[theme] ?? theme}: "${s.title}"${s.artist ? ` by ${s.artist}` : ''}`, `  licence: ${s.licence}`, `  source: ${s.source}`)
+  for (const s of songs) {
+    const where = s.themes?.length ? s.themes.map((t) => THEME_NAMES[t] ?? t).join(', ') : `music library (${(s.moods ?? []).join(', ')})`
+    lines.push(`${where}: "${s.title}"${s.artist ? ` by ${s.artist}` : ''}`, `  file: ${s.file}`, `  licence: ${s.licence}`, `  source: ${s.source}`)
     if (s.placeholder) lines.push('  (a placeholder generated for development, no third-party content)')
     lines.push('')
   }

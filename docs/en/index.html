@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src https://api.github.com; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'; connect-src https://api.github.com; base-uri 'none'; form-action 'none'">
 <title>Diashow Studio – slideshows like on the Mac, for Windows</title>
 <meta name="description" content="Turn photos, videos and music into a slideshow and save it as an MP4 video. Free, no account, works offline and open source – made with schools in mind.">
 <link rel="canonical" href="https://asamedia.github.io/diashow-studio/en/">
@@ -68,6 +68,19 @@
       </div>
       <figure class="shot">
         <img src="../img/en/editor.jpg" width="1100" height="688" alt="The Diashow Studio editor: the preview in the middle, the themes on the right, and the filmstrip with the slides and the music at the bottom">
+      </figure>
+    </div>
+  </section>
+
+  <section class="demo" aria-labelledby="demo-title">
+    <div class="wrap">
+      <h2 id="demo-title">What a finished slideshow looks like</h2>
+      <figure class="video">
+        <video controls preload="none" poster="../media/demo.jpg" width="1280" height="720" aria-describedby="demo-caption">
+          <source src="../media/demo.mp4" type="video/mp4">
+          <a href="../media/demo.mp4">Download the sample video (MP4)</a>
+        </video>
+        <figcaption id="demo-caption">This sample video was made with Diashow Studio from free photos (its titles are German): the Ken Burns theme with its theme music, chapters from folder names, pixelated faces and end credits. <a href="https://github.com/ASAMedia/diashow-studio/blob/main/samples/SOURCES.md">Sources and licences of the photos</a></figcaption>
       </figure>
     </div>
   </section>

@@ -43,3 +43,18 @@
 .pe-straighten input[type='range'] { width: 150px; }
 .pe-val { min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text-2); }
 .pe-group select { height: 26px; font-size: 12px; }
+.pe-tools { flex-wrap: nowrap; flex: none; }
+/* the other tool's controls stay mounted but out of the way (their groups are flex boxes) */
+.photo-edit [hidden] { display: none !important; }
+
+/* light and colour sliders (AdjustSliders.tsx): a row each in the Slide tab, two columns in the edit view */
+.adjust { display: flex; flex-direction: column; gap: 2px; }
+.adj-row { display: flex; align-items: center; gap: 6px; min-height: 28px; min-width: 0; }
+.adj-row > label { flex: none; width: 74px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adj-row input[type='range'] { flex: 1; min-width: 60px; width: auto; }
+.adj-row .val { min-width: 52px; text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--text-2); }
+.pe-adjust { flex-direction: row; flex-wrap: wrap; gap: 0 18px; font-size: 12px; flex: 1 1 240px; max-width: 560px; }
+.pe-adjust .adj-row { flex: 1 1 240px; gap: 4px; }
+.pe-adjust .adj-row > label { color: var(--text-2); width: 64px; }
+.pe-adjust .adj-row input[type='range'] { min-width: 80px; }
+.pe-adjust .adj-row .val { min-width: 36px; }

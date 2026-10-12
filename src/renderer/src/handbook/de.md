@@ -39,18 +39,29 @@ Der Editor hat drei Bereiche: die **Vorschau** in der Mitte, rechts die Reiter *
 
 > Tipp: Mit [[Leertaste]] spielst du die Vorschau ab, mit [[←]] und [[→]] springst du von Folie zu Folie.
 
-### Fotos drehen, begradigen und zuschneiden
+### Fotos bearbeiten
 
-Schiefe oder liegende Handyfotos richtest du wie in Fotos auf dem Mac: Foto auswählen und im Reiter **Folie** unter **Bild** auf **Bearbeiten** klicken (oder **Bearbeiten** im Menü der Folie). Über der Vorschau erscheinen:
+Schiefe oder liegende Handyfotos richtest du wie in Fotos auf dem Mac: Foto auswählen und im Reiter **Folie** unter **Bild** auf **Bearbeiten** klicken (oder **Bearbeiten** im Menü der Folie). Über der Vorschau erscheint das Werkzeug **Zuschneiden**:
 
 - **Drehen:** Die Pfeile drehen um 90° nach links oder rechts. [[Strg+R]] dreht alle ausgewählten Fotos nach links, auch auf mehreren Folien.
 - **Begradigen:** Der Regler neigt das Bild um bis zu 45°. Es wird dabei so weit vergrößert, dass keine leeren Ecken entstehen.
 - **Zuschneiden:** Ecken und Kanten des Rahmens ziehen oder den Rahmen verschieben. **Format** hält ein Seitenverhältnis fest (Frei, Original, 1:1, 4:3, 3:2, 16:9, 9:16); der Knopf daneben tauscht Hoch- und Querformat.
-- **Zurücksetzen** holt das Original zurück, **Abbrechen** ([[Esc]]) verwirft die Änderungen, **Fertig** ([[Enter]]) übernimmt sie. Jeder Schritt lässt sich mit [[Strg+Z]] rückgängig machen.
+- **Zurücksetzen** nimmt Drehen, Begradigen und Zuschnitt zurück, **Abbrechen** ([[Esc]]) verwirft die Änderungen, **Fertig** ([[Enter]]) übernimmt sie. Jeder Schritt lässt sich mit [[Strg+Z]] rückgängig machen.
 
-Das bearbeitete Foto erscheint überall: in jeder Folie, beim Ken-Burns-Effekt, im Filmstreifen, beim Sichten und im Export. Den Ausschnitt in der Folie verschiebst du danach wie gewohnt. Verpixelte Gesichter bleiben auf denselben Gesichtern. Videos drehst, begradigst und schneidest du genauso zu.
+Das zweite Werkzeug, **Licht und Farbe**, hilft bei dunklen Handyfotos, orangem Kunstlicht und flauen Bildern. Dieselben Regler stehen auch im Reiter **Folie** unter **Bild**:
 
-> Mit der Tastatur: Die Pfeiltasten verschieben den Rahmen, mit [[Umschalt]] ändern sie seine Größe.
+- **Helligkeit** hellt Schatten und Mitteltöne auf, ohne helle Stellen abzuschneiden.
+- **Kontrast** setzt Schatten und Lichter weiter auseinander oder näher zusammen.
+- **Wärme** macht das Bild wärmer oder kühler, ohne seine Helligkeit zu ändern. Gegen orangefarbenes Kunstlicht ziehst du sie nach links.
+- **Sättigung** macht die Farben kräftiger oder blasser.
+
+Jeder Regler reicht von −100 bis +100; der Pfeil daneben oder ein Doppelklick setzt ihn auf 0. Sind mehrere Folien ausgewählt, gilt ein Regler für alle ihre Fotos und Videos. Der Look der Diashow kommt danach obendrauf und wirkt so auf alle Fotos gleich. Bearbeitete Folien zeigen im Filmstreifen ein kleines Regler-Zeichen.
+
+![Licht und Farbe in der Bearbeitungsansicht](edit.jpg)
+
+Das bearbeitete Foto erscheint überall: in jeder Folie, beim Ken-Burns-Effekt, im Filmstreifen, beim Sichten und im Export. Den Ausschnitt in der Folie verschiebst du danach wie gewohnt. Verpixelte Gesichter bleiben auf denselben Gesichtern und bleiben verpixelt, auch wenn du das Bild aufhellst. Videos bearbeitest du genauso.
+
+> Mit der Tastatur: Die Pfeiltasten verschieben den Rahmen, mit [[Umschalt]] ändern sie seine Größe. Die Regler für Licht und Farbe bewegst du mit den Pfeiltasten, mit [[Umschalt]] in Zehnerschritten.
 
 ## Themen und Looks {#themes}
 
@@ -66,7 +77,7 @@ Das **Thema** bestimmt, wie die Folien aussehen und wechseln. Es gibt 11 Themen,
 
 Im Reiter **Musik** fügst du eigene Musikdateien hinzu (MP3, M4A, WAV, FLAC und mehr). Mehrere Songs bilden eine Wiedergabeliste, die du per Ziehen ordnest.
 
-Jedes Thema hat seine eigene Musik (CC0, frei nutzbar, auch in geteilten Videos); deine eigene Musik ersetzt sie.
+Jedes Thema hat eigene Musik (CC0 oder gemeinfrei, frei nutzbar, auch in geteilten Videos); deine eigene Musik ersetzt sie. Unter **Themenmusik** wählst du einen anderen Song des Themas, eines anderen Themas oder aus der **Musikbibliothek**, die du nach **Stimmung** filterst (z. B. **Feierlich** für eine Zeugnisausgabe oder **Weihnachtlich**). **Zur eigenen Musik hinzufügen** übernimmt den gewählten Song in die Wiedergabeliste, wo du ihn kürzen oder einem Kapitel geben kannst.
 
 ![Musik mit Wellenform und Taktmarken](music.jpg)
 
@@ -137,11 +148,15 @@ Ist die Diashow fertig, entfernst du an einer Stelle, was die App zu ihr gespeic
 - **Zwischenspeicher** (Vorschaubilder, Videokopien, Ton): entsteht bei Bedarf neu.
 - **Ältere Versionen** und **Export-Aufträge** (Momentaufnahmen in der Warteschlange).
 
+![Nach dem Projekt aufräumen](cleanup.jpg)
+
 Deine eigenen Fotos, Videos und Musik und die exportierten Videos bleiben unberührt. Gelöscht wird endgültig, nicht in den Papierkorb.
 
 **Löschfrist:** Im selben Dialog (oder nach dem Export) legst du fest, wann aufgeräumt werden soll: in 1, 3, 6 oder 12 Monaten oder an einem Datum. Ist der Tag da, zeigt die Startseite einen Hinweis an der Diashow und **Löschfrist erreicht: aufräumen?**; **In einem Monat erinnern** verschiebt sie.
 
 > Beim **Löschen** einer Diashow fragt die App, ob ihr Zwischenspeicher, die hochgeladenen Fotos und die Export-Aufträge mitgehen sollen.
+
+Ein [ZIP-Archiv der Diashow](#projects) ist eine Kopie, die das Aufräumen nicht erreicht; lösche es selbst.
 
 ## Vorführen {#present}
 
@@ -154,6 +169,18 @@ Deine eigenen Fotos, Videos und Musik und die exportierten Videos bleiben unber�
 - **Ältere Version wiederherstellen…** (Menü **⋯**): Vor dem Speichern wird die vorige Version aufgehoben (die letzten 20).
 - **Projekt packen…** kopiert das Projekt mit allen Fotos, Videos und Musik in einen Ordner, z. B. für einen USB-Stick. Am anderen PC öffnest du die `.dshow`-Datei.
 - Wurden Originale verschoben (anderer Ordner, neuer Laufwerksbuchstabe), findet **Ordner durchsuchen…** im gelben Hinweis sie wieder.
+
+### Diashow als ZIP archivieren
+
+Ist die Diashow fertig, legt **⋯ → Als ZIP archivieren…** (oder das Archiv-Symbol an der Diashow auf der Startseite) alles in eine einzige ZIP-Datei, z. B. für das Schularchiv oder einen USB-Stick: das Projekt, die Original-Fotos und -Videos, deine Musik oder die Themenmusik, auf Wunsch die fertigen Exporte und eine kurze Anleitung (`LIESMICH.txt`).
+
+![Diashow als ZIP archivieren](archive.jpg)
+
+- Der Dialog zeigt jeden Teil mit seiner Größe, die Summe und den freien Platz am Ziel. Aussortierte Fotos kommen nur mit, wenn du es ankreuzt; **Gesichtsdaten weglassen** ist voreingestellt, verpixelt bleibt verpixelt.
+- Fehlende Originale werden genannt und übersprungen. Nach dem Schreiben liest die App das Archiv noch einmal und prüft es.
+- **Öffnen:** das ZIP entpacken (Rechtsklick → **Alle extrahieren…**) und die `.dshow`-Datei doppelklicken oder **Projekt öffnen…** wählen. Direkt aus dem ZIP öffnet die App die Diashow nicht.
+
+> Das Archiv enthält Fotos der Schülerinnen und Schüler. Es ist eine Kopie, die das [Aufräumen](#cleanup) nicht erreicht: Bewahre es sicher auf und lösche es selbst bis zur Löschfrist; sie steht auch in der Anleitung im Archiv.
 
 ### Beschädigte Projekte reparieren
 

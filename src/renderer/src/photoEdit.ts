@@ -1,7 +1,9 @@
 // Rotate, straighten and crop (MediaItem.edit) in the editor: opening and closing the edit view over the
-// preview, storing an edit as one undo step, and Ctrl+R on the selected slides.
-import type { MediaEdit, MediaItem } from '@shared/types'
+// preview, storing an edit as one undo step, Ctrl+R on the selected slides, and light and colour
+// (edit.adjust) for one or several pictures, with a live preview while a slider is dragged.
+import type { MediaAdjust, MediaEdit, MediaItem } from '@shared/types'
 import { editKey, normalizeEdit, rotateEdit } from '@shared/mediaEdit'
+import { withAdjust } from '@shared/adjust'
 import { playerRef, useStore } from './store'
 
 function withEdit(m: MediaItem, edit: MediaEdit | undefined): MediaItem {
@@ -38,6 +40,32 @@ export function rotateSelection(dir: -1 | 1 = -1): number {
     p.media = p.media.map((m) => (ids.has(m.id) ? withEdit(m, normalizeEdit(rotateEdit(m.edit, dir))) : m))
   })
   return ids.size
+}
+
+/**
+ * Sets light and colour sliders (the others stay) on several pictures at once, as one undo step (or
+ * one per `key` for a run of key presses). The draft of the live preview ends with it.
+ */
+export function setMediaAdjust(mediaIds: readonly string[], patch: MediaAdjust, key?: string): void {
+  const ids = new Set(mediaIds)
+  const media = useStore.getState().project?.media ?? []
+  const next = new Map<string, MediaEdit | undefined>()
+  for (const m of media) {
+    if (!ids.has(m.id)) continue
+    const edit = normalizeEdit({ ...(m.edit ?? { rotate: 0, straighten: 0 }), adjust: withAdjust(m.edit?.adjust, patch) })
+    if (editKey(edit) !== editKey(m.edit)) next.set(m.id, edit)
+  }
+  if (!next.size) return previewAdjust(null)
+  // the draft shows what is stored now: it goes when the preview has the new project (no flash between)
+  playerRef.current?.endAdjustDraft()
+  useStore.getState().update((p) => {
+    p.media = p.media.map((m) => (next.has(m.id) ? withEdit(m, next.get(m.id)) : m))
+  }, key && `adjust:${[...ids].join(',')}:${key}`)
+}
+
+/** The preview shows these slider values on these pictures without storing them (null: as stored). */
+export function previewAdjust(draft: { ids: readonly string[]; patch: MediaAdjust } | null): void {
+  playerRef.current?.setAdjustDraft(draft && { ids: new Set(draft.ids), patch: draft.patch })
 }
 
 /** Opens the edit view for the picture of an entry (selecting it, and pausing the preview). */

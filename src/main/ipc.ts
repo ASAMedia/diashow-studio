@@ -16,8 +16,9 @@ import { cancelActiveExport, startExport, type ExportJob } from './export/encode
 import { registerExportQueue } from './export/queueMain'
 import { registerShare } from './share/shareMain'
 import { registerCleanup } from './cleanupMain'
+import { registerArchive } from './archive/archiveMain'
 import { registerSystemCheck } from './systemCheck'
-import { registerAbout } from './about'
+import { appVersion, registerAbout } from './about'
 import { registerReportProblem } from './reportProblem'
 import type { ProjectReportEvent } from '@shared/diagnostics'
 import { registerDiagnostics } from './diagnostics'
@@ -78,7 +79,8 @@ export function registerIpc(): void {
     allowPath,
     onUpdate: (item: MediaItem) => broadcast('media:update', item),
     onMusicUpdate: (track: MusicTrack) => broadcast('music:update', track),
-    directDecode: directDecodeSupport
+    directDecode: directDecodeSupport,
+    themeMusicDir
   })
   media = service
   // Warm up encoder detection so the export dialog has it ready
@@ -166,6 +168,8 @@ export function registerIpc(): void {
   registerShare({ uploadsRoot: join(projects.dir, 'Uploads'), broadcast })
   // "Nach dem Projekt aufräumen" and deleting a project with its data (cleanup.ts, safeDelete.ts)
   registerCleanup({ projects, cacheDir, uploadsRoot: join(projects.dir, 'Uploads'), exportsDir: join(app.getPath('userData'), 'exports'), media: service, exports: exportQueue })
+  // "Diashow als ZIP archivieren" (archive/archive.ts): reads originals only, through the same share policy
+  registerArchive({ projects, themeMusic: () => themeMusic, themeMusicDir, exports: exportQueue, allowPath, documentsDir: app.getPath('documents'), appVersion: appVersion() })
   registerSystemCheck({ ff: service.ffmpeg, cacheDir })
   // About dialog, third-party notices and the update hint
   registerAbout({ ff: service.ffmpeg, ffmpegDir, settings: appSettings })
@@ -241,7 +245,7 @@ export function registerIpc(): void {
 
   ipcMain.handle('project:pack', (_e, project: Project, dir: string) => {
     if (typeof dir !== 'string' || !dir) throw new Error('no target folder')
-    return prepareRun((signal) => packProject(project, dir, { signal, onProgress: sendProgress }))
+    return prepareRun((signal) => packProject(project, dir, { signal, onProgress: sendProgress, themeMusicDir }))
   })
 
   ipcMain.handle('project:open-dialog', async (e) => {
@@ -255,13 +259,14 @@ export function registerIpc(): void {
     if (r.canceled || !r.filePaths.length) return null
     // a pack the user opened from a share: its files sit next to it on that share
     await trustPaths([r.filePaths[0]])
-    return importProjectFile(r.filePaths[0], projects, { onReport })
+    // an archived show brings its theme song; it plays when this app's song is another one
+    return importProjectFile(r.filePaths[0], projects, { onReport, themeTracks: await themeMusic })
   })
 
   ipcMain.handle('project:import-file', async (_e, path: string) => {
     if (typeof path !== 'string' || !path) throw new Error('no project file')
     await trustPaths([path])
-    return importProjectFile(path, projects, { onReport })
+    return importProjectFile(path, projects, { onReport, themeTracks: await themeMusic })
   })
 
   ipcMain.handle('project:list', () => projects.list())

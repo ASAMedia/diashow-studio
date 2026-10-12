@@ -1,0 +1,1126 @@
+{
+  "title": {
+    "de": "Studienfahrt Athen 2026",
+    "en": "School trip to Athens 2026"
+  },
+  "folder": "Studienfahrt Athen 2026",
+  "days": [
+    {
+      "day": 1,
+      "date": "2026-05-04",
+      "folder": "1_Montag Anreise",
+      "de": {
+        "title": "Montag",
+        "subtitle": "Anreise"
+      },
+      "en": {
+        "title": "Monday",
+        "subtitle": "Journey"
+      }
+    },
+    {
+      "day": 2,
+      "date": "2026-05-05",
+      "folder": "2_Dienstag Athen",
+      "de": {
+        "title": "Dienstag",
+        "subtitle": "Athen"
+      },
+      "en": {
+        "title": "Tuesday",
+        "subtitle": "Athens"
+      }
+    },
+    {
+      "day": 3,
+      "date": "2026-05-06",
+      "folder": "3_Mittwoch Museum",
+      "de": {
+        "title": "Mittwoch",
+        "subtitle": "Museum"
+      },
+      "en": {
+        "title": "Wednesday",
+        "subtitle": "Museum"
+      }
+    },
+    {
+      "day": 4,
+      "date": "2026-05-07",
+      "folder": "4_Donnerstag Delphi",
+      "de": {
+        "title": "Donnerstag",
+        "subtitle": "Delphi"
+      },
+      "en": {
+        "title": "Thursday",
+        "subtitle": "Delphi"
+      }
+    },
+    {
+      "day": 5,
+      "date": "2026-05-08",
+      "folder": "5_Freitag Ägina",
+      "de": {
+        "title": "Freitag",
+        "subtitle": "Ägina"
+      },
+      "en": {
+        "title": "Friday",
+        "subtitle": "Aegina"
+      }
+    }
+  ],
+  "items": [
+    {
+      "id": "tuebingen-station",
+      "file": "IMG_20260504_055200.jpg",
+      "day": 1,
+      "folder": "1_Montag Anreise",
+      "date": "2026-05-04T05:52:00",
+      "kind": "photo",
+      "description": "German main station at blue hour (wide panorama)",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:T%C3%BCbingen_Hauptbahnhof_zur_blauen_Stunde_2019_001.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e6/T%C3%BCbingen_Hauptbahnhof_zur_blauen_Stunde_2019_001.jpg/3840px-T%C3%BCbingen_Hauptbahnhof_zur_blauen_Stunde_2019_001.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/e/e6/T%C3%BCbingen_Hauptbahnhof_zur_blauen_Stunde_2019_001.jpg",
+        "width": 6239,
+        "height": 2488,
+        "bytes": 6330288
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Dktue (Commons user) - source: own work",
+      "notes": "A few tiny figures at the entrance, not identifiable; panorama format, may need cropping for 16:9",
+      "sha256": "6584d5197dbc76da8631d14d49149806e49ea8214dc6a5a15cc32143fa193c1b"
+    },
+    {
+      "id": "metro-trains",
+      "file": "IMG_20260504_062400.jpg",
+      "day": 1,
+      "folder": "1_Montag Anreise",
+      "date": "2026-05-04T06:24:00",
+      "kind": "photo",
+      "description": "Two trains leaving an underground station, long-exposure motion blur (Featured Picture)",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Trains_leaving_H%C5%AFrka_station_2.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b9/Trains_leaving_H%C5%AFrka_station_2.jpg/3840px-Trains_leaving_H%C5%AFrka_station_2.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/b/b9/Trains_leaving_H%C5%AFrka_station_2.jpg",
+        "width": 7000,
+        "height": 4667,
+        "bytes": 10053560
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "AVDLCZ (Commons user) - source: own work",
+      "notes": "Prague metro, not a mainline station; 2-3 tiny figures far away in the vanishing point",
+      "sha256": "f10debf1035a2c952950aa68d545efd69f0a4f40667fb256aca7cef61698bd99"
+    },
+    {
+      "id": "train-departure",
+      "file": "VID_20260504_064700.mp4",
+      "day": 1,
+      "folder": "1_Montag Anreise",
+      "date": "2026-05-04T06:47:00",
+      "kind": "video",
+      "description": "Double-deck regional train departing a small sunny station",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Train_au_d%C3%A9part_de_la_gare_de_Miribel.ogv",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/1/17/Train_au_d%C3%A9part_de_la_gare_de_Miribel.ogv",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/1/17/Train_au_d%C3%A9part_de_la_gare_de_Miribel.ogv",
+        "width": 1920,
+        "height": 1080,
+        "bytes": 39128179,
+        "seconds": 20.9
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Benoît Prieur (Commons user) - source: own work",
+      "notes": "France; small SNCF/TER logos on the train, not the subject; Ogg Theora - transcode to MP4",
+      "clip": {
+        "start": 6,
+        "duration": 12
+      },
+      "sha256": "47a5712e704782b47fbaed0d73ce6821e96d87abefc09a74b63b2933403bd1b0"
+    },
+    {
+      "id": "train-window",
+      "file": "VID_20260504_113600.mp4",
+      "day": 1,
+      "folder": "1_Montag Anreise",
+      "date": "2026-05-04T11:36:00",
+      "kind": "video",
+      "description": "View from a train window: fields, wind turbine, overhead wires rushing by",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Eurostar_train_speeding_towards_Liege_175756.webm",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/5/5d/Eurostar_train_speeding_towards_Liege_175756.webm",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/5/5d/Eurostar_train_speeding_towards_Liege_175756.webm",
+        "width": 3840,
+        "height": 2160,
+        "bytes": 15915260,
+        "seconds": 35.4
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Quahadi (Commons user) - source: own work",
+      "notes": "no people; title names Eurostar but no logo visible; trim to 10-15 s",
+      "clip": {
+        "start": 8.5,
+        "duration": 12
+      },
+      "sha256": "90de9c6b14739c2c1ed7cbba2d3567ff3511d25a1fb4a45b0d73a56b2709a110"
+    },
+    {
+      "id": "acropolis-moon",
+      "file": "IMG_20260504_194800.jpg",
+      "day": 1,
+      "folder": "1_Montag Anreise",
+      "date": "2026-05-04T19:48:00",
+      "kind": "photo",
+      "description": "Acropolis rock and Erechtheion in evening light, moon above pink clouds",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Erechtheum_Acropolis_Athens_evening_moon.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/9/9f/Erechtheum_Acropolis_Athens_evening_moon.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/9/9f/Erechtheum_Acropolis_Athens_evening_moon.jpg",
+        "width": 3576,
+        "height": 3056,
+        "bytes": 8083885
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "sha256": "236093efaeb485806755654f01c0dae5f026ad9d24219f9f1e955cf86b94ec6b"
+    },
+    {
+      "id": "greek-salad",
+      "file": "IMG_20260504_211200.jpg",
+      "day": 1,
+      "folder": "1_Montag Anreise",
+      "date": "2026-05-04T21:12:00",
+      "kind": "photo",
+      "description": "Food close-up: Greek salad with feta and olives",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Une_salade_grecque_%C3%A0_K%C3%B3kkino_Chori%C3%B3_(Cr%C3%A8te)_en_juillet_2021.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f4/Une_salade_grecque_%C3%A0_K%C3%B3kkino_Chori%C3%B3_%28Cr%C3%A8te%29_en_juillet_2021.jpg/3840px-Une_salade_grecque_%C3%A0_K%C3%B3kkino_Chori%C3%B3_%28Cr%C3%A8te%29_en_juillet_2021.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/f/f4/Une_salade_grecque_%C3%A0_K%C3%B3kkino_Chori%C3%B3_%28Cr%C3%A8te%29_en_juillet_2021.jpg",
+        "width": 4032,
+        "height": 3024,
+        "bytes": 5774508
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Benoît Prieur (Commons user) - source: own work",
+      "notes": "Phone photo with EXIF date",
+      "sha256": "a221dbbb34aa8b05b37bad51fcd734be3aaf22ac0f9e6138a724fd1658048f50"
+    },
+    {
+      "id": "agora-church",
+      "file": "IMG_20260505_094100.jpg",
+      "day": 2,
+      "folder": "2_Dienstag Athen",
+      "date": "2026-05-05T09:41:00",
+      "kind": "photo",
+      "description": "Byzantine church among green trees in the Ancient Agora (Featured Picture)",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Holy_Apostles_church_ancient_agora_from_Acropolis_Athens.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7f/Holy_Apostles_church_ancient_agora_from_Acropolis_Athens.jpg/3840px-Holy_Apostles_church_ancient_agora_from_Acropolis_Athens.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/7/7f/Holy_Apostles_church_ancient_agora_from_Acropolis_Athens.jpg",
+        "width": 4230,
+        "height": 2826,
+        "bytes": 16397803
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "sha256": "92db5cf26a3b59a3e112fb917817471f580f1a16cda7b3f955665b5af1595d7a"
+    },
+    {
+      "id": "tower-of-winds",
+      "file": "IMG_20260505_102600.jpg",
+      "day": 2,
+      "folder": "2_Dienstag Athen",
+      "date": "2026-05-05T10:26:00",
+      "kind": "photo",
+      "description": "Tower of the Winds, Lycabettus in the background",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Tower_of_the_Winds,_Roman_Agora,_Athens,_Greece.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/76/Tower_of_the_Winds%2C_Roman_Agora%2C_Athens%2C_Greece.jpg/3840px-Tower_of_the_Winds%2C_Roman_Agora%2C_Athens%2C_Greece.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/7/76/Tower_of_the_Winds%2C_Roman_Agora%2C_Athens%2C_Greece.jpg",
+        "width": 3885,
+        "height": 5827,
+        "bytes": 15944058
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "notes": "portrait orientation",
+      "sha256": "eeba84b318d117cbf59ab1520571f4c94bca7058e7180d17bcda0c4451028747"
+    },
+    {
+      "id": "cathedral-lamp",
+      "file": "IMG_20260505_110800.jpg",
+      "day": 2,
+      "folder": "2_Dienstag Athen",
+      "date": "2026-05-05T11:08:00",
+      "kind": "photo",
+      "description": "Ornate globe street lamp against trees and sky",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Lamps,_cathedral_square,_Athens,_Greece.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/e/ea/Lamps%2C_cathedral_square%2C_Athens%2C_Greece.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/e/ea/Lamps%2C_cathedral_square%2C_Athens%2C_Greece.jpg",
+        "width": 3808,
+        "height": 4317,
+        "bytes": 9656651
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "notes": "portrait orientation",
+      "sha256": "4022a762a4c287b47e043e5ffb51f3bf3a32e0ed13164245ab093e2b57f4f22c"
+    },
+    {
+      "id": "taverna-table",
+      "file": "IMG_20260505_130400.jpg",
+      "day": 2,
+      "folder": "2_Dienstag Athen",
+      "date": "2026-05-05T13:04:00",
+      "kind": "photo",
+      "description": "Empty taverna table and red chairs under a tree",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Petit_ruisseau_%C3%A0_Kalyves_(Cr%C3%A8te)_et_terrasse.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/12/Petit_ruisseau_%C3%A0_Kalyves_%28Cr%C3%A8te%29_et_terrasse.jpg/1920px-Petit_ruisseau_%C3%A0_Kalyves_%28Cr%C3%A8te%29_et_terrasse.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/1/12/Petit_ruisseau_%C3%A0_Kalyves_%28Cr%C3%A8te%29_et_terrasse.jpg",
+        "width": 3024,
+        "height": 4032,
+        "bytes": 9774487
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Benoît Prieur (Commons user) - source: own work",
+      "notes": "Taken on Crete, not Athens (not recognisable); phone photo with EXIF date",
+      "sha256": "f68d9681d09c11bcccf520aad0abcc86baa3ec6616c706b5a340e7c6245202c3"
+    },
+    {
+      "id": "souvlaki",
+      "file": "IMG_20260505_132200.jpg",
+      "day": 2,
+      "folder": "2_Dienstag Athen",
+      "date": "2026-05-05T13:22:00",
+      "kind": "photo",
+      "description": "Food: souvlaki plate with pita, fries and dip",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Souvlaki_de_porc_en_Cr%C3%A8te_en_juillet_2021.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4a/Souvlaki_de_porc_en_Cr%C3%A8te_en_juillet_2021.jpg/3840px-Souvlaki_de_porc_en_Cr%C3%A8te_en_juillet_2021.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/4/4a/Souvlaki_de_porc_en_Cr%C3%A8te_en_juillet_2021.jpg",
+        "width": 4032,
+        "height": 3024,
+        "bytes": 5596543
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Benoît Prieur (Commons user) - source: own work",
+      "notes": "Phone photo with EXIF date",
+      "sha256": "c5c0fc23a48d29a0eabcecb34de37880f99d52f0a9e5868fd91805d30197d901"
+    },
+    {
+      "id": "zeus-temple-lycabettus",
+      "file": "IMG_20260505_153100.jpg",
+      "day": 2,
+      "folder": "2_Dienstag Athen",
+      "date": "2026-05-05T15:31:00",
+      "kind": "photo",
+      "description": "Temple of Olympian Zeus with Lycabettus hill and the city behind",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:From_Temple_of_Olympian_Zeus_to_Lycabetus_Athens_Greece.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/3/30/From_Temple_of_Olympian_Zeus_to_Lycabetus_Athens_Greece.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/3/30/From_Temple_of_Olympian_Zeus_to_Lycabetus_Athens_Greece.jpg",
+        "width": 3519,
+        "height": 2575,
+        "bytes": 6489956
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "sha256": "e3858c8bf292a1edbcf95e514a1c39d91422b7f5ab0d1152ae9d59cc8f96b2f5"
+    },
+    {
+      "id": "zeus-columns-evening",
+      "file": "IMG_20260505_184300.jpg",
+      "day": 2,
+      "folder": "2_Dienstag Athen",
+      "date": "2026-05-05T18:43:00",
+      "kind": "photo",
+      "description": "Columns of the Temple of Olympian Zeus glowing in evening sun",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Evening_columns_Zeus_temple_Athens.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/75/Evening_columns_Zeus_temple_Athens.jpg/3840px-Evening_columns_Zeus_temple_Athens.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/7/75/Evening_columns_Zeus_temple_Athens.jpg",
+        "width": 4592,
+        "height": 3056,
+        "bytes": 7141593
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "sha256": "204be74138510a43233d7702f27cdd0c122c7f4387df5e6c130388432c0c3ba2"
+    },
+    {
+      "id": "city-lights-timelapse",
+      "file": "VID_20260505_204700.mp4",
+      "day": 2,
+      "folder": "2_Dienstag Athen",
+      "date": "2026-05-05T20:47:00",
+      "kind": "video",
+      "description": "Time-lapse: riverside museum in Linz from dusk to night, facade lights change colour",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Zeitraffer_Lentos.webm",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/f/fa/Zeitraffer_Lentos.webm",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/f/fa/Zeitraffer_Lentos.webm",
+        "width": 1920,
+        "height": 1080,
+        "bytes": 6350489,
+        "seconds": 14
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "TheRo (Commons user) - source: own work",
+      "notes": "city / evening-lights time-lapse",
+      "clip": {
+        "start": 3,
+        "duration": 11
+      },
+      "sha256": "08fe85f3e21a01468048f739b0e2f184acadb3c40c395024b338edfaf14ff5fa"
+    },
+    {
+      "id": "gold-mask",
+      "file": "IMG_20260506_095800.jpg",
+      "day": 3,
+      "folder": "3_Mittwoch Museum",
+      "date": "2026-05-06T09:58:00",
+      "kind": "photo",
+      "description": "Gold 'Mask of Agamemnon', frontal face on dark background",
+      "faces": true,
+      "page": "https://commons.wikimedia.org/wiki/File:Agamemnon_mask_NAMA_Athens_Greece.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/2/24/Agamemnon_mask_NAMA_Athens_Greece.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/2/24/Agamemnon_mask_NAMA_Athens_Greece.jpg",
+        "width": 3000,
+        "height": 3000,
+        "bytes": 7419315
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "notes": "FACE: 1, gold mask, frontal; square format",
+      "sha256": "75c9194f856af3411f259a253442c7f99e4d2958570beaf1354b49ef9e907a50"
+    },
+    {
+      "id": "marble-bust",
+      "file": "IMG_20260506_101400.jpg",
+      "day": 3,
+      "folder": "3_Mittwoch Museum",
+      "date": "2026-05-06T10:14:00",
+      "kind": "photo",
+      "description": "Marble bust of a youth, frontal",
+      "faces": true,
+      "page": "https://commons.wikimedia.org/wiki/File:NAMA_2350_Bust_youth_from_Eleusis.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/e/e6/NAMA_2350_Bust_youth_from_Eleusis.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/e/e6/NAMA_2350_Bust_youth_from_Eleusis.jpg",
+        "width": 3056,
+        "height": 4592,
+        "bytes": 5474238
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "notes": "FACE: 1, marble bust, frontal; portrait orientation",
+      "sha256": "bdb5918756b430a3f83706254da1ed1df709a4720b4996da764562358c3761c0"
+    },
+    {
+      "id": "fayum-portrait",
+      "file": "IMG_20260506_103700.jpg",
+      "day": 3,
+      "folder": "3_Mittwoch Museum",
+      "date": "2026-05-06T10:37:00",
+      "kind": "photo",
+      "description": "Painted Fayum mummy portrait of a bearded man, frontal",
+      "faces": true,
+      "page": "https://commons.wikimedia.org/wiki/File:Fayum_egyptian_funerary_portrait_1627_NAMAthens.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/4/40/Fayum_egyptian_funerary_portrait_1627_NAMAthens.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/4/40/Fayum_egyptian_funerary_portrait_1627_NAMAthens.jpg",
+        "width": 2617,
+        "height": 4190,
+        "bytes": 8115873
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "notes": "FACE: 1, ancient painting, frontal and very realistic; portrait orientation",
+      "sha256": "d2365b31c2988c04c71ec86cb16ca8574b4bfee8322f05dd1eceeec441e72172"
+    },
+    {
+      "id": "spring-fresco",
+      "file": "IMG_20260506_110500.jpg",
+      "day": 3,
+      "folder": "3_Mittwoch Museum",
+      "date": "2026-05-06T11:05:00",
+      "kind": "photo",
+      "description": "Museum room with the reconstructed Spring Fresco from Akrotiri (lilies, swallows)",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Spring_fresco_Akrotiri_NAMA.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/2/25/Spring_fresco_Akrotiri_NAMA.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/2/25/Spring_fresco_Akrotiri_NAMA.jpg",
+        "width": 3178,
+        "height": 2964,
+        "bytes": 7131092
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "sha256": "e92f830ec52fb2ff57176e263bd4aad2cee5ef70d0aa6b36a71e6fbe3c08e1ac"
+    },
+    {
+      "id": "renoir-portrait",
+      "file": "IMG_20260506_142000.jpg",
+      "day": 3,
+      "folder": "3_Mittwoch Museum",
+      "date": "2026-05-06T14:20:00",
+      "kind": "photo",
+      "description": "Renoir's portrait of the girl Romaine Lacaux, frontal",
+      "faces": true,
+      "page": "https://commons.wikimedia.org/wiki/File:Romaine_Lacaux,_by_Pierre-Auguste_Renoir,_Cleveland_Museum_of_Art,_1942.1065.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/bb/Romaine_Lacaux%2C_by_Pierre-Auguste_Renoir%2C_Cleveland_Museum_of_Art%2C_1942.1065.jpg/3840px-Romaine_Lacaux%2C_by_Pierre-Auguste_Renoir%2C_Cleveland_Museum_of_Art%2C_1942.1065.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/b/bb/Romaine_Lacaux%2C_by_Pierre-Auguste_Renoir%2C_Cleveland_Museum_of_Art%2C_1942.1065.jpg",
+        "width": 11255,
+        "height": 14143,
+        "bytes": 39048048
+      },
+      "licence": "Public domain (painting by Renoir, who died in 1919; museum scan released as CC0)",
+      "licenceTemplate": "{{PD-art-two-auto|1919}} {{Cc-zero}} {{Cleveland Museum of Art-source}}",
+      "author": "Painting: Pierre-Auguste Renoir (1864, d. 1919). Scan: Cleveland Museum of Art Open Access (CC0). Source: https://clevelandart.org/art/1942.1065",
+      "notes": "FACE: 1, painting, frontal; museum scan 11255x14143 / 39 MB - use a 3000 px thumbnail",
+      "sha256": "81d314f932d0deea74403bed7730e8bb14d67537b77ea4eacacacc9a010d9a28"
+    },
+    {
+      "id": "hals-couple",
+      "file": "IMG_20260506_144100.jpg",
+      "day": 3,
+      "folder": "3_Mittwoch Museum",
+      "date": "2026-05-06T14:41:00",
+      "kind": "photo",
+      "description": "Frans Hals: married couple seated in a landscape, both smiling at the viewer",
+      "faces": true,
+      "page": "https://commons.wikimedia.org/wiki/File:Frans_Hals_-_Portret_van_een_stel_in_een_landschap_-_Google_Art_Project.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/78/Frans_Hals_-_Portret_van_een_stel_in_een_landschap_-_Google_Art_Project.jpg/3840px-Frans_Hals_-_Portret_van_een_stel_in_een_landschap_-_Google_Art_Project.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/7/78/Frans_Hals_-_Portret_van_een_stel_in_een_landschap_-_Google_Art_Project.jpg",
+        "width": 6936,
+        "height": 5876,
+        "bytes": 11648987
+      },
+      "licence": "Public domain (painting by Frans Hals, who died in 1666)",
+      "licenceTemplate": "{{PD-Art|PD-old-100-expired}}",
+      "author": "Painting: Frans Hals (c. 1622, d. 1666), Rijksmuseum Amsterdam. Source: Google Arts & Culture (From Google Cultural Institute|TQGvNkNZ3MM17g)",
+      "notes": "FACES: 2, painting, both frontal/near-frontal",
+      "sha256": "5fce7edaff5f0f8b76e2d26cba3e977a6ca910605231cf912e297eceb1233727"
+    },
+    {
+      "id": "grooth-family",
+      "file": "IMG_20260506_150200.jpg",
+      "day": 3,
+      "folder": "3_Mittwoch Museum",
+      "date": "2026-05-06T15:02:00",
+      "kind": "photo",
+      "description": "Group portrait: elector with cello, wife and sister at the harpsichord",
+      "faces": true,
+      "page": "https://commons.wikimedia.org/wiki/File:Grooth_-_Maximilian_III_Joseph_with_his_wife_and_sister_2.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/16/Grooth_-_Maximilian_III_Joseph_with_his_wife_and_sister_2.jpg/3840px-Grooth_-_Maximilian_III_Joseph_with_his_wife_and_sister_2.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/1/16/Grooth_-_Maximilian_III_Joseph_with_his_wife_and_sister_2.jpg",
+        "width": 4260,
+        "height": 4720,
+        "bytes": 10076905
+      },
+      "licence": "Public domain (painting by Grooth, who died in 1797; photo of it CC0)",
+      "licenceTemplate": "{{PD-art-old-100-expired}} {{self|cc-zero}}",
+      "author": "Painting: Johann Nikolaus Grooth (1758, d. 1797), Munich Residenz. Photo: Wilfredor (Wilfredo Rodríguez), own work",
+      "notes": "FACES: 3 (2 near-frontal, 1 in profile - good detector test); photo of the painting in the Munich Residenz",
+      "sha256": "cfccff17583dce20de3edb804dae32776849d813ed952800a59c51dd0f18e0cc"
+    },
+    {
+      "id": "sounion-temple",
+      "file": "IMG_20260506_183600.jpg",
+      "day": 3,
+      "folder": "3_Mittwoch Museum",
+      "date": "2026-05-06T18:36:00",
+      "kind": "photo",
+      "description": "Temple of Poseidon at Cape Sounion against blue sky",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Temple_of_Poseidon_perspective_at_Cape_Sounion_Greece.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f0/Temple_of_Poseidon_perspective_at_Cape_Sounion_Greece.jpg/3840px-Temple_of_Poseidon_perspective_at_Cape_Sounion_Greece.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/f/f0/Temple_of_Poseidon_perspective_at_Cape_Sounion_Greece.jpg",
+        "width": 4800,
+        "height": 3456,
+        "bytes": 12695054
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "notes": "no people visible in preview",
+      "sha256": "f5f0f533b4de1e7cf37c3e2773d465adc4c34bc0ea7367d5129cfc4e8445c1c4"
+    },
+    {
+      "id": "lake-yliki",
+      "file": "IMG_20260507_084400.jpg",
+      "day": 4,
+      "folder": "4_Donnerstag Delphi",
+      "date": "2026-05-07T08:44:00",
+      "kind": "photo",
+      "description": "Lake Yliki between hills and fields",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Illiki_lake_(part_of)_near_Thiva_Greece.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/98/Illiki_lake_%28part_of%29_near_Thiva_Greece.jpg/3840px-Illiki_lake_%28part_of%29_near_Thiva_Greece.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/9/98/Illiki_lake_%28part_of%29_near_Thiva_Greece.jpg",
+        "width": 6000,
+        "height": 3681,
+        "bytes": 11895852
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "sha256": "0cd47a2f655fc8c8120887bf69679abee891777f1ad55f64daf82b505ef59584"
+    },
+    {
+      "id": "delphi-temple",
+      "file": "IMG_20260507_103200.jpg",
+      "day": 4,
+      "folder": "4_Donnerstag Delphi",
+      "date": "2026-05-07T10:32:00",
+      "kind": "photo",
+      "description": "Delphi: Temple of Apollo ruins and the mountain valley",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Delphes,_Gr%C3%A8ce._Temple_d%27Apollon._Vall%C3%A9e.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/05/Delphes%2C_Gr%C3%A8ce._Temple_d%27Apollon._Vall%C3%A9e.jpg/3840px-Delphes%2C_Gr%C3%A8ce._Temple_d%27Apollon._Vall%C3%A9e.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/0/05/Delphes%2C_Gr%C3%A8ce._Temple_d%27Apollon._Vall%C3%A9e.jpg",
+        "width": 5508,
+        "height": 3520,
+        "bytes": 22890486
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "sha256": "fbe3aa7be1cad10d36bee20235d858d07556e38a68c071dccf7c649dece18f1c"
+    },
+    {
+      "id": "delphi-valley",
+      "file": "IMG_20260507_105100.jpg",
+      "day": 4,
+      "folder": "4_Donnerstag Delphi",
+      "date": "2026-05-07T10:51:00",
+      "kind": "photo",
+      "description": "Delphi: wide olive valley between mountains, cypresses",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:La_Vall%C3%A9e._Delphes._Greece.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4a/La_Vall%C3%A9e._Delphes._Greece.jpg/3840px-La_Vall%C3%A9e._Delphes._Greece.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/4/4a/La_Vall%C3%A9e._Delphes._Greece.jpg",
+        "width": 6000,
+        "height": 4000,
+        "bytes": 24884040
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "sha256": "de35d990db61d62a5312fe7099422595d1713f0d8021deb3783a9c6d444fb395"
+    },
+    {
+      "id": "arachova",
+      "file": "IMG_20260507_132700.jpg",
+      "day": 4,
+      "folder": "4_Donnerstag Delphi",
+      "date": "2026-05-07T13:27:00",
+      "kind": "photo",
+      "description": "Mountain village Arachova (Parnassus ski area) on a slope",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Arachova._Greece.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c2/Arachova._Greece.jpg/3840px-Arachova._Greece.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/c/c2/Arachova._Greece.jpg",
+        "width": 5544,
+        "height": 3588,
+        "bytes": 14540893
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "sha256": "da0c9959a5a7b1d7ca7efe529cc186f309b5f659e16ef78d044c2486dd21c45b"
+    },
+    {
+      "id": "cloud-timelapse",
+      "file": "VID_20260507_145500.mp4",
+      "day": 4,
+      "folder": "4_Donnerstag Delphi",
+      "date": "2026-05-07T14:55:00",
+      "kind": "video",
+      "description": "Time-lapse: lenticular cloud over a snowy mountain range",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Lenticular_cloud_over_Longs_Peak,_Colorado_(time_lapse).ogv",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/a/aa/Lenticular_cloud_over_Longs_Peak%2C_Colorado_%28time_lapse%29.ogv",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/a/aa/Lenticular_cloud_over_Longs_Peak%2C_Colorado_%28time_lapse%29.ogv",
+        "width": 1920,
+        "height": 1080,
+        "bytes": 27502054,
+        "seconds": 29.3
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Stepleton (Commons user) - source: own work",
+      "notes": "USA; Ogg Theora - transcode to MP4",
+      "clip": {
+        "start": 8,
+        "duration": 12
+      },
+      "sha256": "f8d887f1e058b0267163fb2cf39e500d0707c8b4dfbb165fd6cbd31ff00a9d30"
+    },
+    {
+      "id": "eretria-ferry",
+      "file": "IMG_20260507_161800.jpg",
+      "day": 4,
+      "folder": "4_Donnerstag Delphi",
+      "date": "2026-05-07T16:18:00",
+      "kind": "photo",
+      "description": "Small car ferry at the quay in Eretria (wide)",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Theologos_Eleni_ferry_Eretria_Greece.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e2/Theologos_Eleni_ferry_Eretria_Greece.jpg/3840px-Theologos_Eleni_ferry_Eretria_Greece.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/e/e2/Theologos_Eleni_ferry_Eretria_Greece.jpg",
+        "width": 5862,
+        "height": 2610,
+        "bytes": 6182257
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "notes": "Ship name on the hull, no company logo",
+      "sha256": "039f41eeea0f7ae06c03d996e6fc8219a71ce77f369a1d851571799d9a0c0aaa"
+    },
+    {
+      "id": "euboea-forest",
+      "file": "IMG_20260507_170200.jpg",
+      "day": 4,
+      "folder": "4_Donnerstag Delphi",
+      "date": "2026-05-07T17:02:00",
+      "kind": "photo",
+      "description": "Pine forest and green hills in northern Euboea",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Forest_north_Euboea_Greece.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8c/Forest_north_Euboea_Greece.jpg/3840px-Forest_north_Euboea_Greece.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/8/8c/Forest_north_Euboea_Greece.jpg",
+        "width": 5596,
+        "height": 3437,
+        "bytes": 18583059
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "sha256": "4d2a03f6e854d1217a2985124399a9caf3315a7b9da3323da421bcae3862a135"
+    },
+    {
+      "id": "drymonas-waterfall",
+      "file": "IMG_20260507_174000.jpg",
+      "day": 4,
+      "folder": "4_Donnerstag Delphi",
+      "date": "2026-05-07T17:40:00",
+      "kind": "photo",
+      "description": "Drymonas waterfall in a mossy gorge",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Waterfall_Drymona_Evia_Greece.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a9/Waterfall_Drymona_Evia_Greece.jpg/3840px-Waterfall_Drymona_Evia_Greece.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/a/a9/Waterfall_Drymona_Evia_Greece.jpg",
+        "width": 4000,
+        "height": 6000,
+        "bytes": 19617548
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "notes": "portrait orientation",
+      "sha256": "fbd61494fbfe3e60dcd4f46a67a03617366295f7194ab8948f23399b2052ef79"
+    },
+    {
+      "id": "dirfys-snow",
+      "file": "IMG_20260507_185500.jpg",
+      "day": 4,
+      "folder": "4_Donnerstag Delphi",
+      "date": "2026-05-07T18:55:00",
+      "kind": "photo",
+      "description": "Snow-capped Mount Dirfys above a calm bay, chapel on the shore",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Greece_Ktiponissi_Dirfys.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/26/Greece_Ktiponissi_Dirfys.jpg/3840px-Greece_Ktiponissi_Dirfys.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/2/26/Greece_Ktiponissi_Dirfys.jpg",
+        "width": 4480,
+        "height": 2928,
+        "bytes": 11254900
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "notes": "the snow picture",
+      "sha256": "de70314398514ce8876ab2dde6431ffef655ce45cb205797e8bc9fe1d9360e4a"
+    },
+    {
+      "id": "sunrise-beach",
+      "file": "VID_20260508_062100.mp4",
+      "day": 5,
+      "folder": "5_Freitag Ägina",
+      "date": "2026-05-08T06:21:00",
+      "kind": "video",
+      "description": "Handheld walk on a beach at sunrise, waves",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Sunrise_Glow_Over_Surf_Beach_with_Pink_Horizon_and_Vibrant_Sand_Tones.webm",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/e/ee/Sunrise_Glow_Over_Surf_Beach_with_Pink_Horizon_and_Vibrant_Sand_Tones.webm",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/e/ee/Sunrise_Glow_Over_Surf_Beach_with_Pink_Horizon_and_Vibrant_Sand_Tones.webm",
+        "width": 1080,
+        "height": 1920,
+        "bytes": 7097794,
+        "seconds": 26.1
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "JaredMcKenzie (Commons user) - source: own work",
+      "notes": "the vertical clip; Australia; no people in sampled frames",
+      "clip": {
+        "start": 7.5,
+        "duration": 10
+      },
+      "sha256": "0e789ea0eaddb5b1e8a7999968143de7beb64f07ece25a918997073fe91072a6"
+    },
+    {
+      "id": "piraeus-ferry",
+      "file": "IMG_20260508_090800.jpg",
+      "day": 5,
+      "folder": "5_Freitag Ägina",
+      "date": "2026-05-08T09:08:00",
+      "kind": "photo",
+      "description": "Ferry bow ramp with Piraeus harbour behind, blue sky",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Piraeus_from_ferry_to_Aegina,_Greece.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/da/Piraeus_from_ferry_to_Aegina%2C_Greece.jpg/3840px-Piraeus_from_ferry_to_Aegina%2C_Greece.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/d/da/Piraeus_from_ferry_to_Aegina%2C_Greece.jpg",
+        "width": 4545,
+        "height": 3025,
+        "bytes": 6360277
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "sha256": "230ec651a1fab5f221513ec1a4ed386be1fa798fb5c1834e30002e86d61af957"
+    },
+    {
+      "id": "ferry-deck",
+      "file": "IMG_20260508_091300.jpg",
+      "day": 5,
+      "folder": "5_Freitag Ägina",
+      "date": "2026-05-08T09:13:00",
+      "kind": "photo",
+      "description": "On the ferry deck, mast and bow ramp against deep-blue sky",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:In_the_ferry_to_Aegina.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/3/35/In_the_ferry_to_Aegina.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/3/35/In_the_ferry_to_Aegina.jpg",
+        "width": 3056,
+        "height": 4089,
+        "bytes": 7859918
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "notes": "portrait orientation",
+      "sha256": "4a322b7d410ea03d99337ef68b1b7802e2635ba2998bf2e5805777f85cc80867"
+    },
+    {
+      "id": "aegina-harbour",
+      "file": "IMG_20260508_100600.jpg",
+      "day": 5,
+      "folder": "5_Freitag Ägina",
+      "date": "2026-05-08T10:06:00",
+      "kind": "photo",
+      "description": "Aegina waterfront: pastel houses and church towers over blue water",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Aegina_harbour_1.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/26/Aegina_harbour_1.jpg/3840px-Aegina_harbour_1.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/2/26/Aegina_harbour_1.jpg",
+        "width": 4559,
+        "height": 2690,
+        "bytes": 12122185
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "notes": "Tiny people along the quay (a few px high), not identifiable",
+      "sha256": "741d8a08c0c63199222656c92f1d14c8fe57d55a453f0c67f8023b6107c30273"
+    },
+    {
+      "id": "fishing-boat",
+      "file": "IMG_20260508_104200.jpg",
+      "day": 5,
+      "folder": "5_Freitag Ägina",
+      "date": "2026-05-08T10:42:00",
+      "kind": "photo",
+      "description": "Colourful wooden fishing boat reflected in the turquoise harbour",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Colorful_boat_Nea_Artaki_Euboea_Greece.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/84/Colorful_boat_Nea_Artaki_Euboea_Greece.jpg/3840px-Colorful_boat_Nea_Artaki_Euboea_Greece.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/8/84/Colorful_boat_Nea_Artaki_Euboea_Greece.jpg",
+        "width": 6000,
+        "height": 4000,
+        "bytes": 11885273
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "sha256": "70466e98bb3202f3c399e4d3fa1c1570d37f983262d299ebeca2657a69972cd2"
+    },
+    {
+      "id": "harbour-chapel",
+      "file": "IMG_20260508_111700.jpg",
+      "day": 5,
+      "folder": "5_Freitag Ägina",
+      "date": "2026-05-08T11:17:00",
+      "kind": "photo",
+      "description": "White-and-blue harbour chapel and red boat",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Harbour_chapel,_red_boat,_Nea_Artaki,_Evia_Greece.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9f/Harbour_chapel%2C_red_boat%2C_Nea_Artaki%2C_Evia_Greece.jpg/3840px-Harbour_chapel%2C_red_boat%2C_Nea_Artaki%2C_Evia_Greece.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/9/9f/Harbour_chapel%2C_red_boat%2C_Nea_Artaki%2C_Evia_Greece.jpg",
+        "width": 5999,
+        "height": 3575,
+        "bytes": 11082523
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "notes": "small Greek flags in the background",
+      "sha256": "c7496b897c82aa7886117312265bf47194edae537e335942c7d5c8a363087ed1"
+    },
+    {
+      "id": "bourtzi-castle",
+      "file": "IMG_20260508_123300.jpg",
+      "day": 5,
+      "folder": "5_Freitag Ägina",
+      "date": "2026-05-08T12:33:00",
+      "kind": "photo",
+      "description": "Venetian castle by the turquoise sea and rocky shore",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Bourtzi_castle_harbour_Karystos_Euboea_Greece.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/36/Bourtzi_castle_harbour_Karystos_Euboea_Greece.jpg/3840px-Bourtzi_castle_harbour_Karystos_Euboea_Greece.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/3/36/Bourtzi_castle_harbour_Karystos_Euboea_Greece.jpg",
+        "width": 6000,
+        "height": 3663,
+        "bytes": 19425906
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "sha256": "b468d348b8f742f1ef6edafa7cba6baeea720d23f05eaa2a020781dc029df47c"
+    },
+    {
+      "id": "pebble-beach",
+      "file": "IMG_20260508_140800.jpg",
+      "day": 5,
+      "folder": "5_Freitag Ägina",
+      "date": "2026-05-08T14:08:00",
+      "kind": "photo",
+      "description": "Empty pebble beach with a rowing boat and green cliffs",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Greece_Chiliadou_Euboea_boat.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/1d/Greece_Chiliadou_Euboea_boat.jpg/3840px-Greece_Chiliadou_Euboea_boat.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/1/1d/Greece_Chiliadou_Euboea_boat.jpg",
+        "width": 5259,
+        "height": 3514,
+        "bytes": 22718558
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "sha256": "f9493e83c0fd3e8ce4d10452b066e16dd8d6d4b6d83111cbd86dd32bfda67267"
+    },
+    {
+      "id": "waves",
+      "file": "VID_20260508_143100.mp4",
+      "day": 5,
+      "folder": "5_Freitag Ägina",
+      "date": "2026-05-08T14:31:00",
+      "kind": "video",
+      "description": "Waves rolling onto a Mediterranean beach (Sardinia)",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Vagues_%C3%A0_Badesi_-_Gallura_-_2016.webm",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/3/3e/Vagues_%C3%A0_Badesi_-_Gallura_-_2016.webm",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/3/3e/Vagues_%C3%A0_Badesi_-_Gallura_-_2016.webm",
+        "width": 1920,
+        "height": 1080,
+        "bytes": 8566244,
+        "seconds": 21.1
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Benoît Prieur (Commons user) - source: own work",
+      "notes": "no people",
+      "clip": {
+        "start": 3,
+        "duration": 12
+      },
+      "sha256": "ef1bfa546d57df4416c1f95e4fb0a2a8a6ec8ae8152605770ae3e0eab503c80e"
+    },
+    {
+      "id": "aegina-sunset",
+      "file": "IMG_20260508_194100.jpg",
+      "day": 5,
+      "folder": "5_Freitag Ägina",
+      "date": "2026-05-08T19:41:00",
+      "kind": "photo",
+      "description": "Aegina harbour and domed church in golden sunset light",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Aegina_sunset.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9d/Aegina_sunset.jpg/3840px-Aegina_sunset.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/9/9d/Aegina_sunset.jpg",
+        "width": 3981,
+        "height": 2556,
+        "bytes": 9527194
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "notes": "the sunset picture",
+      "sha256": "41f46678c8b18a10d3c63cad18ba517d47c091bb1527252010011464cb99b8f5"
+    },
+    {
+      "id": "palm-evening",
+      "file": "IMG_20260508_200600.jpg",
+      "day": 5,
+      "folder": "5_Freitag Ägina",
+      "date": "2026-05-08T20:06:00",
+      "kind": "photo",
+      "description": "Palm tree and benches on the seafront at dusk",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Evening,_palm_tree,_Chalkida_Greece.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/ad/Evening%2C_palm_tree%2C_Chalkida_Greece.jpg/3840px-Evening%2C_palm_tree%2C_Chalkida_Greece.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/a/ad/Evening%2C_palm_tree%2C_Chalkida_Greece.jpg",
+        "width": 4000,
+        "height": 4753,
+        "bytes": 13673185
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "notes": "portrait orientation",
+      "sha256": "fb99705dd0fa5615987bad0b75ab25de92019da000256be88cdfa11215b437d3"
+    },
+    {
+      "id": "chapel-night",
+      "file": "IMG_20260508_210200.jpg",
+      "day": 5,
+      "folder": "5_Freitag Ägina",
+      "date": "2026-05-08T21:02:00",
+      "kind": "photo",
+      "description": "Floodlit white chapel at the harbour at night",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:Night_view_chapel_harbour_Aegina_Greece.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/25/Night_view_chapel_harbour_Aegina_Greece.jpg/3840px-Night_view_chapel_harbour_Aegina_Greece.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/2/25/Night_view_chapel_harbour_Aegina_Greece.jpg",
+        "width": 4184,
+        "height": 2929,
+        "bytes": 4787544
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "Jebulon (Commons user) - source: own work",
+      "sha256": "a12a2bd42667aa6bd98f7ab3205974b793fcf890366bd43e80d932930104422c"
+    },
+    {
+      "id": "athens-night",
+      "file": "IMG_20260508_221400.jpg",
+      "day": 5,
+      "folder": "5_Freitag Ägina",
+      "date": "2026-05-08T22:14:00",
+      "kind": "photo",
+      "description": "Illuminated Acropolis above Monastiraki at night",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:View_of_Athens_at_night_-_001.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f2/View_of_Athens_at_night_-_001.jpg/3840px-View_of_Athens_at_night_-_001.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/f/f2/View_of_Athens_at_night_-_001.jpg",
+        "width": 4873,
+        "height": 3253,
+        "bytes": 1484090
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{cc-zero}} {{FlickreviewR|status=passed|author=boklm|...}}",
+      "author": "Nicolas Vigier (Flickr user boklm). Source: https://www.flickr.com/photos/boklm/38612484212/ (Flickr CC0, FlickreviewR passed)",
+      "notes": "a bit soft/noisy; no people visible",
+      "sha256": "be91dd9b00cd168a14e7dfaf1db645cf80df3b3fc1420eac0c8de4602b276b3e"
+    },
+    {
+      "id": "fireworks",
+      "file": "IMG_20260508_223900.jpg",
+      "day": 5,
+      "folder": "5_Freitag Ägina",
+      "date": "2026-05-08T22:39:00",
+      "kind": "photo",
+      "description": "Pink firework burst next to a white church tower",
+      "faces": false,
+      "page": "https://commons.wikimedia.org/wiki/File:New_Year%27s_fireworks_in_Gliwice,_Silesian_Voivodeship,_Poland,_December_2024_January_2025_(9).jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/81/New_Year%27s_fireworks_in_Gliwice%2C_Silesian_Voivodeship%2C_Poland%2C_December_2024_January_2025_%289%29.jpg/3840px-New_Year%27s_fireworks_in_Gliwice%2C_Silesian_Voivodeship%2C_Poland%2C_December_2024_January_2025_%289%29.jpg",
+      "original": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/8/81/New_Year%27s_fireworks_in_Gliwice%2C_Silesian_Voivodeship%2C_Poland%2C_December_2024_January_2025_%289%29.jpg",
+        "width": 4000,
+        "height": 3000,
+        "bytes": 3200946
+      },
+      "licence": "CC0 1.0",
+      "licenceTemplate": "{{self|cc-zero}}",
+      "author": "MichalPL (Commons user) - source: own work",
+      "notes": "Poland, New Year 2025, phone photo; the tower is generic",
+      "sha256": "4c1e0ef6f3f0a2eeafd3bda8e729aeea6d2e9c6923a339f2db70556f40dba741"
+    }
+  ]
+}

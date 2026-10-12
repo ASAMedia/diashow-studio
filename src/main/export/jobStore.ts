@@ -9,7 +9,7 @@ import type { AudioPlan, Project, VideoCodec } from '@shared/types'
 import type { Chapter } from '@shared/chapters'
 import type { ThemeTrack } from '@shared/themeMusic'
 import type { Segment } from './segments'
-import { finite, ID_RE, isObject } from './validate'
+import { finite, ID_RE, isObject, validateThemeSong } from './validate'
 
 const JOB_FILE = 'job.json'
 const MIX_FILE = 'mix.wav'
@@ -148,6 +148,12 @@ export async function loadJobs(root: string): Promise<Job[]> {
       continue
     }
     if (file.version !== 1 || file.id !== name || !isObject(file.request) || !(file.totalFrames > 0) || !(file.segmentFrames > 0) || !finite(file.createdAt)) continue
+    // a job queued by 1.2 names its theme song by the theme: today's form (song id and themes)
+    try {
+      if (file.themeSong) file.themeSong = validateThemeSong(file.themeSong)
+    } catch {
+      // left as it was
+    }
     const job = makeJob(file, dir)
     let dirty = false
     // only segments whose file is there count

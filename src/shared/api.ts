@@ -19,6 +19,7 @@ import type { ExportJobInfo, ExportTask, NewExportJob, SegmentInput } from './ex
 import type { ThemeTrack } from './themeMusic'
 import type { ShareCommand, ShareFilesEvent, ShareStatus } from './share'
 import type { CleanupChoice, CleanupInventory, CleanupResult, DeleteExtras } from './cleanup'
+import type { ArchiveChoice, ArchiveInventory, ArchiveProgress, ArchiveResult, ArchiveTarget, ArchiveVideo } from './archive'
 import type { BenchMedia, EncoderTest, SystemInfo } from './systemCheck'
 import type { AboutInfo, UpdateStatus } from './about'
 import type { ReportFields } from './reportProblem'
@@ -63,6 +64,19 @@ export interface DiashowApi {
   cleanupRun(projectId: string, choice: CleanupChoice): Promise<CleanupResult>
   /** Deletion reminder of a project that is not open (null: none). */
   setDeleteAt(projectId: string, at: number | null): Promise<void>
+
+  // "Diashow als ZIP archivieren" (src/shared/archive.ts)
+  /** What the archive of a saved project would hold, with sizes, a suggested target and its free space. */
+  archiveInventory(projectId: string): Promise<ArchiveInventory>
+  /** Save dialog for the .zip (`bytes`: about how large it becomes, for the FAT32 check); null when cancelled. */
+  pickArchiveTarget(suggested: string, bytes: number): Promise<ArchiveTarget | null>
+  /** "Add another video file…": open dialog for videos to put into the archive. */
+  pickArchiveVideos(): Promise<ArchiveVideo[]>
+  /** Writes and checks the archive at a target from pickArchiveTarget; progress through onArchiveProgress. */
+  archiveRun(projectId: string, choice: ArchiveChoice, target: string): Promise<ArchiveResult>
+  /** Stops the archive being written and deletes its partial file. */
+  archiveCancel(): Promise<void>
+  onArchiveProgress(cb: (p: ArchiveProgress) => void): () => void
 
   // Export: renderer renders frames, main encodes them with FFmpeg.
   encoders(): Promise<EncoderInfo>
