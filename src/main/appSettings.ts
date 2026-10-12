@@ -1,9 +1,10 @@
 // App-wide settings (AppSettings) as JSON in the userData folder (path injected). Electron-free.
 import { readFileSync } from 'node:fs'
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { AppSettings } from '@shared/types'
 import { validHost } from '@shared/netPaths'
+import { replaceFile } from './replaceFile'
 
 const MAX_BYTES = 256 * 1024
 
@@ -55,7 +56,14 @@ export function readAppSettingsSync(file: string): AppSettings {
 }
 
 export function createAppSettingsStore(file: string): AppSettingsStore {
-  let writing: Promise<void> = Promise.resolve()
+  // Reads and writes take turns: on Windows, replacing the file fails while a read still has it open
+  // (several parts of the UI read the settings when a dialog opens, while another part writes).
+  let queue: Promise<unknown> = Promise.resolve()
+  const inTurn = <T>(fn: () => Promise<T>): Promise<T> => {
+    const next = queue.then(fn, fn)
+    queue = next.catch(() => {})
+    return next
+  }
   const read = async (): Promise<AppSettings> => {
     try {
       return sanitizeAppSettings(JSON.parse(await readFile(file, 'utf8')))
@@ -70,26 +78,24 @@ export function createAppSettingsStore(file: string): AppSettingsStore {
     const tmp = `${file}.${process.pid}.tmp`
     await writeFile(tmp, data, 'utf8')
     try {
-      await rename(tmp, file)
+      // a virus scanner may still hold the old file for a moment
+      await replaceFile(tmp, file)
     } catch (err) {
       await rm(tmp, { force: true })
       throw err
     }
   }
   return {
-    async get() {
-      await writing.catch(() => {})
-      return read()
+    get() {
+      return inTurn(read)
     },
     set(settings) {
       const data = JSON.stringify(sanitizeAppSettings(settings), null, 1)
       if (data.length > MAX_BYTES) return Promise.reject(new Error('settings too large'))
-      writing = writing.catch(() => {}).then(() => write(settings))
-      return writing
+      return inTurn(() => write(settings))
     },
     update(patch) {
-      writing = writing.catch(() => {}).then(async () => write({ ...(await read()), ...sanitizeAppSettings(patch) }))
-      return writing
+      return inTurn(async () => write({ ...(await read()), ...sanitizeAppSettings(patch) }))
     }
   }
 }

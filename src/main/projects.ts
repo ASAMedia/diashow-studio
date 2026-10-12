@@ -8,12 +8,13 @@
 // Every project read from disk is migrated and validated (projectSchema.ts): broken parts are dropped or
 // repaired and reported through `onReport`; when data was lost, the file as it was is kept as a backup
 // first. Files that cannot be read at all are listed by damaged() and can be rescued with repair().
-import { copyFile, mkdir, readdir, readFile, rename, rm, stat, utimes, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import type { DamagedProject, ProjectReportEvent, RepairChoice, RepairPlan, RepairReport } from '@shared/diagnostics'
 import type { BackupInfo, Project, ProjectSummary } from '@shared/types'
 import { validDeleteAt } from '@shared/cleanup'
 import { cleanProjectText, formatVersion, hasChanges, lostData, PROJECT_VERSION, ProjectFormatError, readProjectText } from './projectSchema'
+import { replaceFile } from './replaceFile'
 
 export const PROJECT_EXT = '.dshow'
 export const BACKUPS = '.backups'
@@ -160,7 +161,8 @@ export function createProjectStore(dir: string, opts: ProjectStoreOptions = {}):
     const tmp = `${target}.${process.pid}.${now()}.tmp`
     await writeFile(tmp, JSON.stringify(project, null, 1), 'utf8')
     try {
-      await rename(tmp, target)
+      // the project list may be reading the file right now, or a virus scanner may hold it
+      await replaceFile(tmp, target)
     } catch (err) {
       await rm(tmp, { force: true })
       throw err

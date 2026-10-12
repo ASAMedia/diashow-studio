@@ -4,11 +4,12 @@
 import type { ChildProcess } from 'node:child_process'
 import { once } from 'node:events'
 import { createReadStream, existsSync } from 'node:fs'
-import { rename, writeFile } from 'node:fs/promises'
+import { writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { VideoCodec } from '@shared/types'
 import { chapterMetadata, type Chapter } from '@shared/chapters'
 import { abortError } from '../abort'
+import { replaceFile } from '../replaceFile'
 import { summarizeStderr, type Ffmpeg } from '../ffmpeg'
 import { videoStream } from '../media/videoInfo'
 import { AnnexBToTs } from './annexb'
@@ -31,20 +32,13 @@ export interface JoinOptions {
   chaptersFile?: string
 }
 
-/** rename that retries a moment when the target is busy (Explorer preview, virus scanner). */
-async function replaceFile(from: string, to: string): Promise<void> {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      await rename(from, to)
-      return
-    } catch (err) {
-      const code = (err as NodeJS.ErrnoException).code
-      if (attempt < 10 && (code === 'EPERM' || code === 'EBUSY' || code === 'EACCES')) {
-        await new Promise((r) => setTimeout(r, 300))
-        continue
-      }
-      throw new Error(`could not replace ${to} (${code ?? (err instanceof Error ? err.message : String(err))}); is it open in another program?`)
-    }
+/** Moves the finished MP4 over the output; a player or Explorer's preview may hold it for seconds. */
+async function replaceOutput(from: string, to: string): Promise<void> {
+  try {
+    await replaceFile(from, to, { attempts: 11, delayMs: 300 })
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code
+    throw new Error(`could not replace ${to} (${code ?? (err instanceof Error ? err.message : String(err))}); is it open in another program?`)
   }
 }
 
@@ -127,7 +121,7 @@ export async function joinSegments(ff: Ffmpeg, o: JoinOptions): Promise<void> {
     if (frames !== totalFrames) throw new Error(`the MP4 has ${frames} frames, expected ${totalFrames}`)
     if (!probe.streams.some((s) => s.codec_type === 'audio')) throw new Error('the MP4 has no sound')
     check()
-    await replaceFile(partial, out)
+    await replaceOutput(partial, out)
   } catch (err) {
     child?.kill('SIGKILL')
     await exited

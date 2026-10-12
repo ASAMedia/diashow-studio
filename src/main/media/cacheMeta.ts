@@ -2,10 +2,11 @@
 // processed item, source.json the original it was made from. A cached item counts only while its
 // files are there; the cache cleanup leaves alone whatever is in work.
 import { existsSync } from 'node:fs'
-import { readFile, rename, stat, writeFile } from 'node:fs/promises'
+import { readFile, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import type { CacheInfo, MediaItem } from '@shared/types'
 import { cacheInfo as scanCacheInfo, cleanCache as cleanCacheDir, ID_FOLDER, type CleanTarget } from '../cache'
+import { replaceFile } from '../replaceFile'
 import { mediaId } from './scan'
 import type { CacheUsage } from './service'
 import { clean, type ServiceContext } from './serviceContext'
@@ -20,7 +21,8 @@ const RECENT_MS = 5 * 60_000
 export async function writeJson(path: string, data: unknown): Promise<void> {
   const tmp = `${path}.tmp`
   await writeFile(tmp, JSON.stringify(data))
-  await rename(tmp, path)
+  // a restore may be reading the old meta.json at this moment
+  await replaceFile(tmp, path)
 }
 
 export async function readJson<T>(path: string): Promise<T | null> {
