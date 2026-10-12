@@ -1,6 +1,5 @@
 // Slide tab: what the selected slide holds and how it plays; several slides at once go to BatchPanel.
-import { Crop as CropIcon, Film, LogOut, Maximize, Minus, Plus, ScanFace, Trash2, Volume2, VolumeX } from 'lucide-react'
-import { mediaUrl } from '@shared/api'
+import { Crop as CropIcon, Film, LogOut, Maximize, Minus, Plus, ScanFace, SquarePen, Trash2, Volume2, VolumeX } from 'lucide-react'
 import { themeMeta } from '@shared/themes'
 import type { Entry, MediaItem, PhotoEntry, TextEntry, TitleStyle, VideoEntry } from '@shared/types'
 import { titleStyleOf, type TimelineSlide } from '@shared/timeline'
@@ -11,7 +10,9 @@ import { useStore } from '../store'
 import { timelineOf } from '../timeline'
 import { fmtTime, localeTag, t } from '../i18n'
 import { Check, Field, Section, Slider, TITLE_STYLES } from './ui'
-import { BatchPanel, FreeTextSection, PrivacySection, SpeedSelect } from './SlideTools'
+import { BatchPanel, EditSection, FreeTextSection, PrivacySection, SpeedSelect } from './SlideTools'
+import { MediaThumb } from './EditedPicture'
+import { openPhotoEdit } from '../photoEdit'
 import { TrimStrip } from './TrimStrip'
 import { ErrorText } from '../errors'
 
@@ -54,7 +55,7 @@ function ChapterMusic({ entry }: { entry: TextEntry }) {
 function MediaInfo({ m }: { m: MediaItem }) {
   return (
     <div className="section media-info">
-      {m.thumb && <img className="preview-thumb" src={mediaUrl(m.thumb)} alt={m.name} />}
+      {m.thumb && <MediaThumb className="preview-thumb" m={m} alt={m.name} />}
       <dl className="info">
         <dt>{t('file')}</dt>
         <dd title={m.path}>{m.name}</dd>
@@ -270,7 +271,7 @@ export function SlidePanel() {
               const isVideo = e.type === 'video'
               return (
                 <div key={e.id} className="item" title={m?.name}>
-                  {m?.thumb && <img src={mediaUrl(m.thumb)} alt={m.name} />}
+                  {m?.thumb && <MediaThumb m={m} alt={m.name} />}
                   {isVideo && (
                     <span className="badge kind">
                       <Film size={10} /> {fmtTime(m?.duration ?? 0)}
@@ -295,7 +296,12 @@ export function SlidePanel() {
                       )
                     })()}
                     {e.type !== 'text' && (
-                      <button title={t('privacyEdit')} aria-label={`${t('privacyEdit')} ${m?.name ?? ''}`} className={e.privacy?.length || (e.type === 'video' && e.privacyTracks?.length) ? 'on' : ''} onClick={() => set({ privacyEdit: e.id, kbEdit: null })}>
+                      <button title={t('peEditHint')} aria-label={`${t('peEdit')}: ${m?.name ?? ''}`} onClick={() => openPhotoEdit(e.id)}>
+                        <SquarePen size={12} />
+                      </button>
+                    )}
+                    {e.type !== 'text' && (
+                      <button title={t('privacyEdit')} aria-label={`${t('privacyEdit')} ${m?.name ?? ''}`} className={e.privacy?.length || (e.type === 'video' && e.privacyTracks?.length) ? 'on' : ''} onClick={() => set({ privacyEdit: e.id, kbEdit: null, photoEdit: null })}>
                         <ScanFace size={12} />
                       </button>
                     )}
@@ -363,6 +369,7 @@ export function SlidePanel() {
     return (
       <>
         <MediaInfo m={m} />
+        <EditSection entry={ve} media={m} />
         <Section title={t('trim')}>
           <TrimStrip entry={ve} media={m} />
           <SpeedSelect entry={ve} hasAudio={!!m.hasAudio} />
@@ -404,6 +411,7 @@ export function SlidePanel() {
   return (
     <>
       <MediaInfo m={m} />
+      <EditSection entry={pe} media={m} />
       <Section title={t('duration')}>
         <DurationOverride entry={pe} />
       </Section>
@@ -429,10 +437,10 @@ export function SlidePanel() {
       {meta.kenBurns && (
         <Section title={t('kenBurns')}>
           <div className="row">
-            <button className={`btn small ${kbEdit === 'start' ? 'on' : ''}`} aria-pressed={kbEdit === 'start'} onClick={() => set({ kbEdit: 'start' })}>
+            <button className={`btn small ${kbEdit === 'start' ? 'on' : ''}`} aria-pressed={kbEdit === 'start'} onClick={() => set({ kbEdit: 'start', photoEdit: null })}>
               {t('kbStart')}
             </button>
-            <button className={`btn small ${kbEdit === 'end' ? 'on' : ''}`} aria-pressed={kbEdit === 'end'} onClick={() => set({ kbEdit: 'end' })}>
+            <button className={`btn small ${kbEdit === 'end' ? 'on' : ''}`} aria-pressed={kbEdit === 'end'} onClick={() => set({ kbEdit: 'end', photoEdit: null })}>
               {t('kbEnd')}
             </button>
             <button className="btn small ghost" disabled={!pe.kenBurns} onClick={() => setEntry(pe.id, { kenBurns: undefined })}>

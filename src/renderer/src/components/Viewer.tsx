@@ -6,7 +6,10 @@ import type { TimelineSlide } from '@shared/timeline'
 import { themeMeta } from '@shared/themes'
 import { aspectValue } from '@shared/timeline'
 import { Player } from '../engine/player'
-import { coverRect, defaultKenBurns, photoUv, showsWhole, type Box } from '../engine/draw'
+import { coverRect, kenBurnsOf, photoUv, showsWhole, type Box } from '../engine/draw'
+import { shownAspect, sourceAspect } from '@shared/mediaEdit'
+import { EditedPicture } from './EditedPicture'
+import { PhotoEditor } from './PhotoEditor'
 import { Crop as CropIcon, Maximize } from 'lucide-react'
 import { playerRef, useStore } from '../store'
 import { timelineOf, useTimeline } from '../timeline'
@@ -35,6 +38,7 @@ export function Viewer() {
   const playing = useStore((s) => s.playing)
   const kbEdit = useStore((s) => s.kbEdit)
   const privacyEdit = useStore((s) => s.privacyEdit)
+  const photoEdit = useStore((s) => s.photoEdit)
   const fullscreen = useStore((s) => s.fullscreen)
   const tl = useTimeline()
   const stageRef = useRef<HTMLDivElement>(null)
@@ -130,11 +134,12 @@ export function Viewer() {
       <div className="stage" ref={stageRef} data-theme="dark">
         <div className="frame" style={{ width: fw, height: fh, visibility: empty ? 'hidden' : 'visible' }}>
           <canvas ref={canvasRef} />
-          {!playing && !kbEdit && !privacyEdit && editSlide && <CropEditor slide={editSlide} scale={fw / (canvasRef.current?.width || fw)} />}
-          {!playing && !kbEdit && !privacyEdit && atPlayhead?.template?.id === 'free' && <CollageEditor slide={atPlayhead} w={fw} h={fh} />}
-          {!playing && !kbEdit && !privacyEdit && atPlayhead && <FreeTextLayer slide={atPlayhead} w={fw} h={fh} />}
+          {!playing && !kbEdit && !privacyEdit && !photoEdit && editSlide && <CropEditor slide={editSlide} scale={fw / (canvasRef.current?.width || fw)} />}
+          {!playing && !kbEdit && !privacyEdit && !photoEdit && atPlayhead?.template?.id === 'free' && <CollageEditor slide={atPlayhead} w={fw} h={fh} />}
+          {!playing && !kbEdit && !privacyEdit && !photoEdit && atPlayhead && <FreeTextLayer slide={atPlayhead} w={fw} h={fh} />}
           {privacyEdit && !playing && <PrivacyEditor entryId={privacyEdit} w={fw} h={fh} />}
-          {kbEdit && selectedPhoto && <KenBurnsEditor entry={selectedPhoto.e} display={selectedPhoto.m.display} mediaAspect={selectedPhoto.m.width / selectedPhoto.m.height} frameAspect={aspect} w={fw} h={fh} />}
+          {kbEdit && selectedPhoto && <KenBurnsEditor entry={selectedPhoto.e} display={selectedPhoto.m.display} mediaAspect={shownAspect(selectedPhoto.m)} frameAspect={aspect} w={fw} h={fh} />}
+          {photoEdit && !playing && fw > 0 && <PhotoEditor w={fw} h={fh} />}
         </div>
         {empty && (
           <div className="empty-stage">
@@ -192,7 +197,8 @@ function KenBurnsEditor(props: { entry: PhotoEntry; display?: string; mediaAspec
   const kbEdit = useStore((s) => s.kbEdit)!
   const setEntry = useStore((s) => s.setEntry)
   const media = useStore((s) => s.project?.media.find((m) => m.id === entry.mediaId))
-  const kb = entry.kenBurns ?? defaultKenBurns(mediaAspect, frameAspect, entry.id, media?.faces)
+  // the frames are drawn on the edited picture (as the engine draws them)
+  const kb = kenBurnsOf(entry, media, frameAspect)
   const full = coverRect(mediaAspect, frameAspect)
   // image area inside the editor (contain)
   const iw = Math.min(w * 0.92, (h * 0.86) * mediaAspect)
@@ -244,7 +250,7 @@ function KenBurnsEditor(props: { entry: PhotoEntry; display?: string; mediaAspec
   const cur = kb[kbEdit]
   return (
     <div className="kb">
-      {props.display && <img src={mediaUrl(props.display)} style={{ left: ix, top: iy, width: iw, height: ih }} alt="" />}
+      {props.display && <EditedPicture src={mediaUrl(props.display)} edit={media?.edit} aspect={sourceAspect(media)} box={{ x: ix, y: iy, w: iw, h: ih }} />}
       {rect(kbEdit === 'start' ? 'end' : 'start')}
       {rect(kbEdit)}
       <div className="kb-bar">
@@ -300,7 +306,7 @@ function CropEditor({ slide, scale }: { slide: TimelineSlide; scale: number }) {
         const e = slide.entries[i]
         const m = slide.media[i]
         if (!e || e.type === 'text' || !m) return null
-        const whole = showsWhole(e, settings, m.width / m.height, b.w / b.h)
+        const whole = showsWhole(e, settings, shownAspect(m), b.w / b.h)
         return (
           <div
             key={e.id}

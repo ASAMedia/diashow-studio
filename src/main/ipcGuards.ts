@@ -1,9 +1,11 @@
 // Checks of renderer input that reaches the file system or FFmpeg outside the export queue (which has
 // its own, export/validate.ts): the direct export (benchmark, tests) writes and on cancel deletes its
 // output file, so the path must be a video file in an existing folder, never a device path or URL.
+// "Problem melden" may open the browser, but only on pages of the project on GitHub (checkProjectUrl).
 import { statSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { dirname, isAbsolute, resolve } from 'node:path'
+import { MAX_URL_LENGTH, PROJECT_PAGE_PREFIX } from '@shared/reportProblem'
 import type { ExportOptions } from '@shared/types'
 import { validateAudio } from './export/validate'
 
@@ -68,4 +70,28 @@ export function checkDirectExport(raw: unknown): ExportOptions {
     audio: validateAudio(o.audio),
     ...(o.input !== undefined ? { input: o.input as ExportOptions['input'] } : {})
   }
+}
+
+/**
+ * A URL the browser may open for the app (shell:open-github): a page of the project on GitHub
+ * (https://github.com/ASAMedia/diashow-studio/…), nothing else. Returns it as the URL parser
+ * normalises it; throws for anything else, also for tricks that leave the project after parsing
+ * ("/../", "%2e%2e", encoded slashes, user names, ports, control characters).
+ */
+export function checkProjectUrl(raw: unknown): string {
+  const fail = (): never => {
+    throw new Error('only pages of the project on GitHub can be opened')
+  }
+  if (typeof raw !== 'string' || raw.length > MAX_URL_LENGTH || !raw.startsWith(PROJECT_PAGE_PREFIX)) return fail()
+  if (/[\s\\\u0000-\u001f\u007f-\u009f]/.test(raw)) return fail()
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    return fail()
+  }
+  const prefix = new URL(PROJECT_PAGE_PREFIX)
+  if (url.protocol !== 'https:' || url.host !== prefix.host || url.username || url.password || url.port) return fail()
+  if (!url.pathname.startsWith(prefix.pathname) || /%2f|%5c|%2e/i.test(url.pathname)) return fail()
+  return url.href
 }

@@ -44,9 +44,17 @@ function remember(key: string, make: () => Promise<string>): Promise<string> {
   return p
 }
 
+/** Drops every picture made so far (the clean-up removed the faces they show). */
+export function forgetFaceCrops(): void {
+  for (const p of urls.values()) void p.then((u) => URL.revokeObjectURL(u)).catch(() => {})
+  urls.clear()
+}
+
 /** A square picture of the face `r` (normalised) with some margin, `size` px. */
 export function faceCropUrl(m: MediaItem, r: Rect, t?: number, size = 96): Promise<string> {
-  const key = `face|${m.id}|${t ?? ''}|${r.x},${r.y},${r.w},${r.h}|${size}`
+  // upright as on the edited picture (rotate, straighten); the box is in the original's coordinates
+  const turn = m.edit ? ((m.edit.rotate + m.edit.straighten) * Math.PI) / 180 : 0
+  const key = `face|${m.id}|${t ?? ''}|${r.x},${r.y},${r.w},${r.h}|${size}|${turn.toFixed(3)}`
   return remember(key, async () => {
     const bmp = await source(m, t, 1600)
     try {
@@ -60,7 +68,9 @@ export function faceCropUrl(m: MediaItem, r: Rect, t?: number, size = 96): Promi
       g.fillStyle = '#222'
       g.fillRect(0, 0, size, size)
       g.imageSmoothingQuality = 'high'
-      g.drawImage(bmp, cx - side / 2, cy - side / 2, side, side, 0, 0, size, size)
+      g.translate(size / 2, size / 2)
+      g.rotate(turn)
+      g.drawImage(bmp, cx - side / 2, cy - side / 2, side, side, -size / 2, -size / 2, size, size)
       return URL.createObjectURL(await c.convertToBlob({ type: 'image/jpeg', quality: 0.85 }))
     } finally {
       bmp.close()

@@ -123,7 +123,8 @@ export async function stripFolder(ctx: ServiceContext, path: string): Promise<st
 
 // ------------------------------------------------------------------ cleanup
 
-function busyIds(ctx: ServiceContext): Set<string> {
+/** Ids in work; `recent`: freshly imported ids count too (the renderer may not have saved them yet). */
+function busyIds(ctx: ServiceContext, recent = true): Set<string> {
   const busy = new Set<string>()
   const now = Date.now()
   for (const it of ctx.items.values()) if (it.status === 'pending' || it.status === 'processing') busy.add(it.id)
@@ -132,8 +133,9 @@ function busyIds(ctx: ServiceContext): Set<string> {
   for (const path of ctx.writes.keys()) busy.add(basename(dirname(path)))
   for (const dir of ctx.strips.keys()) busy.add(basename(dirname(dir)))
   for (const [id, at] of ctx.recent) {
-    if (now - at < RECENT_MS) busy.add(id)
-    else ctx.recent.delete(id)
+    if (now - at < RECENT_MS) {
+      if (recent) busy.add(id)
+    } else ctx.recent.delete(id)
   }
   return busy
 }
@@ -156,4 +158,45 @@ export async function cleanCache(ctx: ServiceContext, what: CleanTarget, used: C
   if (what !== 'unused' && what !== 'hires' && what !== 'proxies') throw new Error(`unknown cache part: ${String(what)}`)
   forget(ctx, await cleanCacheDir(ctx.config.cacheDir, what, { ids: used.ids, paths: used.paths, busy: busyIds(ctx) }))
   return scanCacheInfo(ctx.config.cacheDir, { ids: used.ids, paths: used.paths, busy: busyIds(ctx) })
+}
+
+// ------------------------------------------------------------------ clean-up after a project
+
+/**
+ * The clean-up removed a project's face data: it leaves these items' cache folders (meta.json) and
+ * the service's memory too. Items not in work are forgotten, so the next restore takes each
+ * project's own copy (another project using the same file keeps the face data in its own file);
+ * items in work lose the fields and take the face centre the clean-up kept (their next update to
+ * the renderer must not change the framing).
+ */
+export async function forgetFaces(ctx: ServiceContext, items: { id: string; faceFocus?: { x: number; y: number } }[]): Promise<void> {
+  const busy = busyIds(ctx, false)
+  const gone = { faces: undefined, faceDesc: undefined, videoFaces: undefined }
+  for (const { id, faceFocus } of items.filter((x) => !!x && typeof x.id === 'string' && ID_FOLDER.test(x.id))) {
+    if (ctx.items.has(id)) {
+      if (busy.has(id)) ctx.set(id, faceFocus ? { ...gone, faceFocus } : gone)
+      else {
+        ctx.items.delete(id)
+        ctx.contexts.delete(id)
+      }
+    }
+    const path = join(ctx.folder(id), META)
+    // a write in flight would put the old state back
+    await ctx.writes.get(path)
+    const cached = await readJson<MediaItem>(path)
+    if (cached && (cached.faces !== undefined || cached.faceDesc !== undefined || cached.videoFaces !== undefined)) {
+      await writeJson(path, clean({ ...cached, ...gone })).catch(() => {})
+    }
+  }
+}
+
+/**
+ * The clean-up deletes the cache folders of these ids: the ones not in work now are forgotten (they
+ * are rebuilt when a project opens them again) and returned; the others stay.
+ */
+export function releaseCache(ctx: ServiceContext, ids: string[]): string[] {
+  const busy = busyIds(ctx, false)
+  const free = ids.filter((id) => typeof id === 'string' && ID_FOLDER.test(id) && !busy.has(id))
+  forget(ctx, free)
+  return free
 }

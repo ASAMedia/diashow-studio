@@ -39,6 +39,19 @@ Der Editor hat drei Bereiche: die **Vorschau** in der Mitte, rechts die Reiter *
 
 > Tipp: Mit [[Leertaste]] spielst du die Vorschau ab, mit [[←]] und [[→]] springst du von Folie zu Folie.
 
+### Fotos drehen, begradigen und zuschneiden
+
+Schiefe oder liegende Handyfotos richtest du wie in Fotos auf dem Mac: Foto auswählen und im Reiter **Folie** unter **Bild** auf **Bearbeiten** klicken (oder **Bearbeiten** im Menü der Folie). Über der Vorschau erscheinen:
+
+- **Drehen:** Die Pfeile drehen um 90° nach links oder rechts. [[Strg+R]] dreht alle ausgewählten Fotos nach links, auch auf mehreren Folien.
+- **Begradigen:** Der Regler neigt das Bild um bis zu 45°. Es wird dabei so weit vergrößert, dass keine leeren Ecken entstehen.
+- **Zuschneiden:** Ecken und Kanten des Rahmens ziehen oder den Rahmen verschieben. **Format** hält ein Seitenverhältnis fest (Frei, Original, 1:1, 4:3, 3:2, 16:9, 9:16); der Knopf daneben tauscht Hoch- und Querformat.
+- **Zurücksetzen** holt das Original zurück, **Abbrechen** ([[Esc]]) verwirft die Änderungen, **Fertig** ([[Enter]]) übernimmt sie. Jeder Schritt lässt sich mit [[Strg+Z]] rückgängig machen.
+
+Das bearbeitete Foto erscheint überall: in jeder Folie, beim Ken-Burns-Effekt, im Filmstreifen, beim Sichten und im Export. Den Ausschnitt in der Folie verschiebst du danach wie gewohnt. Verpixelte Gesichter bleiben auf denselben Gesichtern. Videos drehst, begradigst und schneidest du genauso zu.
+
+> Mit der Tastatur: Die Pfeiltasten verschieben den Rahmen, mit [[Umschalt]] ändern sie seine Größe.
+
 ## Themen und Looks {#themes}
 
 Das **Thema** bestimmt, wie die Folien aussehen und wechseln. Es gibt 11 Themen, z. B. **Ken Burns** (langsame Fahrten über das Foto), **Magazin** (mehrere Fotos im Raster) oder **Schnappschüsse** (Sofortbilder auf einem Tisch).
@@ -113,6 +126,21 @@ Für Schülerinnen und Schüler ohne Fotoerlaubnis kannst du Gesichter verpixeln
 
 > Beim ersten Mal fragt Windows, ob die App ins Netzwerk darf: **Zulassen** (privates Netzwerk). In Gäste-WLANs, die Geräte voneinander trennen, hilft der mobile Hotspot von Windows.
 
+## Nach dem Projekt aufräumen {#cleanup}
+
+Ist die Diashow fertig, entfernst du an einer Stelle, was die App zu ihr gespeichert hat: **⋯ → Nach dem Projekt aufräumen…**, der Radiergummi an der Diashow auf der Startseite oder **Einstellungen → Datenschutz**. Der Dialog zeigt jeden Teil mit seiner Größe:
+
+- **Gesichtsdaten:** erkannte Gesichter, Gesichtsmerkmale und die Personenliste mit den Namen, auch in älteren Versionen und im Zwischenspeicher. Was verpixelt ist, bleibt verpixelt, in der Vorschau und in jedem späteren Export. Neue Fotos werden danach aber nicht mehr automatisch erkannt.
+- **Hochgeladene Fotos und Videos** der Klasse (`Dokumente\Diashow Studio\Uploads`): alle oder nur die, die nicht in der Show sind. Folien mit gelöschten Fotos verschwinden aus der Show; exportiere vorher.
+- **Zwischenspeicher** (Vorschaubilder, Videokopien, Ton): entsteht bei Bedarf neu.
+- **Ältere Versionen** und **Export-Aufträge** (Momentaufnahmen in der Warteschlange).
+
+Deine eigenen Fotos, Videos und Musik und die exportierten Videos bleiben unberührt. Gelöscht wird endgültig, nicht in den Papierkorb.
+
+**Löschfrist:** Im selben Dialog (oder nach dem Export) legst du fest, wann aufgeräumt werden soll: in 1, 3, 6 oder 12 Monaten oder an einem Datum. Ist der Tag da, zeigt die Startseite einen Hinweis an der Diashow und **Löschfrist erreicht: aufräumen?**; **In einem Monat erinnern** verschiebt sie.
+
+> Beim **Löschen** einer Diashow fragt die App, ob ihr Zwischenspeicher, die hochgeladenen Fotos und die Export-Aufträge mitgehen sollen.
+
 ## Vorführen {#present}
 
 - **Abspielen** zeigt die Diashow im Vollbild ([[Esc]] beendet).
@@ -142,6 +170,7 @@ Die **Einstellungen** öffnest du mit dem Zahnrad oben rechts (oder im Menü **�
 
 - **Erscheinungsbild:** System, Hell oder Dunkel (siehe unten).
 - **Vorschauqualität:** Hoch, Mittel oder Niedrig für langsamere Laptops. Exporte sind davon nicht betroffen.
+- **Grafikchip** (nur auf Laptops mit zwei Grafikchips): **Leistung** zeichnet Vorschau und Export auf der stärkeren Grafikkarte, 4K-Exporte sind dann etwa ein Drittel schneller. **Stromsparend** schont den Akku. Die Wahl gilt ab dem nächsten Start.
 - **Speicher:** zeigt, wie viel Platz Vorschaubilder und Video-Fassungen belegen, und räumt auf.
 - **Endlos-/Kioskmodus:** siehe [Vorführen](#present).
 - **Updates:** Auf Wunsch fragt die App einmal am Tag bei GitHub nach einer neuen Version und zeigt dann einen Hinweis. Installiert wird nichts automatisch.
@@ -163,6 +192,7 @@ Klappt etwas nicht, hilft ein **Diagnosepaket** der Person, die dir hilft: **Ein
 | [[Entf]] | Ausgewählte Folien löschen |
 | [[Strg]]+Klick, [[Umschalt]]+Klick | Mehrere Folien auswählen |
 | [[Strg+A]] | Alle Folien auswählen |
+| [[Strg+R]] | Ausgewählte Fotos nach links drehen |
 | [[Alt+Enter]] | Vollbild abspielen |
 | [[Esc]] | Vollbild, Präsentation oder Dialog beenden |
 | [[F1]] | Dieses Handbuch |
@@ -195,6 +225,7 @@ Alles in Diashow Studio geht auch ohne Maus:
 - **Dateien auf einem Netzlaufwerk bleiben gesperrt:** Ein Projekt von einem anderen PC verweist auf Freigaben wie `\\server\fotos`. Weil sich Windows dort mit deinem Konto anmeldet, fragt die App oben im Editor erst nach. Wähle **Zugriff erlauben** nur, wenn du dem Projekt vertraust; Freigaben, aus denen du selbst importierst, gelten automatisch als vertrauenswürdig.
 - **Handys erreichen den Laptop nicht:** Laptop und Handys müssen im selben WLAN sein; die Windows-Firewall muss die App zulassen. Sonst den mobilen Hotspot von Windows nutzen.
 - **Etwas anderes:** Unter **Einstellungen → Fehlersuche** ein [Diagnosepaket](#settings) erstellen und mit einer Beschreibung an die Person schicken, die dir hilft.
+- **Einen Fehler melden:** **Problem melden…** (unter **Einstellungen → Fehlersuche** oder in [Über Diashow Studio](app:about)) öffnet ein Formular auf GitHub, in dem App-Version, Windows-Version und Grafikkarte schon eingetragen sind; dafür brauchst du ein kostenloses GitHub-Konto. Der Bericht ist öffentlich: Häng höchstens das Diagnosepaket an, keine Fotos von Schülerinnen und Schülern.
 
 ## Über, Lizenzen und Updates {#about}
 

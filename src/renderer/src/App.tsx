@@ -22,9 +22,11 @@ import { HandbookDialog } from './components/Handbook'
 import { AboutDialog } from './components/AboutDialog'
 import { Wizard } from './components/Wizard'
 import { DiagnosticsHost } from './components/ProjectRepair'
+import { CleanupHost } from './components/Cleanup'
 import { watchStabilize } from './stabilize'
 import { timelineOf } from './timeline'
 import { keyForFocus, modalOpen } from './keys'
+import { closePhotoEdit, rotateSelection } from './photoEdit'
 import { NetworkBanner } from './components/NetworkBanner'
 
 /** Routes dropped files: audio goes to the playlist, everything else into the show. */
@@ -119,6 +121,9 @@ export function App() {
         s.set({ dialog: s.dialog === 'handbook' ? null : 'handbook' })
         return
       }
+      // Ctrl+R turns the selected photos (as in Photos); it never reloads the window
+      const rotateKey = e.ctrlKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'r'
+      if (rotateKey) e.preventDefault()
       // typing in a field, or Space/Enter on a button reached with the keyboard
       if (keyForFocus(e)) return
       if (e.key === 'Escape' && s.dialog) {
@@ -126,6 +131,14 @@ export function App() {
         return
       }
       if (s.view !== 'editor' || s.fullscreen || s.exportOpen || s.presenting || s.dialog || modalOpen()) return
+      if (rotateKey) {
+        rotateSelection(-1)
+        return
+      }
+      if (e.key === 'Escape' && s.photoEdit) {
+        closePhotoEdit(true)
+        return
+      }
       if (e.key === 'Escape' && (s.privacyEdit || s.textSel)) {
         s.set({ privacyEdit: null, textSel: null })
         return
@@ -194,6 +207,7 @@ export function App() {
       <Wizard />
       {presenting && <PresenterPanel />}
       <DiagnosticsHost />
+      <CleanupHost />
       {dragging && <div className="window-drop">{t('dropHere')}</div>}
     </div>
   )

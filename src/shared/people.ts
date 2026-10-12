@@ -2,6 +2,7 @@
 // through the sampled frames of a video, and the areas the engine pixelates at a given time.
 // Pure functions, shared by the engine, the editor and the tests.
 import type { MediaItem, Person, Project, Rect, VideoEntry, VideoFaces, PhotoEntry } from './types'
+import { facesInEdit, isEdited, sourceAspect } from './mediaEdit'
 
 /**
  * Largest descriptor distance (Euclidean, 128-d dlib descriptors) still counted as the same person.
@@ -21,6 +22,21 @@ export function sampleTimes(duration: number): number[] {
   const n = Math.max(1, Math.min(VIDEO_MAX_SAMPLES, Math.round(duration / VIDEO_SAMPLE_STEP)))
   const step = duration / n
   return Array.from({ length: n }, (_, i) => Math.round((i + 0.5) * step * 1000) / 1000)
+}
+
+/** Centre of faces weighted by their size (where crops and Ken Burns aim), or null without faces. */
+export function faceCentre(faces: readonly Rect[] | undefined): { x: number; y: number } | null {
+  if (!faces?.length) return null
+  let sum = 0
+  let x = 0
+  let y = 0
+  for (const f of faces) {
+    const a = f.w * f.h
+    sum += a
+    x += (f.x + f.w / 2) * a
+    y += (f.y + f.h / 2) * a
+  }
+  return { x: x / sum, y: y / sum }
 }
 
 /** A detected face grown to cover hair and chin, as the area to pixelate. */
@@ -405,6 +421,10 @@ export interface OpenFaces {
   samples: VideoFaces[]
 }
 
+/** Faces (original coordinates) still on the edited picture: a face the crop cut away is not in the show. */
+const onPicture = (faces: Rect[], m: MediaItem): Rect[] =>
+  isEdited(m.edit) ? faces.filter((f) => facesInEdit([f], m.edit, sourceAspect(m), 0.15).length > 0) : faces
+
 /** Items of the show (in order, left-out ones skipped) whose detected faces are not all pixelated. */
 export function openFacesInShow(project: Project, threshold = MATCH_THRESHOLD): OpenFaces[] {
   const media = new Map(project.media.map((m) => [m.id, m]))
@@ -414,10 +434,12 @@ export function openFacesInShow(project: Project, threshold = MATCH_THRESHOLD): 
     const m = media.get(e.mediaId)
     if (!m) continue
     if (e.type === 'photo') {
-      const faces = openPhotoFaces(e, m, project.people, threshold)
+      const faces = onPicture(openPhotoFaces(e, m, project.people, threshold), m)
       if (faces.length) out.push({ entry: e, media: m, faces, samples: [] })
     } else {
       const samples = openVideoFaces(e, m, project.people, threshold)
+        .map((s) => ({ ...s, faces: onPicture(s.faces, m) }))
+        .filter((s) => s.faces.length)
       if (samples.length) out.push({ entry: e, media: m, faces: [], samples })
     }
   }
@@ -426,6 +448,8 @@ export function openFacesInShow(project: Project, threshold = MATCH_THRESHOLD): 
 
 /** Photos and videos of the show searched for faces so far (with descriptors), and in all. */
 export function faceSearchProgress(project: Project): { done: number; total: number } {
+  // after the clean-up nothing is searched in the background until someone is marked again
+  if (project.faceDataRemovedAt && !project.people?.length) return { done: 0, total: 0 }
   const used = new Set(project.entries.flatMap((e) => (e.type === 'text' || e.excluded ? [] : [e.mediaId])))
   let done = 0
   let total = 0

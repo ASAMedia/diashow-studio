@@ -1,0 +1,35 @@
+name: Idee oder Wunsch / Feature request
+description: Eine neue Funktion oder Verbesserung vorschlagen. / Suggest a new feature or an improvement.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Danke für deine Idee! Schreib gern auf Deutsch oder Englisch. Der Vorschlag ist öffentlich – bitte keine Fotos von Schülerinnen und Schülern anhängen.
+
+        Thanks for your idea! German or English are both fine. The suggestion is public – please don't attach photos of pupils.
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: Was wünschst du dir? / What would you like?
+      description: Beschreib die Funktion so konkret wie möglich. / Describe the feature as concretely as you can.
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Wofür brauchst du es? / What do you need it for?
+      description: Zum Beispiel eine Situation aus der Schule. / For example a situation from school.
+
+  - type: textarea
+    id: today
+    attributes:
+      label: Wie machst du es bisher? (optional) / How do you do it today? (optional)
+
+  - type: input
+    id: version
+    attributes:
+      label: App-Version (optional) / App version (optional)
+      placeholder: "1.0.0"

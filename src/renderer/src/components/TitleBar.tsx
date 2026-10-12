@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CalendarDays, CircleHelp, Clapperboard, QrCode, ScanFace, ChevronLeft, Download, Eraser, FolderTree, History, LayoutGrid, Loader2, MonitorPlay, MoreHorizontal, Package, Play, Redo2, ScanSearch, Settings, SortAsc, Undo2 } from 'lucide-react'
+import { CalendarDays, CircleHelp, Clapperboard, QrCode, ScanFace, ChevronLeft, Download, Eraser, FolderTree, History, LayoutGrid, Loader2, MonitorPlay, MoreHorizontal, Package, Play, Redo2, ScanSearch, Settings, ShieldCheck, SortAsc, Undo2 } from 'lucide-react'
 import { useStore } from '../store'
 import { useTimeline } from '../timeline'
 import { fmtTime, t } from '../i18n'
@@ -7,6 +7,7 @@ import { QueueChip } from './Queue'
 import { UpdateChip } from './Updates'
 import { AppIcon } from './AppIcon'
 import { Menu, MenuItem, MenuSeparator } from './Menu'
+import { openCleanup } from './Cleanup'
 
 /** An icon-only button of the title bar; the tooltip is its name for screen readers too. */
 function IconButton(props: { label: string; onClick: () => void; disabled?: boolean; children: React.ReactNode; expanded?: boolean; popup?: boolean }) {
@@ -149,6 +150,9 @@ export function TitleBar() {
             </MenuItem>
             <MenuItem icon={<History size={15} />} onSelect={() => set({ dialog: 'backups' })}>
               {t('backups')}
+            </MenuItem>
+            <MenuItem icon={<ShieldCheck size={15} />} onSelect={() => openCleanup(project.id)}>
+              {t('cleanupMenu')}
             </MenuItem>
             <MenuItem icon={<MonitorPlay size={15} />} disabled={!slides} onSelect={() => set({ presenting: true })}>
               {t('present')}

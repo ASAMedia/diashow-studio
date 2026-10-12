@@ -8,6 +8,7 @@ import type {
   EncoderInfo,
   ExportOptions,
   ExportProgress,
+  GpuChoiceInfo,
   MediaItem,
   MusicTrack,
   Project,
@@ -16,8 +17,10 @@ import type {
 } from './types'
 import type { ExportJobInfo, ExportTask, NewExportJob, SegmentInput } from './exportQueue'
 import type { ShareCommand, ShareFilesEvent, ShareStatus } from './share'
+import type { CleanupChoice, CleanupInventory, CleanupResult, DeleteExtras } from './cleanup'
 import type { BenchMedia, EncoderTest, SystemInfo } from './systemCheck'
 import type { AboutInfo, UpdateStatus } from './about'
+import type { ReportFields } from './reportProblem'
 import type { DamagedProject, DiagnosticsInput, DiagnosticsPreview, ProjectRef, ProjectReportEvent, RendererLogEntry, RepairChoice, RepairPlan } from './diagnostics'
 
 export interface DiashowApi {
@@ -47,7 +50,16 @@ export interface DiashowApi {
   listProjects(): Promise<ProjectSummary[]>
   loadProject(id: string): Promise<Project>
   saveProject(project: Project): Promise<void>
-  deleteProject(id: string): Promise<void>
+  /** Deletes a project with its older versions and the face data of its media; `extras`: its caches, uploads, finished exports too. */
+  deleteProject(id: string, extras?: DeleteExtras): Promise<CleanupResult>
+
+  // "Nach dem Projekt aufräumen" (src/shared/cleanup.ts)
+  /** What the app keeps for a project (face data, uploads, caches, older versions, export jobs), with sizes. */
+  cleanupInventory(projectId: string): Promise<CleanupInventory>
+  /** Removes what was chosen, for good; pixelation stays. Save an open project first and take the result's project. */
+  cleanupRun(projectId: string, choice: CleanupChoice): Promise<CleanupResult>
+  /** Deletion reminder of a project that is not open (null: none). */
+  setDeleteAt(projectId: string, at: number | null): Promise<void>
 
   // Export: renderer renders frames, main encodes them with FFmpeg.
   encoders(): Promise<EncoderInfo>
@@ -93,6 +105,8 @@ export interface DiashowApi {
 
   /** Presentation: the show fullscreen on a second display (or a second window). */
   displays(): Promise<number>
+  /** Graphics chip in use and how many there are (Settings → Graphics chip). */
+  gpuChoice(): Promise<GpuChoiceInfo>
   presentStart(): Promise<void>
   presentStop(): Promise<void>
   onPresentClosed(cb: () => void): () => void
@@ -179,6 +193,12 @@ export interface DiashowApi {
    * off in Settings or in a development build. `force` (About dialog) always asks. Never rejects.
    */
   checkUpdate(force?: boolean): Promise<UpdateStatus>
+
+  // "Problem melden" (src/shared/reportProblem.ts)
+  /** App version, Windows version and graphics card for the bug form; nothing personal. */
+  reportFields(): Promise<ReportFields>
+  /** Opens a page of the project on GitHub in the browser; rejects any other URL. */
+  openGithub(url: string): Promise<void>
 
   // Diagnostics and project checks (src/shared/diagnostics.ts)
   /** An error of this window for the log file (fire and forget; rate-limited and capped by the main process). */

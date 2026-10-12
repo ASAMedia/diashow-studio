@@ -2,7 +2,9 @@
 // ("pixelate this person everywhere") for every photo, and faces in frames sampled across every
 // video. The work runs in the vision worker (vision/), offline; results are stored with the media
 // item through the main process. The queue pauses while the show plays, exports or presents.
-import type { MediaItem, Rect, VideoFaces } from '@shared/types'
+// Detection always looks at the original picture (display image, playback frames), never at an
+// edited one, so faces stay in original-image coordinates whatever the rotate / straighten / crop.
+import type { MediaItem, Project, Rect, VideoFaces } from '@shared/types'
 import { faceArea, faceDistance, followFace, MATCH_THRESHOLD, rectAt, sampleTimes, thinDescriptors } from '@shared/people'
 import { analyzeBitmap, analyzePath, loadBitmap, setDelegate, visionWorkers } from './vision/client'
 import { useStore } from './store'
@@ -36,10 +38,32 @@ export async function saveFaces(id: string, faces: Rect[], desc: number[][] | un
   await window.api.setFaces(id, faces, desc).catch(() => {})
 }
 
-/** True while the show plays, exports or presents: background analysis waits. */
+/** Holds of the background analysis (the clean-up), and a counter that makes results of earlier runs void. */
+let holds = 0
+let epoch = 0
+
+/**
+ * Stops the background analysis until the returned function is called; what is being analysed now
+ * is thrown away (the clean-up removes the face data meanwhile and must not get it back).
+ */
+export function holdFaceAnalysis(): () => void {
+  holds++
+  epoch++
+  tried.clear()
+  urgent.length = 0
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    holds--
+    wake?.()
+  }
+}
+
+/** True while the show plays, exports or presents (or the clean-up runs): background analysis waits. */
 export function analysisPaused(): boolean {
   const s = useStore.getState()
-  return s.playing || s.exportOpen || s.fullscreen || s.presenting || s.exportJobs.some((j) => j.state === 'running')
+  return holds > 0 || s.playing || s.exportOpen || s.fullscreen || s.presenting || s.exportJobs.some((j) => j.state === 'running')
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
@@ -193,13 +217,16 @@ export function startFaceQueue(): () => void {
     clearTimeout(timer)
     timer = setTimeout(() => void tick(), ms)
   }
-  const pick = (media: MediaItem[]): { m: MediaItem; work: Work } | null => {
+  const pick = (project: Project): { m: MediaItem; work: Work } | null => {
+    const media = project.media
     const ok = (m: MediaItem | undefined): Work | null => (m && !tried.has(m.id) && !analyzing.has(m.id) ? needsWork(m) : null)
     for (const id of urgent) {
       const m = media.find((x) => x.id === id)
       const work = ok(m)
       if (m && work) return { m, work }
     }
+    // after the clean-up only what the user opens in the pixelation editor, until someone is marked again
+    if (project.faceDataRemovedAt && !project.people?.length) return null
     for (const m of media) {
       const work = m.kind === 'photo' ? ok(m) : null
       if (work) return { m, work }
@@ -211,7 +238,8 @@ export function startFaceQueue(): () => void {
     return null
   }
   const run = async (m: MediaItem, work: Work, projectId: string): Promise<void> => {
-    const cancelled = (): boolean => stopped || useStore.getState().project?.id !== projectId
+    const started = epoch
+    const cancelled = (): boolean => stopped || started !== epoch || useStore.getState().project?.id !== projectId
     try {
       if (work === 'detect') {
         const { faces, desc } = await analyzePicture(m.display!)
@@ -235,7 +263,7 @@ export function startFaceQueue(): () => void {
     if (analysisPaused()) return later(1500)
     const s = useStore.getState()
     while (s.project && running < visionWorkers()) {
-      const next = pick(s.project.media)
+      const next = pick(s.project)
       // a video uses every worker: it waits for the photos in work, and they for it
       if (!next || (next.work === 'video' && running > 0)) break
       const { m, work } = next

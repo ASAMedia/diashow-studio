@@ -86,8 +86,24 @@ describe('relinkMedia', () => {
       const restored = await svc.restoreMedia(items)
       expect(restored.every((r) => r.status === 'error' && r.error === 'missing')).toBe(true)
       const gone = { ...byName('photo.jpg'), id: 'ffffffffffffffff', path: join(tmp, 'nowhere', 'gone.jpg'), name: 'gone.jpg' }
+      // fields of the project, not of the cache: they must survive the move (restore keeps them too)
+      const edit = { rotate: 90 as const, straighten: 2.5, crop: { x: 0.1, y: 0.2, w: 0.6, h: 0.5 } }
+      const faceFocus = { x: 0.3, y: 0.4 }
+      expect(restored.find((r) => r.name === 'photo.jpg')?.edit).toBeUndefined()
+      const own = (r: MediaItem): MediaItem => (r.name === 'photo.jpg' ? { ...r, edit, faceFocus } : r.name === 'clip.mp4' ? { ...r, edit: { rotate: 270, straighten: 0 } } : r)
+      const again = await svc.restoreMedia(restored.map(own))
+      expect(again.find((r) => r.name === 'photo.jpg')).toMatchObject({ edit, faceFocus, error: 'missing' })
 
-      const result = await svc.relinkMedia([...restored, gone], join(tmp, 'Archiv'))
+      const result = await svc.relinkMedia([...restored.map(own), gone], join(tmp, 'Archiv'))
+      expect(result[byName('photo.jpg').id]).toMatchObject({ edit, faceFocus, status: 'ready' })
+      expect(result[byName('clip.mp4').id].edit).toEqual({ rotate: 270, straighten: 0 })
+      expect(result[byName('live.jpg').id].edit).toBeUndefined()
+      // the cache itself keeps no edit (another project may use the same file)
+      expect(svc.get(result[byName('photo.jpg').id].id)?.edit).toBeUndefined()
+      // opened again while the service still knows the item: the project's fields come back with it
+      const reopened = await svc.restoreMedia([{ ...result[byName('photo.jpg').id], edit: { rotate: 180, straighten: 0 } }])
+      expect(reopened[0]).toMatchObject({ edit: { rotate: 180, straighten: 0 }, faceFocus, status: 'ready' })
+      expect((await svc.restoreMedia([{ ...result[byName('photo.jpg').id], edit: undefined }]))[0].edit).toBeUndefined()
       expect(Object.keys(result).sort()).toEqual(items.map((i) => i.id).sort())
       for (const old of items) {
         const found = result[old.id]

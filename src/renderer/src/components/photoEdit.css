@@ -1,0 +1,45 @@
+/* The edit view over the preview (PhotoEditor.tsx): the straightened picture, dimmed outside the crop,
+   the crop frame with its handles and thirds grid, and the tool bar. It sits on the stage, which stays
+   dark in both themes, so the bar uses the dark tokens. */
+.photo-edit { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.92); user-select: none; }
+.photo-edit .pe-picture img { pointer-events: none; }
+.pe-dim { position: absolute; overflow: hidden; pointer-events: none; }
+.pe-hole { position: absolute; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.62); }
+
+.pe-crop { position: absolute; border: 1px solid rgba(255, 255, 255, 0.92); cursor: move; touch-action: none; box-sizing: border-box; }
+.pe-crop:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; }
+.pe-grid { position: absolute; inset: 0; pointer-events: none; opacity: 0; }
+.pe-crop.guides .pe-grid { opacity: 1; }
+.pe-grid::before, .pe-grid::after { content: ''; position: absolute; border: 0 solid rgba(255, 255, 255, 0.6); }
+.pe-grid::before { left: 33.333%; right: 33.333%; top: 0; bottom: 0; border-left-width: 1px; border-right-width: 1px; }
+.pe-grid::after { top: 33.333%; bottom: 33.333%; left: 0; right: 0; border-top-width: 1px; border-bottom-width: 1px; }
+
+/* handles: the edges between the corners, the corners on top */
+.pe-handle { position: absolute; touch-action: none; }
+.pe-handle::after { content: ''; position: absolute; background: #fff; border-radius: 2px; box-shadow: 0 0 3px rgba(0, 0, 0, 0.7); }
+.pe-handle.n, .pe-handle.s { left: 12px; right: 12px; height: 22px; cursor: ns-resize; }
+.pe-handle.n { top: -11px; }
+.pe-handle.s { bottom: -11px; }
+.pe-handle.e, .pe-handle.w { top: 12px; bottom: 12px; width: 22px; cursor: ew-resize; }
+.pe-handle.e { right: -11px; }
+.pe-handle.w { left: -11px; }
+.pe-handle.n::after, .pe-handle.s::after { left: calc(50% - 12px); top: 9px; width: 24px; height: 4px; }
+.pe-handle.e::after, .pe-handle.w::after { top: calc(50% - 12px); left: 9px; width: 4px; height: 24px; }
+.pe-handle.nw, .pe-handle.ne, .pe-handle.se, .pe-handle.sw { width: 24px; height: 24px; z-index: 1; }
+.pe-handle.nw { left: -12px; top: -12px; cursor: nwse-resize; }
+.pe-handle.se { right: -12px; bottom: -12px; cursor: nwse-resize; }
+.pe-handle.ne { right: -12px; top: -12px; cursor: nesw-resize; }
+.pe-handle.sw { left: -12px; bottom: -12px; cursor: nesw-resize; }
+.pe-handle.nw::after, .pe-handle.ne::after, .pe-handle.se::after, .pe-handle.sw::after { left: 7px; top: 7px; width: 10px; height: 10px; }
+
+.pe-bar {
+  position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%);
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 16px;
+  width: max-content; max-width: calc(100% - 24px); box-sizing: border-box;
+  background: rgba(30, 30, 32, 0.94); color: var(--text); padding: 7px 10px; border-radius: 10px;
+}
+.pe-group { display: flex; align-items: center; gap: 6px; font-size: 12px; flex: none; }
+.pe-group label { color: var(--text-2); }
+.pe-straighten input[type='range'] { width: 150px; }
+.pe-val { min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text-2); }
+.pe-group select { height: 26px; font-size: 12px; }

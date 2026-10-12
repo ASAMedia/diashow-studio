@@ -47,7 +47,9 @@ describe('GPU tone mapping', () => {
       '[Vulkan @ 000001]     0: Intel(R) Iris(R) Xe Graphics (integrated) (0xa7a0)',
       '[Vulkan @ 000001]     1: NVIDIA GeForce RTX 4070 Laptop GPU (discrete) (0x2820)'
     ].join('\n')
-    expect(pickVulkanDevice(log)).toBe(1)
+    expect(pickVulkanDevice(log, 'discrete')).toBe(1)
+    // DIASHOW_GPU=integrated: like a PC without the NVIDIA card
+    expect(pickVulkanDevice(log, 'integrated')).toBe(0)
     expect(pickVulkanDevice('[Vulkan @ 1]     0: llvmpipe (LLVM 17.0.6, 256 bits) (cpu) (0x0)')).toBe(0)
     expect(pickVulkanDevice('no vulkan')).toBeNull()
   })

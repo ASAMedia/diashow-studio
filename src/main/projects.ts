@@ -8,14 +8,15 @@
 // Every project read from disk is migrated and validated (projectSchema.ts): broken parts are dropped or
 // repaired and reported through `onReport`; when data was lost, the file as it was is kept as a backup
 // first. Files that cannot be read at all are listed by damaged() and can be rescued with repair().
-import { copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, readdir, readFile, rename, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import type { DamagedProject, ProjectReportEvent, RepairChoice, RepairPlan, RepairReport } from '@shared/diagnostics'
 import type { BackupInfo, Project, ProjectSummary } from '@shared/types'
+import { validDeleteAt } from '@shared/cleanup'
 import { cleanProjectText, formatVersion, hasChanges, lostData, PROJECT_VERSION, ProjectFormatError, readProjectText } from './projectSchema'
 
 export const PROJECT_EXT = '.dshow'
-const BACKUPS = '.backups'
+export const BACKUPS = '.backups'
 const BACKUP_NAME = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})\.dshow$/i
 
 export interface ProjectStoreOptions {
@@ -42,8 +43,16 @@ export interface ProjectStore {
   load(id: string): Promise<Project>
   save(project: Project): Promise<void>
   delete(id: string): Promise<void>
-  /** Everything the saved projects refer to (for the cache cleanup). */
-  references(): Promise<ProjectReferences>
+  /** Everything the saved projects (but `except`) refer to (for the cache cleanup). */
+  references(except?: string): Promise<ProjectReferences>
+  /**
+   * The clean-up: writes a project without backing up the version on disk (it holds what was just
+   * removed), and rewrites its readable backups with `fn`; the backup's file name (its time) stays.
+   */
+  overwrite(project: Project): Promise<void>
+  rewriteBackups(id: string, fn: (p: Project) => Project): Promise<{ rewritten: number; failed: number }>
+  /** Folder of a project's backups (`.backups/<id>`). */
+  backupFolder(id: string): string
   /** Backups of a project, newest first. */
   listBackups(id: string): Promise<BackupInfo[]>
   /** Makes a backup the current version (backing up the current one first) and returns it. */
@@ -78,6 +87,7 @@ export function summarize(project: Project): ProjectSummary {
     slideCount: project.entries.length
   }
   if (cover) summary.cover = cover
+  if (validDeleteAt(project.deleteAt)) summary.deleteAt = project.deleteAt
   return summary
 }
 
@@ -254,7 +264,40 @@ export function createProjectStore(dir: string, opts: ProjectStoreOptions = {}):
       lastBackup.delete(id)
     },
 
-    async references() {
+    async overwrite(project) {
+      const id = checkId(project.id)
+      return serial(id, async () => {
+        await writeAtomic(file(id), project)
+        // the next save backs up this version at the earliest after the interval
+        lastBackup.set(id, now())
+      })
+    },
+
+    async rewriteBackups(id, fn) {
+      const folder = backupDir(id)
+      let rewritten = 0
+      let failed = 0
+      return serial(id, async () => {
+        for (const name of await backupNames(id)) {
+          const path = join(folder, name)
+          try {
+            const st = await stat(path)
+            const { project } = await readChecked(path, { fallbackId: id })
+            await writeAtomic(path, fn(project))
+            // the list shows the time in the name; the file time follows it
+            await utimes(path, st.atime, st.mtime).catch(() => {})
+            rewritten++
+          } catch {
+            failed++
+          }
+        }
+        return { rewritten, failed }
+      })
+    },
+
+    backupFolder: (id) => backupDir(id),
+
+    async references(except) {
       const ids = new Set<string>()
       const paths: string[] = []
       let names: string[]
@@ -263,9 +306,10 @@ export function createProjectStore(dir: string, opts: ProjectStoreOptions = {}):
       } catch {
         return { ids, paths }
       }
+      const skip = except ? `${except}${PROJECT_EXT}`.toLowerCase() : null
       await Promise.all(
         names
-          .filter((n) => n.toLowerCase().endsWith(PROJECT_EXT))
+          .filter((n) => n.toLowerCase().endsWith(PROJECT_EXT) && n.toLowerCase() !== skip)
           .map(async (n) => {
             const p = await readProject(join(dir, n))
             if (!p) return

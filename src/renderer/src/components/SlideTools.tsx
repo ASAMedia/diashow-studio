@@ -1,5 +1,7 @@
 // Slide tab tools: pixelated areas, clip speed, free text boxes, and editing many slides at once.
-import { EyeOff, Plus, ScanFace, Trash2, Merge } from 'lucide-react'
+import { Crop as CropIcon, EyeOff, Plus, RotateCcw, RotateCw, ScanFace, Trash2, Merge } from 'lucide-react'
+import { isEdited, rotateEdit } from '@shared/mediaEdit'
+import { closePhotoEdit, openPhotoEdit, rotateSelection, setMediaEdit } from '../photoEdit'
 import type { Entry, FreeText, MediaItem, PhotoEntry, Rect, VideoEntry } from '@shared/types'
 import { themeMeta } from '@shared/themes'
 import { MAX_SPEED, MIN_SPEED, speedHasSound, type TimelineSlide } from '@shared/timeline'
@@ -35,7 +37,7 @@ export function PrivacySection({ entry, media }: { entry: PhotoEntry | VideoEntr
   return (
     <Section title={t('privacy')}>
       <div className="row wrap">
-        <button className={`btn small ${editing ? 'on' : ''}`} aria-pressed={editing} onClick={() => set({ privacyEdit: editing ? null : entry.id, kbEdit: null })}>
+        <button className={`btn small ${editing ? 'on' : ''}`} aria-pressed={editing} onClick={() => set({ privacyEdit: editing ? null : entry.id, kbEdit: null, photoEdit: null })}>
           <ScanFace size={14} /> {t('privacyEdit')}
         </button>
         {anyFaces && (
@@ -60,6 +62,41 @@ export function PrivacySection({ entry, media }: { entry: PhotoEntry | VideoEntr
           <PeopleList />
         </details>
       )}
+    </Section>
+  )
+}
+
+// ---------------------------------------------------------------- rotate, straighten, crop
+
+/** The picture of a photo or video: the edit view over the preview, quick quarter turns, back to the original. */
+export function EditSection({ entry, media }: { entry: PhotoEntry | VideoEntry; media: MediaItem }) {
+  const open = useStore((s) => s.photoEdit?.entryId === entry.id)
+  const edited = isEdited(media.edit)
+  return (
+    <Section title={t('pePicture')}>
+      <div className="row wrap">
+        <button
+          className={`btn small ${open ? 'on' : ''}`}
+          aria-pressed={open}
+          title={t('peEditHint')}
+          disabled={media.status === 'error'}
+          onClick={() => (open ? closePhotoEdit(false) : openPhotoEdit(entry.id))}
+        >
+          <CropIcon size={14} /> {t('peEdit')}
+        </button>
+        <button className="btn small icon" title={`${t('peRotateLeft')} (${t('kbdRotate')})`} aria-label={t('peRotateLeft')} onClick={() => setMediaEdit(media.id, rotateEdit(media.edit, -1))}>
+          <RotateCcw size={14} />
+        </button>
+        <button className="btn small icon" title={t('peRotateRight')} aria-label={t('peRotateRight')} onClick={() => setMediaEdit(media.id, rotateEdit(media.edit, 1))}>
+          <RotateCw size={14} />
+        </button>
+        {edited && (
+          <button className="btn small ghost" onClick={() => setMediaEdit(media.id, undefined)}>
+            {t('peOriginalBack')}
+          </button>
+        )}
+      </div>
+      {edited && <p className="hint">{t('peEdited')}</p>}
     </Section>
   )
 }
@@ -382,6 +419,18 @@ export function BatchPanel({ entries, slides }: { entries: Entry[]; slides: Time
           )}
         </div>
       </Section>
+      {visual.length > 0 && (
+        <Section title={t('pePicture')}>
+          <div className="row wrap">
+            <button className="btn small" title={`${t('peRotateLeft')} (${t('kbdRotate')})`} onClick={() => rotateSelection(-1)}>
+              <RotateCcw size={14} /> {t('peRotateLeft')}
+            </button>
+            <button className="btn small" onClick={() => rotateSelection(1)}>
+              <RotateCw size={14} /> {t('peRotateRight')}
+            </button>
+          </div>
+        </Section>
+      )}
       {visual.length > 0 && (
         <Section title={t('privacy')}>
           <div className="row wrap">

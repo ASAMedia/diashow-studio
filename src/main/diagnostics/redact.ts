@@ -1,5 +1,6 @@
 // What goes into the log and the diagnostics package is cleaned first: the user profile part of paths
-// becomes %USERPROFILE% (other profiles' names become <user>), and anything that could carry media
+// becomes %USERPROFILE% (other profiles' names become <user>), pupils' names in upload folders become
+// <name>, and anything that could carry media
 // content or personal data is cut out: data: URLs, long base64 runs, long lists of numbers (face
 // descriptors) and the random tokens of share links. Pure, no Electron.
 
@@ -19,6 +20,12 @@ function pathVariants(home: string): string[] {
   const variants = new Set([back, fwd, back.replace(/\\/g, '\\\\'), encodeURIComponent(back), encodeURIComponent(fwd), encodeURI(fwd)])
   return [...variants].filter((v) => v.length >= 3).sort((a, b) => b.length - a.length)
 }
+
+// A path separator in any spelling (\, \\ in JSON, /, URL-encoded), and one path segment (URL-encoded
+// characters such as %20 included).
+const SEP = String.raw`(?:\\\\|\\|\/|%5C|%2F)`
+const SEGMENT = String.raw`(?:[^\\/:*?"<>|\r\n%]|%(?!5C|2F)[0-9A-F]{2}){1,200}`
+const UPLOAD_NAME = new RegExp(String.raw`(${SEP}Uploads${SEP}${SEGMENT}${SEP})(${SEGMENT})(?=\\|\/|%5C|%2F)`, 'gi')
 
 const cache = new Map<string, RegExp | null>()
 
@@ -47,6 +54,8 @@ export function redact(input: unknown, opts: RedactOptions = {}): string {
   s = s.replace(/([A-Za-z]:(?:\\\\|\\|\/)Users(?:\\\\|\\|\/))(?!%USERPROFILE%)([^\\/:*?"<>|\r\n]+)/gi, (_m, pre: string, name: string) =>
     /^(public|default|all users)$/i.test(name) ? `${pre}${name}` : `${pre}<user>`
   )
+  // pupils' upload folders (…\Uploads\<show>\<name>\…): the folder is named after the pupil
+  s = s.replace(UPLOAD_NAME, '$1<name>')
   // media content
   s = s.replace(/data:([\w/+.-]{0,60})[;,][^\s"')]{40,}/gi, (_m, mime: string) => `data:${mime || '?'},<removed>`)
   s = s.replace(/[A-Za-z0-9+/]{200,}={0,2}/g, (m) => `<base64 ${m.length} chars>`)

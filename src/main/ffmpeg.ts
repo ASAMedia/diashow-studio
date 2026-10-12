@@ -5,6 +5,7 @@ import { setPriority } from 'node:os'
 import { join } from 'node:path'
 import type { EncoderInfo } from '@shared/types'
 import { abortError } from './abort'
+import { hardwareEncoderFamilies } from './gpuChoice'
 
 const EXE = process.platform === 'win32' ? '.exe' : ''
 
@@ -265,7 +266,7 @@ export class Ffmpeg {
       // keep empty: no encoders known
     }
     const has = (name: string): boolean => new RegExp(`\\s${name}\\s`).test(listed)
-    const hwOrder = ['nvenc', 'qsv', 'amf']
+    const hwOrder = hardwareEncoderFamilies()
     const candidates = hwOrder.flatMap((hw) => [`h264_${hw}`, `hevc_${hw}`]).filter(has)
     const results = await Promise.all(candidates.map(async (enc) => [enc, await this.testEncoder(enc)] as const))
     const working = new Set(results.filter(([, ok]) => ok).map(([enc]) => enc))
@@ -282,15 +283,17 @@ export class Ffmpeg {
       hardware: {
         h264: h264.find((e) => !e.startsWith('lib')),
         hevc: hevc.find((e) => !e.startsWith('lib'))
-      }
+      },
+      // with a quality value look-ahead means LA-ICQ, as in the export (without it, LA VBR wants a bitrate)
+      ...(working.has('h264_qsv') ? { qsvLookAhead: await this.testEncoder('h264_qsv', ['-global_quality', '23', '-look_ahead', '1']) } : {})
     }
   }
 
-  private async testEncoder(encoder: string): Promise<boolean> {
+  private async testEncoder(encoder: string, extra: string[] = []): Promise<boolean> {
     const signal = AbortSignal.timeout(20_000)
     try {
       await this.run(
-        ['-f', 'lavfi', '-i', 'color=c=black:s=256x256:d=0.1', '-frames:v', '3', '-pix_fmt', 'yuv420p', '-c:v', encoder, '-f', 'null', '-'],
+        ['-f', 'lavfi', '-i', 'color=c=black:s=256x256:d=0.1', '-frames:v', '3', '-pix_fmt', 'yuv420p', '-c:v', encoder, ...extra, '-f', 'null', '-'],
         { signal }
       )
       return true

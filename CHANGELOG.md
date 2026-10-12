@@ -2,6 +2,38 @@
 
 All notable changes to Diashow Studio. Versions follow [Semantic Versioning](https://semver.org). The release workflow publishes the section of a version as its release notes.
 
+## [1.1.0] - 2026-10-12
+
+**Downloads**
+
+- `Diashow.Studio-Setup-1.1.0.exe`: installer (no admin rights needed); it updates an installed 1.0 and keeps your slideshows and settings.
+- `Diashow.Studio-1.1.0-portable.exe`: runs without installing, e.g. from a USB stick.
+- The installer is not code-signed. If Windows SmartScreen says "Windows protected your PC", choose "More info" and then "Run anyway".
+- `THIRD_PARTY_NOTICES.txt` lists the licences of everything bundled. The `ffmpeg-*` archives contain the source code of the bundled FFmpeg build and of every library compiled into it (GPL), listed in `ffmpeg-deps-sources-*.txt`.
+
+**New**
+
+- Rotate, straighten and crop photos and videos, like in Photos: **Edit** in the Slide tab or the slide's menu. Turn by 90°, straighten up to ±45° (zoomed so no corners are empty), crop freely or to 1:1, 4:3, 3:2, 16:9 or 9:16. Ctrl+R turns all selected photos left. Pixelated faces stay on the same faces, in the preview and the export.
+- Clean up after the project (data protection): one dialog lists with their sizes what the app keeps for a slideshow and deletes what you pick, for good. You can pick face data, uploads from pupils, the cache, older versions and finished export jobs. Everything pixelated stays pixelated. Your own photos, videos and exported videos are never touched.
+- Deletion date per slideshow (in 1, 3, 6 or 12 months, or a date): when it comes, the home screen reminds you to clean up.
+- Deleting a slideshow asks whether its cache, uploads and finished export jobs go too.
+- "Report a problem…" in Settings → Troubleshooting and in About: opens the bug form on GitHub with the app version, Windows version and graphics card filled in; nothing else is sent.
+- Project website with download, SmartScreen help and the handbook online: https://asamedia.github.io/diashow-studio/
+
+**Faster and better**
+
+- Laptops with two graphics chips draw the preview and the export on the stronger one: 4K exports about a third faster (Settings → Graphics chip → Power saving switches back).
+- PCs with only Intel graphics: exports with Quick Sync now have the same quality as with NVIDIA (before, H.264 came out noticeably softer at half the size). Rotated H.264 phone videos are prepared on Intel's graphics too.
+
+**Privacy and licences**
+
+- The error log hides pupils' names in upload folders.
+- Each release also carries the source code of every library compiled into the bundled FFmpeg, with a manifest (also added to 1.0.0).
+
+**Under the hood**
+
+- Updated development tools (vitest 5, TypeScript 7); issue forms for bugs and ideas.
+
 ## [1.0.0] - 2026-10-11
 
 The first public version: photo and video slideshows for Windows, modelled on the slideshow feature of macOS Photos. German and English, works offline.

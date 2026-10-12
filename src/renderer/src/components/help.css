@@ -71,6 +71,13 @@
   border: 1px solid var(--line-soft); border-radius: 6px; font: 11px/1.45 Consolas, 'Cascadia Mono', monospace; white-space: pre-wrap;
 }
 
+/* ---------- "Problem melden" */
+.dialog.report-dialog { width: 560px; user-select: text; }
+.report-fields { font-size: 12.5px; }
+.report-fields dd { white-space: normal; overflow-wrap: anywhere; }
+.report-fields .unknown { color: var(--text-3); }
+.hint.report-opened { color: var(--ok); }
+
 /* ---------- update hint in the title bar */
 .update-chip { display: inline-flex; align-items: center; height: 24px; border-radius: 12px; background: var(--accent-soft); border: 1px solid var(--accent); overflow: hidden; }
 .update-chip a { display: inline-flex; align-items: center; gap: 5px; padding: 0 4px 0 9px; color: var(--accent); font-size: 12px; text-decoration: none; height: 100%; }

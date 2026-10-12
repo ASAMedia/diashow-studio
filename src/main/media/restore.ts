@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs'
 import { copyFile, link, mkdir, readdir, stat } from 'node:fs/promises'
 import { basename, dirname, join, relative } from 'node:path'
 import type { MediaItem } from '@shared/types'
+import { withProjectFields } from '@shared/mediaEdit'
 import { wantsAnalysis } from './analysisJobs'
 import { cacheFilesPresent, isInside, knownSize, META, readJson, withStabilized, writeJson } from './cacheMeta'
 import { importPaths, schedule } from './processing'
@@ -44,6 +45,12 @@ function withoutForeignFiles(it: MediaItem, allow: (path: string) => boolean): M
   return out
 }
 
+/** What the main process keeps has no photo edit: edits belong to a project, the cache serves them all. */
+function withoutEdit(item: MediaItem): MediaItem {
+  const { edit: _e, ...rest } = item
+  return rest
+}
+
 export async function restoreMedia(ctx: ServiceContext, items: MediaItem[]): Promise<MediaItem[]> {
   // a malformed entry from the renderer must not fail the whole project
   const list = items.filter((it) => !!it && typeof it.id === 'string' && typeof it.path === 'string')
@@ -54,7 +61,8 @@ export async function restoreMedia(ctx: ServiceContext, items: MediaItem[]): Pro
   const result = await Promise.all(
     list.map(async (it) => {
       const current = ctx.items.get(it.id)
-      if (current && current.status !== 'error') return { ...current }
+      // the photo edit and the kept face centre belong to the project, not to the cache
+      if (current && current.status !== 'error') return withProjectFields({ ...current }, it)
       // a network share from a project made elsewhere: not touched until the user trusts the host
       const allow = ctx.config.allowPath ?? (() => true)
       if (!allow(it.path)) return clean({ ...it, status: 'error' as const, error: 'network-blocked', progress: undefined })
@@ -69,7 +77,7 @@ export async function restoreMedia(ctx: ServiceContext, items: MediaItem[]): Pro
       }
       it = withStabilized(it)
       if (!changed && it.status === 'ready' && cacheFilesPresent(it)) {
-        ctx.items.set(it.id, it)
+        ctx.items.set(it.id, withoutEdit(it))
         if (wantsAnalysis(ctx, it)) analyze.push(it.id)
         return { ...it }
       }
@@ -80,7 +88,7 @@ export async function restoreMedia(ctx: ServiceContext, items: MediaItem[]): Pro
           proxyGone === 'video'
             ? clean({ ...it, playback: undefined, proxied: undefined, status: 'processing' as const, progress: 0, error: undefined })
             : clean({ ...it, liveVideo: undefined })
-        ctx.items.set(it.id, fresh)
+        ctx.items.set(it.id, withoutEdit(fresh))
         reproxy.push(it.id)
         if (wantsAnalysis(ctx, fresh)) analyze.push(it.id)
         return { ...fresh }
@@ -89,7 +97,7 @@ export async function restoreMedia(ctx: ServiceContext, items: MediaItem[]): Pro
       // An edited original invalidates what was derived from its content
       if (changed) fresh = clean({ ...fresh, faces: undefined, faceDesc: undefined, videoFaces: undefined, sharpness: undefined, hash: undefined, loudness: undefined, hash2: undefined, bitrate: undefined })
       if (fresh.live && !existsSync(fresh.live.source)) delete fresh.live
-      ctx.items.set(it.id, fresh)
+      ctx.items.set(it.id, withoutEdit(fresh))
       requeue.push(it.id)
       return { ...fresh }
     })
@@ -206,7 +214,8 @@ export async function relinkMedia(ctx: ServiceContext, missing: MediaItem[], dir
   const result: Record<string, MediaItem> = {}
   for (const [oldId, f] of found) {
     const it = byPath.get(f.file.path.toLowerCase())
-    if (it) result[oldId] = it
+    // the item comes from the cache: the project's own fields (photo edit, kept face centre) go along
+    if (it) result[oldId] = withProjectFields(it, wanted.find((m) => m.id === oldId))
   }
   return result
 }

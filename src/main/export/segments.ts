@@ -49,6 +49,8 @@ interface RawSegmentOptions {
   codec: VideoCodec
   quality: ExportQuality
   encoder: string
+  /** From the encoder detection: h264_qsv with look-ahead (encoderArgs). */
+  qsvLookAhead?: boolean
   expected: number
   tmp: string
   final: string
@@ -57,7 +59,7 @@ interface RawSegmentOptions {
 /** FFmpeg encodes raw frames like a regular export, but video only, into an elementary stream. */
 export function openRawSegment(ff: Ffmpeg, o: RawSegmentOptions): Segment {
   const frameBytes = o.input === 'yuv' ? (o.width * o.height * 3) / 2 : o.width * o.height * 4
-  const video = encoderArgs(o.encoder, o.codec, o.quality, o.fps)
+  const video = encoderArgs(o.encoder, o.codec, o.quality, o.fps, { qsvLookAhead: o.qsvLookAhead })
   // the hvc1 tag belongs to the MP4 made at the end, not to the raw stream
   const tag = video.indexOf('-tag:v')
   if (tag >= 0) video.splice(tag, 2)

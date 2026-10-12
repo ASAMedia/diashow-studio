@@ -39,6 +39,19 @@ The editor has three areas: the **preview** in the middle, the tabs **Themes**, 
 
 > Tip: [[Space]] plays the preview, [[←]] and [[→]] step from slide to slide.
 
+### Rotate, straighten and crop photos
+
+Crooked or sideways phone photos are fixed as in Photos on the Mac: select the photo and click **Edit** under **Picture** in the **Slide** tab (or **Edit** in the slide's menu). The preview then shows:
+
+- **Rotate:** the arrows turn the photo 90° to the left or right. [[Ctrl+R]] turns every selected photo to the left, also on several slides.
+- **Straighten:** the slider tilts the picture by up to 45°. It is zoomed just enough that no empty corners show.
+- **Crop:** drag the corners and edges of the frame, or move the frame. **Aspect** keeps a shape (Free, Original, 1:1, 4:3, 3:2, 16:9, 9:16); the button next to it swaps portrait and landscape.
+- **Reset** brings back the original, **Cancel** ([[Esc]]) drops the changes, **Done** ([[Enter]]) keeps them. Every step can be undone with [[Ctrl+Z]].
+
+The edited photo is used everywhere: on every slide, in the Ken Burns motion, in the filmstrip, in the review and in the export. You can still move the framing on the slide as before. Pixelated faces stay on the same faces. Videos are rotated, straightened and cropped the same way.
+
+> With the keyboard: the arrow keys move the frame; with [[Shift]] they change its size.
+
 ## Themes and looks {#themes}
 
 The **theme** decides how slides look and change. There are 11 themes, e.g. **Ken Burns** (slow moves across the photo), **Magazine** (several photos in a grid) or **Snapshots** (instant photos landing on a table).
@@ -113,6 +126,21 @@ Faces of pupils without photo consent can be pixelated. Face detection runs offl
 
 > The first time, Windows asks whether the app may use the network: choose **Allow** (private network). On guest Wi-Fi that keeps devices apart, the Windows mobile hotspot helps.
 
+## Cleaning up after a project {#cleanup}
+
+When the slideshow is finished, you remove what the app keeps for it in one place: **⋯ → Clean up after the project…**, the eraser on the slideshow on the home screen, or **Settings → Privacy**. The dialog lists each part with its size:
+
+- **Face data:** detected faces, face features and the people list with the names, also in older versions and in the cache. Whatever is pixelated stays pixelated, in the preview and in every later export. New photos are no longer recognised automatically afterwards, though.
+- **Uploaded photos and videos** of the class (`Documents\Diashow Studio\Uploads`): all of them, or only those not in the show. Slides with deleted photos leave the show; export first.
+- **Cache** (thumbnails, video copies, sound): made again when needed.
+- **Older versions** and **export jobs** (snapshots in the queue).
+
+Your own photos, videos and music and the exported videos are not touched. Deleting is final, not to the recycle bin.
+
+**Deletion date:** in the same dialog (or after the export) you decide when to clean up: in 1, 3, 6 or 12 months, or on a date. When the day has come, the home screen shows a hint on the slideshow and **Deletion date reached: clean up?**; **Remind me in a month** postpones it.
+
+> When you **delete** a slideshow, the app asks whether its cache, the uploaded photos and the export jobs go with it.
+
 ## Showing it {#present}
 
 - **Play** shows the slideshow fullscreen ([[Esc]] ends it).
@@ -142,6 +170,7 @@ Open **Settings** with the gear at the top right (or from the **⋯** menu).
 
 - **Appearance:** System, Light or Dark (see below).
 - **Preview quality:** High, Medium or Low for slower laptops. Exports are not affected.
+- **Graphics chip** (only on laptops with two graphics chips): **Performance** draws the preview and the export on the stronger graphics card, which makes 4K exports about a third faster. **Power saving** saves battery. The choice takes effect at the next start.
 - **Storage:** shows how much space thumbnails and video versions take, and cleans up.
 - **Kiosk mode:** see [Showing it](#present).
 - **Updates:** if you like, the app asks GitHub once a day for a new version and then shows a hint. Nothing is installed automatically.
@@ -163,6 +192,7 @@ When something doesn't work, a **diagnostics package** helps whoever helps you: 
 | [[Del]] | Delete the selected slides |
 | [[Ctrl]]+click, [[Shift]]+click | Select several slides |
 | [[Ctrl+A]] | Select all slides |
+| [[Ctrl+R]] | Rotate the selected photos to the left |
 | [[Alt+Enter]] | Play fullscreen |
 | [[Esc]] | Leave fullscreen, presentation or a dialog |
 | [[F1]] | This handbook |
@@ -195,6 +225,7 @@ Everything in Diashow Studio also works without a mouse:
 - **Files on a network drive stay blocked:** a project from another PC points to shares such as `\\server\photos`. Because Windows signs in there with your account, the app asks first at the top of the editor. Choose **Allow access** only if you trust the project; shares you import from yourself are trusted automatically.
 - **Phones can't reach the laptop:** laptop and phones must be on the same Wi-Fi, and the Windows firewall must allow the app. Otherwise use the Windows mobile hotspot.
 - **Anything else:** create a [diagnostics package](#settings) under **Settings → Troubleshooting** and send it with a description to whoever helps you.
+- **Reporting a bug:** **Report a problem…** (under **Settings → Troubleshooting** or in [About Diashow Studio](app:about)) opens a form on GitHub with the app version, Windows version and graphics card already filled in; you need a free GitHub account for it. The report is public: attach the diagnostics package at most, never photos of pupils.
 
 ## About, licences and updates {#about}
 

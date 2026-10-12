@@ -18,7 +18,7 @@ import { join } from 'node:path'
 import type { CacheInfo, ExportProgress, MediaItem, MusicTrack, Rect, VideoFaces } from '@shared/types'
 import { ID_FOLDER, type CleanTarget } from '../cache'
 import type { Ffmpeg } from '../ffmpeg'
-import { cacheInfo, cleanCache, fromCache, persist, stripFolder } from './cacheMeta'
+import { cacheInfo, cleanCache, forgetFaces, fromCache, persist, releaseCache, stripFolder } from './cacheMeta'
 import { endExiftool } from './exif'
 import { sanitizeDescriptors, sanitizeRects, sanitizeVideoFaces } from './faceData'
 import { MAX_EDGE as FRAMES_MAX_EDGE, MAX_FRAMES, videoFrames, videoInfoCached } from './frames'
@@ -99,6 +99,10 @@ export interface MediaService {
   cacheInfo(used: CacheUsage): Promise<CacheInfo>
   /** Deletes unused folders / hi-res proxies / all proxies; affected items are rebuilt on restore. */
   cleanCache(what: CleanTarget, used: CacheUsage): Promise<CacheInfo>
+  /** The clean-up: face data of these items leaves their cache folders and the service's memory (cacheMeta.ts). */
+  forgetFaces(items: { id: string; faceFocus?: { x: number; y: number } }[]): Promise<void>
+  /** The clean-up: of these ids, those whose cache folders may be deleted now (not in work); they are forgotten. */
+  releaseCache(ids: string[]): string[]
   /**
    * Finds moved originals (same file name; same size and time preferred) in `folder` and imports them
    * like importPaths. Resolves with old id → new item for the ones found.
@@ -198,6 +202,10 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
     cacheInfo: (used) => cacheInfo(ctx, used),
 
     cleanCache: (what, used) => cleanCache(ctx, what, used),
+
+    forgetFaces: (items) => forgetFaces(ctx, Array.isArray(items) ? items : []),
+
+    releaseCache: (ids) => releaseCache(ctx, Array.isArray(ids) ? ids : []),
 
     relinkMedia: (missing, dir) => relinkMedia(ctx, missing, dir),
 

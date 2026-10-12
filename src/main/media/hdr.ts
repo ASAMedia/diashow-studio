@@ -7,6 +7,7 @@ import { readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Ffmpeg } from '../ffmpeg'
+import { integratedGpuOnly } from '../gpuChoice'
 import { gpuInputArgs, gpuVideoFilter, TONEMAP_CHAIN } from './video'
 import { analyzeVideo } from './videoInfo'
 
@@ -23,13 +24,13 @@ const MAX_TEST_DIFF = 16
 const cache = new Map<string, Promise<GpuTonemap | null>>()
 
 /** Parses ffmpeg's verbose Vulkan "GPU listing" and returns the preferred device index. */
-export function pickVulkanDevice(log: string): number | null {
+export function pickVulkanDevice(log: string, prefer: 'discrete' | 'integrated' = integratedGpuOnly ? 'integrated' : 'discrete'): number | null {
   const devices = [...log.matchAll(/^\s*(?:\[[^\]]*\]\s*)?(\d+):\s+(.+?)\s+\((discrete|integrated|virtual|cpu|other)\)/gm)].map((m) => ({
     index: Number(m[1]),
     kind: m[3]
   }))
   if (!devices.length) return null
-  return (devices.find((d) => d.kind === 'discrete') ?? devices[0]).index
+  return (devices.find((d) => d.kind === prefer) ?? devices[0]).index
 }
 
 function meanAbsDiff(a: Buffer, b: Buffer): number {
@@ -91,14 +92,29 @@ async function detect(ff: Ffmpeg): Promise<GpuTonemap | null> {
       }
     }
     const upload: GpuTonemap = { device, decode: 'upload' }
-    for (const decode of ['vulkan', 'cuda'] as const) {
+    for (const decode of integratedGpuOnly ? (['vulkan'] as const) : (['vulkan', 'cuda'] as const)) {
       const r = await attempt({ device, decode })
       if (r.ok && !r.hwFailed) return { device, decode }
+      // Intel's Windows driver decodes H.264 through Vulkan but not 10-bit HEVC. FFmpeg then decodes
+      // HEVC in software and libplacebo uploads the frames (the picture above was still right), while
+      // H.264 phone videos keep decoding on the GPU.
+      if (r.ok && decode === 'vulkan' && (await decodesH264({ device, decode }, `${base}-h264.mp4`, signal))) return { device, decode }
     }
     return (await attempt(upload)).ok ? upload : null
   } catch {
     return null
   } finally {
-    await Promise.all([plain, clip, raw].map((f) => rm(f, { force: true })))
+    await Promise.all([plain, clip, raw, `${base}-h264.mp4`].map((f) => rm(f, { force: true })))
+  }
+
+  /** H.264 decodes on the GPU without falling back to software. */
+  async function decodesH264(gpu: GpuTonemap, file: string, signal: AbortSignal): Promise<boolean> {
+    try {
+      await ff.run(['-f', 'lavfi', '-i', 'testsrc2=s=640x360:r=30:d=0.2', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', file], { signal })
+      const log = await ff.log(['-threads', '2', ...gpuInputArgs(gpu), '-i', file, '-vf', 'libplacebo=w=64:h=36:format=yuv420p', '-f', 'null', '-'], { level: 'error', signal })
+      return !/hwaccel|failed setup/i.test(log)
+    } catch {
+      return false
+    }
   }
 }

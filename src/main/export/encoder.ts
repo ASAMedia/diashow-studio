@@ -39,7 +39,7 @@ export function pickEncoder(codec: VideoCodec, hardware: boolean, info: EncoderI
   return codec === 'hevc' ? 'libx265' : 'libx264'
 }
 
-export function encoderArgs(encoder: string, codec: VideoCodec, quality: ExportQuality, fps: number): string[] {
+export function encoderArgs(encoder: string, codec: VideoCodec, quality: ExportQuality, fps: number, opts: { qsvLookAhead?: boolean } = {}): string[] {
   const q = QUALITY_INDEX[quality]
   const gop = String(Math.max(1, Math.round(fps * 2)))
   const hevcTag = codec === 'hevc' ? ['-tag:v', 'hvc1'] : []
@@ -51,8 +51,13 @@ export function encoderArgs(encoder: string, codec: VideoCodec, quality: ExportQ
     return ['-c:v', encoder, '-preset', 'p4', '-rc', 'vbr', '-cq', String(cq), '-b:v', '0', '-profile:v', profile, '-g', gop, ...hevcTag]
   }
   if (encoder.endsWith('_qsv')) {
-    const gq = [23, 19, 16][q]
-    return ['-c:v', encoder, '-preset', 'slow', '-global_quality', String(gq), '-profile:v', profile, '-g', gop, ...hevcTag]
+    // Calibrated against NVENC on a 220 s show (SSIM to a near-lossless export, Iris Xe): plain ICQ 19
+    // gave 0.987 at half NVENC's size; H.264 with look-ahead (LA-ICQ) matches NVENC at the same levels
+    // (0.9948 / 0.9968 / 0.9976). HEVC has no look-ahead in FFmpeg's QSV and needs lower values instead
+    // (17 / 14 / 12 ≈ NVENC 23 / 19 / 16).
+    const lookAhead = codec === 'h264' && opts.qsvLookAhead !== false
+    const gq = codec === 'hevc' ? [17, 14, 12][q] : lookAhead ? [23, 19, 16][q] : [19, 15, 12][q]
+    return ['-c:v', encoder, '-preset', 'slow', '-global_quality', String(gq), ...(lookAhead ? ['-look_ahead', '1'] : []), '-profile:v', profile, '-g', gop, ...hevcTag]
   }
   if (encoder.endsWith('_amf')) {
     const qp = [23, 19, 16][q]
@@ -172,7 +177,7 @@ export async function startExport(
         '-i', wav,
         '-map', '0:v:0', '-map', '1:a:0',
         '-vf', rawVideoFilter(input, width, height),
-        ...encoderArgs(encoder, options.codec, options.quality, fps),
+        ...encoderArgs(encoder, options.codec, options.quality, fps, { qsvLookAhead: info.qsvLookAhead }),
         ...audioOut
       ]
     } else {

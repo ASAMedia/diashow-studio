@@ -2,15 +2,15 @@
 // itself plays in a separate window (#present). Both talk over a BroadcastChannel.
 import { useEffect, useRef, useState } from 'react'
 import { MonitorX, Pause, Play, SkipBack, SkipForward } from 'lucide-react'
-import { mediaUrl } from '@shared/api'
 import { aspectValue, buildTimeline, slideIndexAt } from '@shared/timeline'
-import type { Project } from '@shared/types'
+import type { MediaItem, Project } from '@shared/types'
 import { Player } from '../engine/player'
 import { useStore } from '../store'
 import { timelineOf } from '../timeline'
 import { fmtTime, localeTag, t } from '../i18n'
 import { keyForFocus } from '../keys'
 import { Modal } from './Modal'
+import { MediaThumb } from './EditedPicture'
 
 const CHANNEL = 'diashow-present'
 
@@ -135,18 +135,18 @@ export function PresenterPanel() {
   const idx = slideIndexAt(tl, state.t + 0.01)
   const cur = tl.slides[idx]
   const next = tl.slides[idx + 1]
-  const thumb = (i: number): string | undefined => tl.slides[i]?.media[0]?.thumb
+  const shot = (i: number): MediaItem | undefined => (tl.slides[i]?.media[0]?.thumb ? tl.slides[i].media[0] : undefined)
   return (
     <Modal title={t('presenting')} onClose={() => set({ presenting: false })} noCloseButton className="wide" overlayClassName="presenter">
       <div className="presenter-slides">
         <figure>
-          {cur && thumb(idx) ? <img src={mediaUrl(thumb(idx)!)} alt="" /> : <div className="ph">{cur?.title?.text ?? ''}</div>}
+          {cur && shot(idx) ? <MediaThumb m={shot(idx)!} /> : <div className="ph">{cur?.title?.text ?? ''}</div>}
           <figcaption>
             {t('nowShowing')} {idx + 1} / {tl.slides.length}
           </figcaption>
         </figure>
         <figure className="next">
-          {next && thumb(idx + 1) ? <img src={mediaUrl(thumb(idx + 1)!)} alt="" /> : <div className="ph">{next?.title?.text ?? '—'}</div>}
+          {next && shot(idx + 1) ? <MediaThumb m={shot(idx + 1)!} /> : <div className="ph">{next?.title?.text ?? '—'}</div>}
           <figcaption>{t('upNext')}</figcaption>
         </figure>
       </div>

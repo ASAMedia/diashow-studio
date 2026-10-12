@@ -12,9 +12,11 @@
 import { randomUUID } from 'node:crypto'
 import { basename } from 'node:path'
 import { classify } from '@shared/formats'
+import { validDeleteAt } from '@shared/cleanup'
 import type { RepairCode, RepairReport } from '@shared/diagnostics'
 import { PROJECT_DAMAGED, PROJECT_TOO_NEW } from '@shared/friendlyError'
 import { LOOKS, THEMES, TRANSITIONS } from '@shared/themes'
+import { sanitizeEdit } from '@shared/mediaEdit'
 import { DEFAULT_SETTINGS, DEFAULT_TEXT_STYLE, type Project } from '@shared/types'
 
 /** Format version this app writes. */
@@ -269,6 +271,7 @@ function validateMedia(raw: unknown): { item: Data | null; repaired: boolean } {
   fixes += dropBad(m, [...DERIVED, 'format', 'device', 'error', 'hash', 'hash2'], str)
   fixes += dropBad(m, ['duration', 'fps', 'progress', 'sharpness', 'loudness', 'bitrate', 'stabilizing'], num)
   fixes += dropBad(m, ['hasAudio', 'hdr', 'proxied'], (v) => typeof v === 'boolean')
+  fixes += dropBad(m, ['faceFocus'], (v) => isObj(v) && num(v.x) && num(v.y) && v.x >= 0 && v.x <= 1 && v.y >= 0 && v.y <= 1)
   if (m.live !== undefined && !(isObj(m.live) && str(m.live.source) && m.live.source && num(m.live.duration))) {
     delete m.live
     fixes++
@@ -294,6 +297,13 @@ function validateMedia(raw: unknown): { item: Data | null; repaired: boolean } {
       delete m.videoFaces
       fixes++
     }
+  }
+  if (m.edit !== undefined) {
+    // rotate / straighten / crop: bad numbers rounded or clamped, nonsense dropped (shows the unedited picture)
+    const { edit, fixed } = sanitizeEdit(m.edit)
+    if (edit) m.edit = edit
+    else delete m.edit
+    if (fixed) fixes++
   }
   if (reprocess) {
     // a fresh pass through the pipeline rebuilds what is missing
@@ -536,6 +546,13 @@ export function validateProject(raw: unknown, opts: ValidateOptions = {}): { pro
   if (!num(p.updatedAt)) {
     p.updatedAt = now
     basics++
+  }
+  // optional dates (deletion reminder, face data removed by the clean-up): a wrong one is dropped
+  for (const key of ['deleteAt', 'faceDataRemovedAt']) {
+    if (p[key] !== undefined && !validDeleteAt(p[key])) {
+      delete p[key]
+      basics++
+    }
   }
   changes.add('basics', basics)
 

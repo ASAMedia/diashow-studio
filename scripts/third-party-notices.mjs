@@ -160,7 +160,8 @@ function ffmpegSection(ff) {
     tag
       ? `  Build scripts, which name the version of every included library: https://github.com/BtbN/FFmpeg-Builds/tree/${tag}`
       : '  Build scripts, which name the version of every included library: https://github.com/BtbN/FFmpeg-Builds',
-    `  A copy of the FFmpeg source and of the build scripts is attached to each Diashow Studio release:`,
+    `  A copy of the FFmpeg source, of the build scripts and of the source of every library compiled`,
+    `  into the build (with a manifest) is attached to each Diashow Studio release:`,
     `  ${REPO}/releases`,
     '',
     'Configuration:',

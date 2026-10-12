@@ -1,4 +1,5 @@
-import type { LookId, MediaItem, Project, TextEntry, ThemeId } from '@shared/types'
+import type { LookId, MediaEdit, MediaItem, Project, TextEntry, ThemeId } from '@shared/types'
+import { editedSize, editToSource, isEdited, sourceAspect, type Affine } from '@shared/mediaEdit'
 import { buildTimeline, clipSeconds, slidesAt, titleStyleOf, type Timeline, type TimelineSlide } from '@shared/timeline'
 import { Compositor, NEUTRAL_LOOK, NEUTRAL_POST, type Look, type PostParams, type Tex } from './gl'
 import { ExportVideoStore, ImageStore, TextStore, VideoPool } from './media'
@@ -41,6 +42,8 @@ export class Engine {
   missing = 0
   /** Areas to pixelate per media id: drawn areas, followed faces, marked people (engine/privacy.ts). */
   private privacy = new PrivacyIndex()
+  /** Texture maps of edited media, per edit (edits are replaced, never changed in place). */
+  private views = new WeakMap<MediaEdit, Affine>()
 
   constructor(
     canvas: HTMLCanvasElement | OffscreenCanvas,
@@ -67,7 +70,20 @@ export class Engine {
   private markPrivate(m: MediaItem | undefined, tex: Tex | null, time?: number, path?: string): Tex | null {
     const rects = m && tex ? this.privacy.at(m, time, !!path && path === m.stabilized) : undefined
     if (rects?.length && tex) this.c.markPrivate(tex, rects)
-    return tex
+    return this.edited(m, tex)
+  }
+
+  /**
+   * The picture as edited (rotate, straighten, crop): the same texture, sampled through an affine
+   * map and with the edited size, so every theme crops and fits it like any other picture. The
+   * pixelated areas stay on the texture (original coordinates) and so on the same faces.
+   */
+  private edited(m: MediaItem | undefined, tex: Tex | null): Tex | null {
+    if (!tex || !m || !isEdited(m.edit)) return tex
+    let map = this.views.get(m.edit)
+    if (!map) this.views.set(m.edit, (map = editToSource(m.edit, sourceAspect(m))))
+    const size = editedSize(tex.w, tex.h, m.edit)
+    return { ...tex, w: size.w, h: size.h, view: { m: map, tw: tex.w, th: tex.h } }
   }
 
   resize(W: number, H: number): void {

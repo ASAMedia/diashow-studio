@@ -112,13 +112,16 @@ export function videoFilter(info: VideoInfo, maxEdge: number, opts: { fps?: numb
   return parts.join(',')
 }
 
-export function proxyEncoderArgs(encoder: string, fps: number): string[] {
+export function proxyEncoderArgs(encoder: string, fps: number, opts: { qsvLookAhead?: boolean } = {}): string[] {
   const gop = String(Math.max(1, Math.round(fps)))
   switch (encoder) {
     case 'h264_nvenc':
       return ['-c:v', 'h264_nvenc', '-preset', 'p4', '-rc', 'vbr', '-cq', '21', '-b:v', '0', '-profile:v', 'high', '-g', gop]
     case 'h264_qsv':
-      return ['-c:v', 'h264_qsv', '-preset', 'medium', '-global_quality', '21', '-profile:v', 'high', '-g', gop]
+      // look-ahead ICQ: plain ICQ lands far below NVENC at the same value (see encoderArgs)
+      return opts.qsvLookAhead === false
+        ? ['-c:v', 'h264_qsv', '-preset', 'medium', '-global_quality', '17', '-profile:v', 'high', '-g', gop]
+        : ['-c:v', 'h264_qsv', '-preset', 'medium', '-global_quality', '21', '-look_ahead', '1', '-profile:v', 'high', '-g', gop]
     case 'h264_amf':
       return ['-c:v', 'h264_amf', '-quality', 'balanced', '-rc', 'cqp', '-qp_i', '20', '-qp_p', '22', '-qp_b', '24', '-profile:v', 'high', '-g', gop]
     default:
@@ -182,7 +185,7 @@ export async function transcodeProxy(ff: Ffmpeg, src: string, info: VideoInfo, o
       '-vf', vf,
       '-fps_mode', 'cfr',
       '-pix_fmt', 'yuv420p',
-      ...proxyEncoderArgs(encoder, fps),
+      ...proxyEncoderArgs(encoder, fps, { qsvLookAhead: opts.encoders?.qsvLookAhead }),
       ...colorTags,
       '-an', '-sn', '-dn',
       '-map_metadata', '-1',

@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { FolderSearch, Lightbulb } from 'lucide-react'
-import type { BackupInfo, CacheInfo } from '@shared/types'
+import type { BackupInfo, CacheInfo, GpuChoiceInfo } from '@shared/types'
 import { useStore } from '../store'
 import { localeTag, t, type StringKey } from '../i18n'
 import { appearance, setAppearance, type Appearance } from '../appearance'
 import { UpdateSetting } from './Updates'
 import { DiagnosticsDialog } from './Diagnostics'
+import { CleanupSetting } from './Cleanup'
+import { ReportProblemDialog } from './ReportProblem'
 import { Modal } from './Modal'
 import { Field, Section, Seg } from './ui'
 
@@ -52,6 +54,40 @@ function AppearanceSetting() {
   )
 }
 
+/** Laptops with two graphics chips: render on the stronger one (default) or save power. Next start. */
+function GpuChoiceSetting() {
+  const [info, setInfo] = useState<GpuChoiceInfo | null>(null)
+  const [choice, setChoice] = useState<'performance' | 'saving'>('performance')
+  useEffect(() => {
+    void window.api.gpuChoice().then((i) => {
+      setInfo(i)
+      setChoice(i.running)
+    })
+    void window.api.getAppSettings().then((s) => setChoice(s.gpuPreference ?? 'performance'))
+  }, [])
+  if (!info || info.chips < 2 || info.override) return null
+  return (
+    <Section title={t('gpuChoiceTitle')}>
+      <Seg
+        label={t('gpuChoiceTitle')}
+        value={choice}
+        options={[
+          { id: 'performance', label: t('gpuPerformance') },
+          { id: 'saving', label: t('gpuSaving') }
+        ]}
+        onChange={(v) => {
+          setChoice(v)
+          void window.api.setAppSettings({ gpuPreference: v })
+        }}
+      />
+      <p className="hint">
+        {t('gpuChoiceHint')}
+        {choice !== info.running && <> {t('gpuChoiceRestart')}</>}
+      </p>
+    </Section>
+  )
+}
+
 export function SettingsDialog() {
   const set = useStore((s) => s.set)
   const projects = useStore((s) => s.projects)
@@ -60,6 +96,7 @@ export function SettingsDialog() {
   const [busy, setBusy] = useState(false)
   const [kiosk, setKiosk] = useState<string>('')
   const [diagnostics, setDiagnostics] = useState(false)
+  const [report, setReport] = useState(false)
 
   useEffect(() => {
     void window.api.cacheInfo().then(setCache)
@@ -128,6 +165,8 @@ export function SettingsDialog() {
         <p className="hint">{t('previewQualityHint')}</p>
       </Section>
 
+      <GpuChoiceSetting />
+
       <Section title={t('storage')}>
         {!cache ? (
           <p className="hint">{t('loading')}</p>
@@ -168,6 +207,8 @@ export function SettingsDialog() {
         )}
       </Section>
 
+      <CleanupSetting />
+
       <Section title={t('kiosk')}>
         <Field label={t('kioskProject')}>
           <select
@@ -198,10 +239,14 @@ export function SettingsDialog() {
           <button className="btn small" data-testid="diagnostics-open" onClick={() => setDiagnostics(true)}>
             {t('diagButton')}
           </button>
+          <button className="btn small" data-testid="report-open" onClick={() => setReport(true)}>
+            {t('reportButton')}
+          </button>
         </div>
         <p className="hint">{t('troubleshootingHint')}</p>
       </Section>
       {diagnostics && <DiagnosticsDialog onClose={() => setDiagnostics(false)} />}
+      {report && <ReportProblemDialog onClose={() => setReport(false)} />}
     </Modal>
   )
 }
@@ -266,6 +311,7 @@ const SHORTCUTS: [StringKey[], StringKey][] = [
   [['kbdCtrlClick'], 'scMulti'],
   [['kbdShiftClick'], 'scRange'],
   [['kbdSelectAll'], 'scAll'],
+  [['kbdRotate'], 'scRotate'],
   [['kbdAltEnter'], 'scFullscreen'],
   [['kbdEsc'], 'scEsc'],
   [['kbdF1'], 'scHelp'],

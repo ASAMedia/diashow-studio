@@ -31,6 +31,8 @@ in vec2 v_local;
 uniform sampler2D u_tex;
 uniform int u_mode;        // 0 textured, 1 solid, 2 shadow
 uniform vec4 u_uv;
+uniform vec3 u_view0;      // rotate / straighten / crop: uv of the edited picture -> texture uv (affine rows)
+uniform vec3 u_view1;
 uniform vec4 u_color;
 uniform vec2 u_size;
 uniform float u_radius;
@@ -112,6 +114,7 @@ void main() {
     vec2 uv = v_uv;
     if (u_flipY > 0.5) uv.y = 1.0 - uv.y;
     uv = u_uv.xy + uv * u_uv.zw;
+    uv = vec2(dot(u_view0, vec3(uv, 1.0)), dot(u_view1, vec3(uv, 1.0)));
     float lod;
     if (u_privN > 0 && privacy(uv, lod)) c = textureLod(u_tex, uv, lod + u_blur);
     else c = u_blur > 0.0 ? texture(u_tex, uv, u_blur) : texture(u_tex, uv);

@@ -17,6 +17,8 @@ import { markPerson, notThisPerson, personLabel, takeRequestedStill } from '../p
 import { useStore } from '../store'
 import { t } from '../i18n'
 import { togglePrivacy } from './SlideTools'
+import { EditedPicture } from './EditedPicture'
+import { areaToSource, rectToEdit, shownAspect, sourceAspect } from '@shared/mediaEdit'
 import './people.css'
 
 /** Photos searched with the fine tile grid in this session (the result is stored with the media). */
@@ -31,6 +33,12 @@ export function stillTime(e: VideoEntry, m: MediaItem): number {
 
 const sameArea = (a: Rect, b: Rect): boolean => Math.abs(a.x - b.x) < 1e-4 && Math.abs(a.y - b.y) < 1e-4 && Math.abs(a.w - b.w) < 1e-4
 const round = (r: Rect): Rect => ({ x: +r.x.toFixed(4), y: +r.y.toFixed(4), w: +r.w.toFixed(4), h: +r.h.toFixed(4) })
+/** Rounded outwards, so the area never shrinks. */
+const roundOut = (r: Rect): Rect => {
+  const x = Math.floor(r.x * 1e4) / 1e4
+  const y = Math.floor(r.y * 1e4) / 1e4
+  return { x, y, w: +(Math.ceil((r.x + r.w) * 1e4) / 1e4 - x).toFixed(4), h: +(Math.ceil((r.y + r.h) * 1e4) / 1e4 - y).toFixed(4) }
+}
 
 interface Still {
   url: string
@@ -113,7 +121,9 @@ export function PrivacyEditor({ entryId, w, h }: { entryId: string; w: number; h
 
   if (!entry || !media) return null
   const src = isVideo ? still?.url : media.display ? mediaUrl(media.display) : media.thumb ? mediaUrl(media.thumb) : undefined
-  const aspect = media.width / media.height
+  // the picture as it is shown (rotated, straightened, cropped); faces and areas stay in original coordinates
+  const source = sourceAspect(media)
+  const aspect = shownAspect(media)
   // the picture stays clear of the bar at the bottom (faces under it could not be clicked)
   const iw = Math.min(w * 0.94, (h - 96) * aspect)
   const ih = iw / aspect
@@ -130,7 +140,15 @@ export function PrivacyEditor({ entryId, w, h }: { entryId: string; w: number; h
   const personRects = isVideo ? videoPersonTracks(media, people).map((x) => ({ r: rectAt(x.keys, tStill), name: personLabel(x.person, people) })) : []
 
   const save = (patch: Partial<VideoEntry>): void => setEntry(entry.id, patch as Partial<PhotoEntry>)
-  const box = (r: Rect): React.CSSProperties => ({ left: ix + r.x * iw, top: iy + r.y * ih, width: r.w * iw, height: r.h * ih })
+  const at = (r: Rect): React.CSSProperties => ({ left: ix + r.x * iw, top: iy + r.y * ih, width: r.w * iw, height: r.h * ih })
+  const box = (r: Rect): React.CSSProperties => at(rectToEdit(r, media.edit, source))
+  /** A face or area still (mostly) on the edited picture: those cropped away get no button. */
+  const shown = (r: Rect): boolean => {
+    const e = rectToEdit(r, media.edit, source)
+    const w = Math.max(0, Math.min(1, e.x + e.w) - Math.max(0, e.x))
+    const h = Math.max(0, Math.min(1, e.y + e.h) - Math.max(0, e.y))
+    return w * h >= 0.25 * e.w * e.h
+  }
 
   /**
    * Follows clicked faces of the video through the clip: by the sampled analysis (position and
@@ -192,7 +210,8 @@ export function PrivacyEditor({ entryId, w, h }: { entryId: string; w: number; h
       el.removeEventListener('pointerup', up)
       const r = at(pe)
       setDraft(null)
-      if (r.w > 0.02 && r.h > 0.02) save({ privacy: [...areas, round(r)] })
+      // drawn on the edited picture, stored for the original (an area that covers the drawn one)
+      if (r.w > 0.02 && r.h > 0.02) save({ privacy: [...areas, roundOut(areaToSource(r, media!.edit, source))] })
     }
     el.addEventListener('pointermove', move)
     el.addEventListener('pointerup', up)
@@ -227,10 +246,10 @@ export function PrivacyEditor({ entryId, w, h }: { entryId: string; w: number; h
 
   return (
     <div className="privacy-edit">
-      {src && <img src={src} style={{ left: ix, top: iy, width: iw, height: ih }} alt="" draggable={false} />}
+      {src && <EditedPicture src={src} edit={media.edit} aspect={source} box={{ x: ix, y: iy, w: iw, h: ih }} />}
       <div ref={areaRef} className="privacy-area" style={{ left: ix, top: iy, width: iw, height: ih }} onPointerDown={startDraw} />
       {state.map((s, i) =>
-        s.on ? null : (
+        s.on || !shown(s.f) ? null : (
           <div key={`f${i}`} className={`privacy-face-wrap ${s.match ? 'person' : ''} ${s.waiting ? 'waiting' : ''}`} style={box(s.f)}>
             <button
               className={`privacy-face ${s.match ? 'person' : ''} ${s.waiting ? 'draft' : ''}`}
@@ -284,7 +303,7 @@ export function PrivacyEditor({ entryId, w, h }: { entryId: string; w: number; h
           </div>
         ) : null
       )}
-      {draft && <div className="privacy-face draft" style={box(draft)} />}
+      {draft && <div className="privacy-face draft" style={at(draft)} />}
       <div className="kb-bar">
         <span className="hint privacy-hint" style={{ margin: 0, flex: 1 }}>
           {note || hint}

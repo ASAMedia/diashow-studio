@@ -3,6 +3,7 @@
 // from sleeping while a job runs.
 import { app, BrowserWindow, ipcMain, powerSaveBlocker, type IpcMainInvokeEvent, type WebContents } from 'electron'
 import type { EncoderInfo, ExportProgress } from '@shared/types'
+import type { ExportJobState } from '@shared/exportQueue'
 import { denyPopups, loadRenderer, rendererWebPreferences } from '../presentation'
 import { openExportQueue, throttle, type ExportQueue } from './queue'
 
@@ -29,6 +30,9 @@ export interface ExportQueueMain {
   prepare<T>(run: (signal: AbortSignal, onProgress: (p: ExportProgress) => void) => Promise<T>): Promise<T>
   /** App quits: pauses the running job (resumable) and closes the worker. */
   shutdown(): Promise<void>
+  /** The clean-up: a project's jobs, and taking a finished one out of the queue (queue.ts). */
+  jobsOf(projectId: string): Promise<{ id: string; dir: string; state: ExportJobState; outPath: string }[]>
+  forget(id: string): Promise<void>
 }
 
 export function registerExportQueue(cfg: { dir: string; ffmpegDir: string; encoders: () => Promise<EncoderInfo> }): ExportQueueMain {
@@ -240,6 +244,8 @@ export function registerExportQueue(cfg: { dir: string; ffmpegDir: string; encod
       if (!signal) throw new Error('no export job is being prepared')
       return run(signal, () => q.touch())
     },
-    shutdown: stop
+    shutdown: stop,
+    jobsOf: async (projectId) => (await ready).jobsOf(projectId),
+    forget: async (id) => (await ready).forget(id)
   }
 }

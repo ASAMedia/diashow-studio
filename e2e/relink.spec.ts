@@ -1,6 +1,7 @@
 // Moved originals end to end: a project imported from a folder that is renamed later shows the
 // missing-files banner; "Search a folder…" with the new folder (the native folder dialog answers from
-// the test) finds every file again, the items are ready again and the entries point to the new ids.
+// the test) finds every file again, the items are ready again and the entries point to the new ids. A
+// photo turned with Ctrl+R stays turned: its edit belongs to the project, not to the moved file.
 import { expect, test } from '@playwright/test'
 import { mkdtempSync, renameSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -31,7 +32,18 @@ test('relink: a renamed media folder is found again with "Search a folder…"', 
     expect(old.media.every((m: any) => m.status === 'ready')).toBe(true)
     expect(old.media.length).toBeGreaterThanOrEqual(5)
     const live = old.media.find((m: any) => m.live)
-    await waitSaved(dataDir, id, (p) => p.media.length === old.media.length && p.media.every((m: any) => m.status === 'ready'))
+    // a photo turned left with Ctrl+R
+    const turned = old.media.find((m: any) => m.kind === 'photo' && !m.live)
+    const left = { rotate: 270, straighten: 0 }
+    await s.page.evaluate((mediaId) => {
+      const st = (window as any).__diashow.store.getState()
+      st.select(st.project.entries.filter((e: any) => e.mediaId === mediaId).map((e: any) => e.id))
+    }, turned.id)
+    await s.page.locator('.cards .card').first().focus()
+    await s.page.keyboard.press('Control+r')
+    const page0 = s.page
+    await expect.poll(async () => (await project(page0)).media.find((m: any) => m.id === turned.id)?.edit).toEqual(left)
+    await waitSaved(dataDir, id, (p) => p.media.length === old.media.length && p.media.every((m: any) => m.status === 'ready') && p.media.some((m: any) => m.edit?.rotate === 270))
     expect(s.errors).toEqual([])
     await s.app.close()
     s = null
@@ -69,6 +81,8 @@ test('relink: a renamed media folder is found again with "Search a folder…"', 
       expect(byId.has(e.mediaId)).toBe(true)
       expect((byId.get(e.mediaId) as any).name).toBe((oldById.get(old.entries[i].mediaId) as any).name)
     })
+    // the turned photo is still turned (and only that one)
+    expect(now.media.filter((m: any) => m.edit).map((m: any) => [m.name, m.edit])).toEqual([[turned.name, left]])
     // a Live Photo keeps its motion part, from the new folder too
     if (live) {
       const relinked = now.media.find((m: any) => m.name === live.name)
@@ -76,7 +90,7 @@ test('relink: a renamed media folder is found again with "Search a folder…"', 
     }
     // the show plays from the new files
     expect(await page.evaluate(() => (window as any).__diashow.player.current.tl.slides.length)).toBeGreaterThanOrEqual(old.media.length - 1)
-    await waitSaved(dataDir, id, (p) => p.media.every((m: any) => m.status === 'ready' && m.path.startsWith(after + sep)))
+    await waitSaved(dataDir, id, (p) => p.media.every((m: any) => m.status === 'ready' && m.path.startsWith(after + sep)) && p.media.find((m: any) => m.name === turned.name)?.edit?.rotate === 270)
     expect(s.errors).toEqual([])
   } finally {
     await s?.app.close().catch(() => {})

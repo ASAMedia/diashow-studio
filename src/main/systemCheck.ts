@@ -10,6 +10,7 @@ import sharp from 'sharp'
 import type { BenchMedia, EncoderTest, GpuDeviceInfo, SystemInfo } from '@shared/systemCheck'
 import { directDecodeSupport } from './codecSupport'
 import type { Ffmpeg } from './ffmpeg'
+import { hardwareEncoderFamilies } from './gpuChoice'
 import { detectGpuTonemap } from './media/hdr'
 
 const VENDORS: Record<number, string> = {
@@ -23,7 +24,7 @@ const VENDORS: Record<number, string> = {
 }
 
 /** Hardware encoders the export and the proxies can use, tested in this order. */
-const HW_ENCODERS = ['h264_nvenc', 'hevc_nvenc', 'h264_qsv', 'hevc_qsv', 'h264_amf', 'hevc_amf']
+const HW_ENCODERS = hardwareEncoderFamilies().flatMap((hw) => [`h264_${hw}`, `hevc_${hw}`])
 
 interface ChromiumGpuDevice {
   vendorId?: number
@@ -37,7 +38,8 @@ function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
   return Promise.race([p.catch(() => fallback), new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))])
 }
 
-async function gpuDevices(): Promise<GpuDeviceInfo[]> {
+/** The graphics cards Chromium sees (also for "Problem melden", src/main/reportProblem.ts). */
+export async function gpuDevices(): Promise<GpuDeviceInfo[]> {
   const info = (await withTimeout(app.getGPUInfo('complete'), 8000, null)) ?? (await withTimeout(app.getGPUInfo('basic'), 4000, null))
   const list = ((info as { gpuDevice?: ChromiumGpuDevice[] } | null)?.gpuDevice ?? []).filter((d) => d.vendorId || d.deviceId)
   return list.map((d) => ({

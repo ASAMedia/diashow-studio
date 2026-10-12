@@ -9,6 +9,7 @@ import { localeTag, pick, t } from '../i18n'
 import { CopyChaptersButton, JobRow } from './Queue'
 import { openFacesInShow } from '@shared/people'
 import { PrivacyReview } from './PrivacyReview'
+import { DeadlineNudge } from './Cleanup'
 import { Modal } from './Modal'
 import { ErrorText } from '../errors'
 
@@ -275,6 +276,7 @@ export function ExportDialog() {
         <>
           <p>{t('queueAdded')}</p>
           {job && <JobRow job={job} />}
+          <DeadlineNudge />
         </>
       )}
       {phase === 'error' && (

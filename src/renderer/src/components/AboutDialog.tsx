@@ -1,12 +1,13 @@
 // About Diashow Studio: version, Electron/Chromium/FFmpeg versions, the MIT licence, what is bundled
 // under which licence (FFmpeg's GPL notice with the source of the exact build), the full
-// THIRD_PARTY_NOTICES.txt and "Check for updates".
+// THIRD_PARTY_NOTICES.txt, "Check for updates" and "Problem melden…" (ReportProblem.tsx).
 import { useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import type { AboutInfo, UpdateStatus } from '@shared/about'
 import { useStore } from '../store'
 import { localeTag, t } from '../i18n'
 import { checkUpdateNow } from './Updates'
+import { ReportProblemDialog } from './ReportProblem'
 import { Modal } from './Modal'
 import { AppIcon } from './AppIcon'
 import { Section } from './ui'
@@ -32,6 +33,7 @@ export function AboutDialog() {
   const [showNotices, setShowNotices] = useState(false)
   const [checking, setChecking] = useState(false)
   const [update, setUpdate] = useState<UpdateStatus | null>(null)
+  const [report, setReport] = useState(false)
 
   useEffect(() => {
     void window.api.aboutInfo().then(setInfo)
@@ -64,6 +66,9 @@ export function AboutDialog() {
         <>
           <button className="btn" onClick={() => set({ dialog: 'handbook' })}>
             {t('handbook')}
+          </button>
+          <button className="btn" data-testid="report-open" onClick={() => setReport(true)}>
+            {t('reportButton')}
           </button>
           <button className="btn primary" onClick={close}>
             {t('close')}
@@ -171,6 +176,7 @@ export function AboutDialog() {
             </pre>
           ))}
       </Section>
+      {report && <ReportProblemDialog onClose={() => setReport(false)} />}
     </Modal>
   )
 }

@@ -10,6 +10,7 @@ import { findRejects, rejectLabel } from './Dialogs'
 import { prioritize } from '../priority'
 import { keyForFocus, modalOpen } from '../keys'
 import { Seg } from './ui'
+import { MediaThumb } from './EditedPicture'
 
 type Filter = 'all' | 'in' | 'out' | 'stars' | 'suggest'
 interface Item {
@@ -214,7 +215,7 @@ export function Cull() {
                 }}
               >
                 <div className="pic">
-                  {it.m.thumb && <img src={mediaUrl(it.m.thumb)} alt="" loading="lazy" draggable={false} />}
+                  {it.m.thumb && <MediaThumb m={it.m} loading="lazy" draggable={false} />}
                   {it.m.kind === 'video' && (
                     <span className="badge kind">
                       <Film size={10} /> {fmtTime(it.m.duration ?? 0)}
@@ -244,7 +245,7 @@ export function Cull() {
           {focused.m.kind === 'video' && focused.m.playback ? (
             <video key={focused.m.id} src={mediaUrl(focused.m.playback)} autoPlay controls onClick={(e) => e.stopPropagation()} />
           ) : (
-            <img key={focused.m.id} src={mediaUrl(focused.m.display ?? focused.m.thumb ?? '')} alt="" />
+            <MediaThumb key={focused.m.id} m={focused.m} edge={2048} />
           )}
           <button className="nav prev" title={t('previous')} aria-label={t('previous')} onClick={(e) => { e.stopPropagation(); move(-1) }}>
             <ChevronLeft size={28} />

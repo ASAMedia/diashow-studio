@@ -93,6 +93,10 @@ export interface ExportQueue {
   cancel(id: unknown): Promise<void>
   /** Deletes a job's folder; not while it runs. */
   remove(id: unknown): Promise<void>
+  /** The jobs of a project (by the id in their snapshot), for the clean-up. */
+  jobsOf(projectId: string): { id: string; dir: string; state: ExportJobState; outPath: string }[]
+  /** The clean-up: a finished (done, cancelled, failed) job leaves the queue; its folder is deleted by the caller. */
+  forget(id: unknown): Promise<void>
   /** paused / error → queued. */
   resume(id: unknown): Promise<void>
 
@@ -461,6 +465,20 @@ export async function openExportQueue(opts: ExportQueueOptions): Promise<ExportQ
       changed()
     },
 
+    jobsOf(projectId) {
+      return sorted()
+        .filter((j) => j.file.project?.id === projectId)
+        .map((j) => ({ id: j.file.id, dir: j.dir, state: j.file.state, outPath: j.file.request.outPath }))
+    },
+
+    async forget(id) {
+      const job = getJob(id)
+      if (!['done', 'cancelled', 'error'].includes(job.file.state)) throw new Error(`a ${job.file.state} export stays in the queue`)
+      await stopWork(job)
+      jobs.delete(job.file.id)
+      changed()
+    },
+
     async resume(id) {
       const job = getJob(id)
       if (job.file.state === 'queued' || job.file.state === 'running') return
@@ -497,6 +515,7 @@ export async function openExportQueue(opts: ExportQueueOptions): Promise<ExportQ
         await old.abort()
       }
       const encoder = raw ? (job.file.encoder ?? pickEncoder(request.codec, request.hardware, await encoders())) : 'webcodecs'
+      const qsvLookAhead = encoder.endsWith('_qsv') ? (await encoders()).qsvLookAhead : undefined
       // the job may have been cancelled or paused meanwhile
       if (job.file.state !== 'running' || !job.attached) throw new Error(stopped ?? 'export job stopped')
       if (job.segment) throw new Error('another segment was started meanwhile')
@@ -504,7 +523,7 @@ export async function openExportQueue(opts: ExportQueueOptions): Promise<ExportQ
       await rm(tmp, { force: true })
       const common = { k: index, expected: segmentLength(job, index), tmp, final: segmentPath(job, index) }
       job.segment = raw
-        ? openRawSegment(ff, { ...common, input: kind, width: request.width, height: request.height, fps: request.fps, codec: request.codec, quality: request.quality, encoder })
+        ? openRawSegment(ff, { ...common, input: kind, width: request.width, height: request.height, fps: request.fps, codec: request.codec, quality: request.quality, encoder, qsvLookAhead })
         : openChunkSegment({ ...common, codec: request.codec })
       job.phase = 'video'
       job.prepareAbort = null

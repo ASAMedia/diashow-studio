@@ -1,6 +1,5 @@
 import { useRef, useState, useEffect } from 'react'
-import { Clock, Film, FolderPlus, ImagePlus, Plus, Type, Volume2, VolumeX, Trash2, Split, Merge, Move, EyeOff } from 'lucide-react'
-import { mediaUrl } from '@shared/api'
+import { Clock, Film, FolderPlus, ImagePlus, Plus, Type, Volume2, VolumeX, Trash2, Split, Merge, Move, EyeOff, Crop as CropIcon, RotateCcw } from 'lucide-react'
 import type { Timeline, TimelineSlide } from '@shared/timeline'
 import { prioritize } from '../priority'
 import type { VideoEntry } from '@shared/types'
@@ -13,6 +12,8 @@ import { AudioLane } from './AudioLane'
 import { CARD, GAP, STEP, timeToX } from './stripScale'
 import { Menu, MenuItem, MenuSeparator } from './Menu'
 import { reducedMotion } from '../appearance'
+import { MediaThumb } from './EditedPicture'
+import { openPhotoEdit, rotateSelection } from '../photoEdit'
 
 interface Menu {
   x: number
@@ -323,6 +324,16 @@ export function Filmstrip() {
               >
                 {t('excludeSel')}
               </MenuItem>
+              {(menu.slide.kind === 'photos' || menu.slide.kind === 'video') && (
+                <>
+                  <MenuItem icon={<CropIcon size={15} />} onSelect={() => openPhotoEdit(menu.slide!.entries[0].id)}>
+                    {t('peEdit')}
+                  </MenuItem>
+                  <MenuItem icon={<RotateCcw size={15} />} onSelect={() => rotateSelection(-1)}>
+                    {`${t('peRotateLeft')} (${t('kbdRotate')})`}
+                  </MenuItem>
+                </>
+              )}
               {menu.slide.kind === 'photos' && themeMeta(project.settings.theme).kenBurns && (
                 <MenuItem icon={<Move size={15} />} onSelect={() => useStore.getState().set({ tab: 'slide', kbEdit: 'start' })}>
                   {t('kbEdit')}
@@ -390,7 +401,7 @@ function SlideCard(props: {
         <div className="text-card">T</div>
       ) : (
         <div className="tiles">
-          {s.media.map((m, i) => (m.thumb ? <img key={i} src={mediaUrl(m.thumb)} alt="" draggable={false} loading="lazy" decoding="async" /> : <div key={i} className="empty" />))}
+          {s.media.map((m, i) => (m.thumb ? <MediaThumb key={i} m={m} draggable={false} loading="lazy" decoding="async" /> : <div key={i} className="empty" />))}
         </div>
       )}
       <div className="badges" aria-hidden>

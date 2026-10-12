@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { mediaUrl } from '@shared/api'
 import { sameClipGroups } from '@shared/duplicates'
 import type { MediaItem, Project } from '@shared/types'
 import { Loader2 } from 'lucide-react'
@@ -8,6 +7,7 @@ import { t } from '../i18n'
 import { ErrorText } from '../errors'
 import { Modal } from './Modal'
 import { Slider } from './ui'
+import { MediaThumb } from './EditedPicture'
 
 // ---------------------------------------------------------------- rejects
 
@@ -123,7 +123,7 @@ export function RejectsDialog() {
         <div className="reject-grid">
           {rejects.map((r) => (
             <label key={r.entryId} className={`reject ${unchecked.has(r.entryId) ? 'off' : ''}`} title={`${r.media.name} · ${rejectLabel(r)}`}>
-              {r.media.thumb && <img src={mediaUrl(r.media.thumb)} alt="" loading="lazy" />}
+              {r.media.thumb && <MediaThumb m={r.media} loading="lazy" />}
               <input
                 type="checkbox"
                 aria-label={`${r.media.name}: ${rejectLabel(r)}`}

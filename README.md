@@ -2,6 +2,8 @@
 
 Photo and video slideshows for Windows, modelled on the slideshow feature of macOS Photos: pick photos and videos, choose a theme and music, and export an MP4.
 
+**Website:** https://asamedia.github.io/diashow-studio/ (German, with an English version and the handbook online). **Download:** [latest release](https://github.com/ASAMedia/diashow-studio/releases/latest).
+
 ## Features
 
 - **Getting started:** on the first start a three-step assistant makes a first show (photos or a folder, theme and music, then play or export). It can be skipped and is also on the home screen ("New slideshow with assistant").
@@ -33,6 +35,9 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
 - **Colour looks:** Natural, Vivid, Warm, Cool, Dramatic, Faded, Mono and Noir. A look changes only the photos and videos, never the theme's paper, backgrounds or text.
 - **Editing:**
   - Undo and redo (Ctrl+Z / Ctrl+Y).
+  - Rotate, straighten and crop like in Photos: **Edit** in the Slide tab (or the slide's menu) turns a photo or video by 90°, straightens it up to ±45° (zoomed so no corners are empty) and crops it freely or to Original, 1:1, 4:3, 3:2, 16:9 or 9:16. Ctrl+R turns all selected photos left.
+    - The edit belongs to the photo: every slide, layout, Ken Burns move, thumbnail, presentation and export uses it.
+    - Pixelated faces stay on the same faces. The edit is a mapping of texture coordinates in the shader (`src/shared/mediaEdit.ts`), and faces and pixelated areas stay in the coordinates of the original.
   - Drag a filmstrip card's right edge to set its time; double-click the edge for automatic again.
   - Day titles from the capture date, or chapters from folder names ("2_Sonntag Unser erster Tag" becomes "Sonntag" with the subtitle "Unser erster Tag").
   - Sort by capture date.
@@ -56,6 +61,14 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
   - "Check faces…" before the export (optional) lists the slides whose detected faces are not pixelated.
   - The pixelation sits on the picture itself, so it follows crops and Ken Burns moves and appears in the preview and the export.
   - Faces are analysed in the background in Web Workers (photos first, then a frame every 0.5 s of each video), paused while the show plays, exports or presents.
+  - **Clean up after the project** ("⋯" menu, the eraser on a slideshow on the home screen, or Settings → Privacy) lists with their sizes what the app keeps for a slideshow and deletes what you pick, for good:
+    - face data;
+    - photos and videos pupils uploaded (all, or only those not in the show);
+    - the cache, older versions and finished export jobs.
+
+    Face data leaves the project, its older versions and the cache. Everything that is pixelated stays pixelated, because marked people become fixed areas, but new photos are no longer recognised automatically. Your own photos, videos, music and exported videos are never touched.
+  - **Deletion date:** in 1, 3, 6 or 12 months or on a date (also offered after an export). When it comes, the slideshow on the home screen gets a hint and a banner says "Deletion date reached: clean up?", with "Remind me in a month".
+  - Deleting a slideshow asks whether its cache, uploads and finished export jobs go too.
 - **Automatic help:**
   - Offline face detection (MediaPipe BlazeFace, run on the whole picture and on tiles) keeps faces inside crops and gives Ken Burns a target.
   - "Change slides on the beat" puts every slide change on a beat of the music.
@@ -79,6 +92,8 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
     - Display images, video sound and proxies run side by side, each on its own resource (CPU, disk, graphics card).
     - Duplicate and sharpness analysis waits until every item is usable.
   - Preview quality (High, Medium, Low) is set in Settings, for slower laptops; exports are not affected.
+  - Laptops with two graphics chips: the app renders on the high-performance one. Chromium alone would pick the integrated chip, and every exported frame would then travel to the other chip for encoding. On an Iris Xe + RTX 4070 laptop a 220 s show exported in 4K in 289 s instead of 419 s, and in 1080p in 58 s instead of 64 s. Settings → Graphics chip → Power saving leaves the choice to Windows.
+  - PCs with only Intel graphics (e.g. school PCs) export with Quick Sync at the same quality as NVENC: H.264 uses look-ahead ICQ, HEVC lower quality values (calibrated by SSIM against a near-lossless export). Rotated H.264 phone videos get their proxies on Intel's GPU too; HDR proxies decode HEVC in software there, because Intel's Vulkan driver doesn't decode 10-bit HEVC.
   - System check (in Settings) for other PCs, such as a school PC without NVIDIA. It shows:
     - the graphics card, WebGL and a real test encode with each hardware encoder;
     - HEVC playback, GPU tone mapping, CPU, memory and free disk space;
@@ -102,7 +117,8 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
 - **Pack project:** copies the project with all photos, videos and music into one folder for a USB stick or another PC. "Open project…" or a double-click on the .dshow loads it there.
 - **When something goes wrong:**
   - Error messages say what happened and what to do (FFmpeg missing, disk full, file locked or missing, unreadable file, export encoder, blocked network port, damaged project), with the technical message under "Details".
-  - The app keeps an error log in `%APPDATA%\Diashow Studio\logs` (a few files of 2 MB): start, versions and graphics card, errors of the main process and the windows, crashes. Paths are shortened to `%USERPROFILE%`; no media content, face data or share links.
+  - The app keeps an error log in `%APPDATA%\Diashow Studio\logs` (a few files of 2 MB): start, versions and graphics card, errors of the main process and the windows, crashes. Paths are shortened to `%USERPROFILE%`, and pupils' names in upload folders become `<name>`; no media content, face data or share links.
+  - "Report a problem…" (Settings → Troubleshooting, and About) shows what will be sent, offers the diagnostics package first, and opens the bug form on GitHub with the app version, Windows version and graphics card filled in. The app opens only pages of its own GitHub project in the browser.
   - "Create diagnostics package…" (Settings) shows every file it would contain and then saves a zip to e-mail: logs, system check, settings, versions, the export queue's states and a summary of the open project made of counts, formats and size classes only (no names, captions or paths of the photos).
 - **Security:** the windows run sandboxed with context isolation and a strict CSP, can't navigate away from the app, open other windows, use camera, microphone or location, or reach the internet; IPC only answers the app's own page; `dsmedia://` serves photos, videos and music only; FFmpeg only reads existing local files. The packaged exe can't be run as Node (Electron fuses).
 - **Presentation mode:** the show runs fullscreen on a second display (projector) while the laptop shows the current and next slide, time and controls.
@@ -171,7 +187,10 @@ npm test             # unit and pipeline tests (generates test media first)
 npm run e2e          # build + Playwright end-to-end test with screenshots of every theme
 npm run dist         # Windows installer and portable exe in dist/ (writes THIRD_PARTY_NOTICES first)
 npm run notices      # vendor/THIRD_PARTY_NOTICES.txt: licences of FFmpeg, fonts, models and every bundled npm package
+npm run site         # rebuilds the generated parts of the website in docs/ (handbook pages, screenshots, icons, link previews)
 ```
+
+`DIASHOW_GPU=integrated` makes a laptop with two graphics chips behave like a PC with only integrated graphics (rendering, Quick Sync, the integrated Vulkan device, no NVENC or CUDA); `DIASHOW_GPU=discrete` renders on the high-performance GPU. `e2e/exportspeed.spec.ts` (with `DIASHOW_ORIGINALS_DIR`) prints which chip WebGL uses, the encoders, and speed and quality of an export.
 
 The handbook lives in `src/renderer/src/handbook/de.md` and `en.md` (a small Markdown subset, see `handbook/markdown.tsx`). Its screenshots in `src/renderer/public/handbook/<de|en>/` are made from the generated test media by `npx electron-vite build && DIASHOW_HANDBOOK_SHOTS=1 npx playwright test e2e/handbook-shots.spec.ts`.
 
@@ -187,4 +206,4 @@ GitHub Actions (`.github/workflows/ci.yml`) runs the type check, the unit tests 
 
 ## Licence
 
-MIT for the app code. `THIRD_PARTY_NOTICES.txt` (next to the installed exe, and in the About dialog) lists every bundled licence. The bundled FFmpeg build is GPL-3.0 (BtbN, pinned in `scripts/ffmpeg-build.json`); see `vendor/ffmpeg/LICENSE.txt`, and the source of that exact build is attached to each release. MediaPipe and the BlazeFace model are Apache-2.0; their usage statistics are blocked inside the app. Face recognition uses dlib's face recognition model (public domain, CC0) as converted by face-api.js (MIT), from `@vladmandic/face-api` (MIT), with TensorFlow.js (Apache-2.0). Fonts are under the SIL Open Font License (Inter, Anton, Cinzel, Playfair Display, Barlow Semi Condensed, Nunito Sans, Caveat) and the Apache License 2.0 (Special Elite).
+MIT for the app code. `THIRD_PARTY_NOTICES.txt` (next to the installed exe, and in the About dialog) lists every bundled licence. The bundled FFmpeg build is GPL-3.0 (BtbN, pinned in `scripts/ffmpeg-build.json`); see `vendor/ffmpeg/LICENSE.txt`. Each release carries the complete source of that exact build: FFmpeg itself, the BtbN build scripts, and every library compiled into it at the exact revision the build used (`ffmpeg-deps-sources-<tag>.tar`, with the manifest `ffmpeg-deps-sources-<tag>.txt` that names each library, its licence, origin and revision; `npm run gpl-sources -- <folder>` collects them). MediaPipe and the BlazeFace model are Apache-2.0; their usage statistics are blocked inside the app. Face recognition uses dlib's face recognition model (public domain, CC0) as converted by face-api.js (MIT), from `@vladmandic/face-api` (MIT), with TensorFlow.js (Apache-2.0). Fonts are under the SIL Open Font License (Inter, Anton, Cinzel, Playfair Display, Barlow Semi Condensed, Nunito Sans, Caveat) and the Apache License 2.0 (Special Elite).

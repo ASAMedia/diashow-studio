@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Handbuch (Deutsch)
+    url: https://asamedia.github.io/diashow-studio/handbuch.html
+    about: Anleitung und Hilfe, wenn etwas nicht klappt. Auch in der App mit F1.
+  - name: Handbook (English)
+    url: https://asamedia.github.io/diashow-studio/en/handbook.html
+    about: Instructions and troubleshooting. Also in the app with F1.

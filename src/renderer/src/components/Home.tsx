@@ -1,9 +1,10 @@
-import { FileUp, FolderOpen, Plus, Trash2, Play, Wand2 } from 'lucide-react'
+import { Eraser, FileUp, FolderOpen, Plus, Trash2, Play, Wand2 } from 'lucide-react'
 import { mediaUrl } from '@shared/api'
 import { useStore } from '../store'
 import { Tip } from './Settings'
 import { openWizard } from './Wizard'
 import { DamagedProjects, importProjectSafely, openProjectSafely } from './ProjectRepair'
+import { CleanupBanner, DeadlineBadge, openCleanup } from './Cleanup'
 import { localeTag, t } from '../i18n'
 
 const FORMATS = 'JPEG · HEIC · HIF · ARW · DNG · PNG · WebP · AVIF — MOV · MP4 · XAVC S/HS/S-I · AVCHD (MTS) · MKV · WebM'
@@ -43,6 +44,7 @@ export function Home() {
             <Plus size={16} /> {t('newProject')}
           </button>
         </div>
+        <CleanupBanner />
         <Tip id="home">{t('onboardHome')}</Tip>
         {projects.length > 0 ? (
           <div className="drop compact">
@@ -73,13 +75,18 @@ export function Home() {
                       </span>
                     </span>
                   </button>
+                  <DeadlineBadge project={p} />
+                  <button className="btn small icon clean" title={t('cleanupMenu')} aria-label={`${t('cleanupMenu')}: ${p.name}`} onClick={() => openCleanup(p.id)}>
+                    <Eraser size={14} />
+                  </button>
                   <button
                     className="btn small icon del"
                     title={t('deleteShow')}
                     aria-label={`${t('deleteShow')}: ${p.name}`}
                     onClick={(e) => {
                       e.stopPropagation()
-                      if (confirm(`${t('confirmDelete')}\n${p.name}`)) void useStore.getState().deleteProject(p.id)
+                      // asks what else goes with it (caches, uploads, exports) and says that it is final
+                      openCleanup(p.id, 'delete')
                     }}
                   >
                     <Trash2 size={14} />

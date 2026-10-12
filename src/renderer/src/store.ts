@@ -1,10 +1,11 @@
 import { create } from 'zustand'
 import type {
-  Entry, FreeText, MediaItem, MusicTrack, Project, ProjectSettings, ProjectSummary, ThemeId
+  Entry, FreeText, MediaEdit, MediaItem, MusicTrack, Project, ProjectSettings, ProjectSummary, ThemeId
 } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import type { ExportJobInfo } from '@shared/exportQueue'
 import { themeMeta } from '@shared/themes'
+import { withProjectFields } from '@shared/mediaEdit'
 import { t } from './i18n'
 import { notifyError } from './errors'
 import type { Player } from './engine/player'
@@ -28,6 +29,8 @@ interface State {
   kbEdit: 'start' | 'end' | null
   /** Entry whose pixelated areas are being edited in the viewer. */
   privacyEdit: string | null
+  /** Rotate / straighten / crop of the picture of an entry in the viewer (photoEdit.ts); `before`: its edit when the editor opened (Cancel). */
+  photoEdit: { entryId: string; mediaId: string; before?: MediaEdit } | null
   /** Selected free text box (its id). */
   textSel: string | null
   canUndo: boolean
@@ -43,7 +46,6 @@ interface State {
   createProject(paths?: string[], name?: string): Promise<Project>
   openProject(id: string): Promise<void>
   closeProject(): void
-  deleteProject(id: string): Promise<void>
   /**
    * Changes the project and records an undo step. Edits with the same `key` that follow each
    * other within a moment (slider and drag moves) form one step.
@@ -91,10 +93,27 @@ interface State {
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined
+/** Set while the clean-up rewrites the open project's file: the editor's own saves wait. */
+let savesHeld = false
 function scheduleSave(p: Project): void {
   clearTimeout(saveTimer)
+  if (savesHeld) return
   // a failed save (disk full, locked folder) must not go unnoticed
   saveTimer = setTimeout(() => void window.api.saveProject(p).catch((e) => notifyError(e, 'save')), 600)
+}
+
+/**
+ * For the clean-up of the open project: its pending changes are saved now, then saves wait until
+ * the returned function is called (the main process rewrites the file meanwhile).
+ */
+export async function holdSaves(): Promise<() => void> {
+  clearTimeout(saveTimer)
+  const p = useStore.getState().project
+  if (p) await window.api.saveProject(p)
+  savesHeld = true
+  return () => {
+    savesHeld = false
+  }
 }
 
 // Undo history. Snapshots are whole projects (cheap to keep: media items are shared data);
@@ -113,7 +132,8 @@ function withCurrentMedia(snapshot: Project, current: Project): Project {
   const music = new Map(current.music.map((m) => [m.id, m]))
   return {
     ...snapshot,
-    media: snapshot.media.map((m) => media.get(m.id) ?? m),
+    // the photo edit (rotate, straighten, crop) is the user's: it goes back with the snapshot
+    media: snapshot.media.map((m) => (media.has(m.id) ? keepEdit(media.get(m.id)!, m) : m)),
     music: snapshot.music.map((m) => music.get(m.id) ?? m)
   }
 }
@@ -121,6 +141,13 @@ function withCurrentMedia(snapshot: Project, current: Project): Project {
 /** Fields of a song the user sets in the editor; processing updates from the main process keep them. */
 function keepTrim(update: MusicTrack, cur: MusicTrack | undefined): MusicTrack {
   return cur && (cur.trimIn != null || cur.trimOut != null) ? { ...update, trimIn: cur.trimIn, trimOut: cur.trimOut } : update
+}
+
+/** A media item of the current state with the photo edit of `cur` (an undo snapshot: the edit goes back with it). */
+function keepEdit(update: MediaItem, cur: MediaItem | undefined): MediaItem {
+  if (!cur || update.edit === cur.edit) return update
+  const { edit: _old, ...rest } = update
+  return cur.edit ? { ...rest, edit: cur.edit } : rest
 }
 
 export const useStore = create<State>((set, get) => ({
@@ -135,6 +162,7 @@ export const useStore = create<State>((set, get) => ({
   exportOpen: false,
   kbEdit: null,
   privacyEdit: null,
+  photoEdit: null,
   textSel: null,
   canUndo: false,
   canRedo: false,
@@ -179,7 +207,7 @@ export const useStore = create<State>((set, get) => ({
     if (!cur || cur.id !== p.id) return
     const byId = new Map(media.map((m) => [m.id, m]))
     const songs = new Map(music.map((m) => [m.id, m]))
-    set({ project: { ...cur, media: cur.media.map((m) => byId.get(m.id) ?? m), music: cur.music.map((m) => songs.get(m.id) ?? m) } })
+    set({ project: { ...cur, media: cur.media.map((m) => (byId.has(m.id) ? withProjectFields(byId.get(m.id)!, m) : m)), music: cur.music.map((m) => songs.get(m.id) ?? m) } })
   },
 
   async openProjectData(p) {
@@ -189,7 +217,8 @@ export const useStore = create<State>((set, get) => ({
     const cur = get().project
     if (!cur || cur.id !== p.id) return
     const old = new Map(cur.music.map((m) => [m.id, m]))
-    const next = { ...cur, media, music: music.map((m) => keepTrim(m, old.get(m.id))) }
+    const shown = new Map(cur.media.map((m) => [m.id, m]))
+    const next = { ...cur, media: media.map((m) => withProjectFields(m, shown.get(m.id))), music: music.map((m) => keepTrim(m, old.get(m.id))) }
     set({ project: next })
     scheduleSave(next)
   },
@@ -198,13 +227,8 @@ export const useStore = create<State>((set, get) => ({
     const p = get().project
     if (p) void window.api.saveProject(p).catch((e) => notifyError(e, 'save'))
     resetHistory()
-    set({ project: null, view: 'home', selection: [], fullscreen: false, canUndo: false, canRedo: false, privacyEdit: null, textSel: null })
+    set({ project: null, view: 'home', selection: [], fullscreen: false, canUndo: false, canRedo: false, privacyEdit: null, photoEdit: null, textSel: null })
     void get().loadProjects()
-  },
-
-  async deleteProject(id) {
-    await window.api.deleteProject(id)
-    await get().loadProjects()
   },
 
   update(fn, key) {
@@ -409,7 +433,7 @@ export const useStore = create<State>((set, get) => ({
   },
 
   select(ids) {
-    set({ selection: ids, kbEdit: null, privacyEdit: null, textSel: null })
+    set({ selection: ids, kbEdit: null, privacyEdit: null, photoEdit: null, textSel: null })
   },
 
   set(patch) {
@@ -431,7 +455,7 @@ export function wireMediaUpdates(): () => void {
     if (!p || (media.size === 0 && music.size === 0)) return
     const next = {
       ...p,
-      media: media.size ? p.media.map((m) => media.get(m.id) ?? m) : p.media,
+      media: media.size ? p.media.map((m) => (media.has(m.id) ? withProjectFields(media.get(m.id)!, m) : m)) : p.media,
       music: music.size ? p.music.map((m) => (music.has(m.id) ? keepTrim(music.get(m.id)!, m) : m)) : p.music
     }
     media.clear()

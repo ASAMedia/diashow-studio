@@ -2,7 +2,7 @@
 import { app, BrowserWindow, dialog, ipcMain, powerSaveBlocker, shell, type IpcMainInvokeEvent } from 'electron'
 import { join } from 'node:path'
 import { AUDIO_EXT, IMAGE_EXT, VIDEO_EXT } from '@shared/formats'
-import type { AppSettings, ExportOptions, ExportProgress, MediaItem, MusicTrack, Project, Rect, VideoFaces } from '@shared/types'
+import type { AppSettings, ExportOptions, ExportProgress, GpuChoiceInfo, MediaItem, MusicTrack, Project, Rect, VideoFaces } from '@shared/types'
 import { createAppSettingsStore } from './appSettings'
 import { directDecodeSupport } from './codecSupport'
 import { resolveFfmpegDir } from './ffmpeg'
@@ -15,13 +15,16 @@ import { createProjectStore, PROJECT_EXT } from './projects'
 import { cancelActiveExport, startExport, type ExportJob } from './export/encoder'
 import { registerExportQueue } from './export/queueMain'
 import { registerShare } from './share/shareMain'
+import { registerCleanup } from './cleanupMain'
 import { registerSystemCheck } from './systemCheck'
 import { registerAbout } from './about'
+import { registerReportProblem } from './reportProblem'
 import type { ProjectReportEvent } from '@shared/diagnostics'
 import { registerDiagnostics } from './diagnostics'
 import { checkDirectExport, checkLocalFile } from './ipcGuards'
 import { registerProjectRepair } from './projectRepair'
-import { collectSystemInfo } from './systemCheck'
+import { collectSystemInfo, gpuDevices } from './systemCheck'
+import { gpuOverride, runningGpuPreference } from './gpuChoice'
 import { uncHost, validHost } from '@shared/netPaths'
 import { setMediaPathPolicy } from './protocol'
 
@@ -154,9 +157,13 @@ export function registerIpc(): void {
   ipcMain.handle('media:stabilize', (_e, id: string) => service.stabilizeVideo(String(id)))
   // Sharing over the local network: uploads go to <Documents>/Diashow Studio/Uploads/<project>/<name>
   registerShare({ uploadsRoot: join(projects.dir, 'Uploads'), broadcast })
+  // "Nach dem Projekt aufräumen" and deleting a project with its data (cleanup.ts, safeDelete.ts)
+  registerCleanup({ projects, cacheDir, uploadsRoot: join(projects.dir, 'Uploads'), exportsDir: join(app.getPath('userData'), 'exports'), media: service, exports: exportQueue })
   registerSystemCheck({ ff: service.ffmpeg, cacheDir })
   // About dialog, third-party notices and the update hint
   registerAbout({ ff: service.ffmpeg, ffmpegDir, settings: appSettings })
+  // "Problem melden": the bug form on GitHub with version, Windows and graphics card filled in
+  registerReportProblem()
   // Damaged project files ("Projekt reparieren"), the error log and the diagnostics package
   registerProjectRepair({ projects, onReport })
   registerDiagnostics({
@@ -252,7 +259,6 @@ export function registerIpc(): void {
   ipcMain.handle('project:list', () => projects.list())
   ipcMain.handle('project:load', (_e, id: string) => projects.load(id))
   ipcMain.handle('project:save', (_e, project: Project) => projects.save(project))
-  ipcMain.handle('project:delete', (_e, id: string) => projects.delete(id))
   ipcMain.handle('project:backups', (_e, id: string) => projects.listBackups(id))
   ipcMain.handle('project:restore-backup', (_e, file: string) => projects.restoreBackup(file))
 
@@ -318,6 +324,11 @@ export function registerIpc(): void {
   })
 
   ipcMain.handle('app:displays', () => displayCount())
+  ipcMain.handle('app:gpu-choice', async (): Promise<GpuChoiceInfo> => {
+    // Windows' software adapter ("Microsoft Basic Render Driver") is no second chip
+    const chips = (await gpuDevices().catch(() => [])).filter((d) => !/microsoft|basic render/i.test(`${d.vendor} ${d.device}`)).length
+    return { running: runningGpuPreference(), override: !!gpuOverride, chips }
+  })
   ipcMain.handle('app:settings-get', () => appSettings.get())
   // merges: each part of the app (kiosk, update hint, …) writes only its own fields
   ipcMain.handle('app:settings-set', (_e, settings: AppSettings) => appSettings.update(settings))

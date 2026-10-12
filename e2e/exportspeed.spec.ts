@@ -23,7 +23,14 @@ test('export speed and quality per path', async () => {
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
   await page.waitForFunction(() => !!(window as any).__diashow)
-  const day = readdirSync(dir!).map((n) => join(dir!, n)).find((p) => statSync(p).isDirectory() && /2_/.test(p))!
+  // which graphics chip renders (DIASHOW_GPU=integrated compares a PC without NVIDIA), and the encoders
+  const gpu = await page.evaluate(() => {
+    const gl = document.createElement('canvas').getContext('webgl2')!
+    const ext = gl.getExtension('WEBGL_debug_renderer_info')
+    return String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER))
+  })
+  console.log(`webgl ${gpu}; encoders ${JSON.stringify(await page.evaluate(() => (window as any).api.encoders?.()))}`)
+  const day =readdirSync(dir!).map((n) => join(dir!, n)).find((p) => statSync(p).isDirectory() && /2_/.test(p))!
   const music = readdirSync(dir!).filter((n) => /\.mp3$/i.test(n)).map((n) => join(dir!, n))
   const t0 = Date.now()
   await page.evaluate(async ({ d, m }) => {

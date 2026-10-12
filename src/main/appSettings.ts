@@ -1,4 +1,5 @@
 // App-wide settings (AppSettings) as JSON in the userData folder (path injected). Electron-free.
+import { readFileSync } from 'node:fs'
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { AppSettings } from '@shared/types'
@@ -36,11 +37,21 @@ export function sanitizeAppSettings(value: unknown): AppSettings {
   const kiosk = copy.kioskProjectId
   if (kiosk !== undefined && kiosk !== null && !(typeof kiosk === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(kiosk))) delete copy.kioskProjectId
   sanitizeUpdateFields(copy)
+  if (copy.gpuPreference !== undefined && copy.gpuPreference !== 'performance' && copy.gpuPreference !== 'saving') delete copy.gpuPreference
   if (copy.trustedHosts !== undefined) {
     const hosts = Array.isArray(copy.trustedHosts) ? copy.trustedHosts.filter(validHost).map((h) => h.toLowerCase()) : []
     copy.trustedHosts = [...new Set(hosts)].slice(0, 200)
   }
   return copy as AppSettings
+}
+
+/** The settings at start-up, before anything else runs (e.g. Chromium switches); {} if unreadable. */
+export function readAppSettingsSync(file: string): AppSettings {
+  try {
+    return sanitizeAppSettings(JSON.parse(readFileSync(file, 'utf8')))
+  } catch {
+    return {}
+  }
 }
 
 export function createAppSettingsStore(file: string): AppSettingsStore {

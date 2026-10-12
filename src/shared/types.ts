@@ -54,6 +54,11 @@ export interface MediaItem {
   faceDesc?: number[][]
   /** Videos: faces found in frames sampled across the clip (t in source seconds). */
   videoFaces?: VideoFaces[]
+  /**
+   * Centre of the faces (weighted by size), kept when the clean-up removed the face data, so crops
+   * and Ken Burns moves stay as they were. Only used while `faces` is empty.
+   */
+  faceFocus?: { x: number; y: number }
   /** Videos: stabilised version of `playback`, made on request (same timing and size). */
   stabilized?: string
   /** Videos: 0..1 while the stabilised version is being made. */
@@ -62,6 +67,21 @@ export interface MediaItem {
   hash2?: string
   /** Videos: bits per second of the original file (size / duration); a re-encode has fewer. */
   bitrate?: number
+  /**
+   * Rotation, straightening and crop set by the user (shared/mediaEdit.ts); applies wherever the
+   * picture appears. Face data and pixelated areas stay in coordinates of the original picture.
+   */
+  edit?: MediaEdit
+}
+
+/** How a photo or video is turned, straightened and cropped, like the edit view of macOS Photos. */
+export interface MediaEdit {
+  /** Quarter turns, degrees clockwise. */
+  rotate: 0 | 90 | 180 | 270
+  /** Degrees clockwise, -45..45; the picture is zoomed so its frame shows no empty corners. */
+  straighten: number
+  /** The part of the straightened picture that is kept (normalised); all of it when undefined. */
+  crop?: Rect
 }
 
 /** Faces in one sampled frame of a video. */
@@ -328,6 +348,13 @@ export interface Project {
   settings: ProjectSettings
   /** People pixelated wherever their face is recognised. */
   people?: Person[]
+  /** Deletion reminder (ms since 1970): from then on the home screen suggests cleaning up (src/shared/cleanup.ts). */
+  deleteAt?: number
+  /**
+   * When the clean-up removed the face data (ms since 1970). Pixelation was turned into fixed areas;
+   * the background face search stays off until someone is marked again.
+   */
+  faceDataRemovedAt?: number
 }
 
 export interface ProjectSummary {
@@ -337,6 +364,8 @@ export interface ProjectSummary {
   slideCount: number
   /** Thumbnail path of the first photo, if any. */
   cover?: string
+  /** The project's deletion reminder, if set. */
+  deleteAt?: number
 }
 
 /** Linear gain keyframe on the show timeline (seconds, linear gain). */
@@ -415,6 +444,21 @@ export interface AppSettings {
   updateLatest?: { version: string; url: string } | null
   /** Network hosts (\\host\share) whose files may be opened without asking. */
   trustedHosts?: string[]
+  /**
+   * Laptops with two graphics chips: render on the high-performance one ('performance', default:
+   * 4K exports about a third faster) or leave the choice to Windows ('saving'). Applies at the next start.
+   */
+  gpuPreference?: 'performance' | 'saving'
+}
+
+/** What the running app uses (app:gpu-choice). */
+export interface GpuChoiceInfo {
+  /** The preference in effect since the start. */
+  running: 'performance' | 'saving'
+  /** DIASHOW_GPU set for tests: the setting has no effect. */
+  override: boolean
+  /** Graphics chips Chromium sees; the setting matters only with two or more. */
+  chips: number
 }
 
 export interface EncoderInfo {
@@ -422,6 +466,8 @@ export interface EncoderInfo {
   hevc: string[]
   /** Best hardware encoder per codec, if any. */
   hardware: { h264?: string; hevc?: string }
+  /** h264_qsv accepts look-ahead (LA-ICQ, needed for NVENC-like quality); false on chips without it. */
+  qsvLookAhead?: boolean
 }
 
 export interface ExportProgress {

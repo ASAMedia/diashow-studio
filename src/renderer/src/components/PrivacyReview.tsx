@@ -12,6 +12,8 @@ import { openPrivacyEditor } from '../personActions'
 import { useStore } from '../store'
 import { t } from '../i18n'
 import { PeopleList } from './PeopleList'
+import { useEditedUrl } from './EditedPicture'
+import { rectToEdit, shownAspect, sourceAspect } from '@shared/mediaEdit'
 import { Modal } from './Modal'
 import './people.css'
 
@@ -21,12 +23,14 @@ function Tile({ item }: { item: OpenFaces }) {
   const sample = item.samples.reduce((a, b) => (b.faces.length > a.faces.length ? b : a), item.samples[0] ?? { t: 0, faces: [] })
   const frame = useAsyncUrl(m.kind === 'video' ? () => frameUrl(m, sample.t, 480) : null, [m.id, sample.t])
   const src = m.kind === 'video' ? frame : m.thumb ? mediaUrl(m.thumb) : m.display ? mediaUrl(m.display) : undefined
-  const faces: Rect[] = m.kind === 'video' ? sample.faces : item.faces
+  // the picture as it is shown, with the faces where they sit on it (they are kept for the original)
+  const shown = useEditedUrl(src, m.edit, sourceAspect(m), 480)
+  const faces: Rect[] = (m.kind === 'video' ? sample.faces : item.faces).map((f) => rectToEdit(f, m.edit, sourceAspect(m)))
   const count = m.kind === 'video' ? Math.max(...item.samples.map((s) => s.faces.length)) : item.faces.length
   return (
     <button className="review-tile" onClick={() => openPrivacyEditor(entry.id, m.kind === 'video' ? sample.t : undefined)} title={m.name}>
-      <div className="review-pic" style={{ aspectRatio: `${m.width} / ${m.height}` }}>
-        {src && <img src={src} alt="" draggable={false} />}
+      <div className="review-pic" style={{ aspectRatio: String(shownAspect(m)), overflow: 'hidden' }}>
+        {shown && <img src={shown} alt="" draggable={false} />}
         {faces.map((f, i) => (
           <span key={i} className="review-face" style={{ left: `${f.x * 100}%`, top: `${f.y * 100}%`, width: `${f.w * 100}%`, height: `${f.h * 100}%` }} />
         ))}
@@ -54,7 +58,13 @@ export function PrivacyReview({ onDone, doneLabel }: { onDone: () => void; doneL
         <h3 className="subhead">{t('peopleTitle')}</h3>
         <PeopleList />
       </div>
-      {items.length > 0 ? <p className="hint lead">{t('reviewIntro')}</p> : <p className="review-ok">{t('reviewNone')}</p>}
+      {project.faceDataRemovedAt && !project.people?.length ? (
+        <p className="callout info">{t('cleanupFacesRemoved')}</p>
+      ) : items.length > 0 ? (
+        <p className="hint lead">{t('reviewIntro')}</p>
+      ) : (
+        <p className="review-ok">{t('reviewNone')}</p>
+      )}
       {pending > 0 && <p className="callout warn">{t('reviewPending').replace('{n}', String(pending))}</p>}
       {items.length > 0 && (
         <div className="review-grid">

@@ -77,6 +77,26 @@ describe('log text cleaning', () => {
     ])
   })
 
+  it("hides pupils' names in upload folders, in every spelling", () => {
+    const text = [
+      'C:\\Users\\Anna Schmidt\\Documents\\Diashow Studio\\Uploads\\Klassenfahrt 7b\\Lisa Marie\\IMG_1.jpg',
+      '"D:\\\\Shows\\\\Uploads\\\\Skilager\\\\Tom\\\\clip.mov"',
+      'dsmedia://f/C%3A%5CShows%5CUploads%5CSkilager%5CTom%5Cclip.mov',
+      'dsmedia://f/C%3A%5CShows%5CUploads%5CSki%20lager%5CLisa%20Marie%5Cclip.mov',
+      'E:/Shows/Uploads/Skilager/Tom/a.jpg',
+      // a file right in the show folder has no name folder; other folders called "Uploads" stay as they are
+      'E:\\Shows\\Uploads\\Skilager\\a.jpg'
+    ].join('\n')
+    expect(redact(text, { home }).split('\n')).toEqual([
+      '%USERPROFILE%\\Documents\\Diashow Studio\\Uploads\\Klassenfahrt 7b\\<name>\\IMG_1.jpg',
+      '"D:\\\\Shows\\\\Uploads\\\\Skilager\\\\<name>\\\\clip.mov"',
+      'dsmedia://f/C%3A%5CShows%5CUploads%5CSkilager%5C<name>%5Cclip.mov',
+      'dsmedia://f/C%3A%5CShows%5CUploads%5CSki%20lager%5C<name>%5Cclip.mov',
+      'E:/Shows/Uploads/Skilager/<name>/a.jpg',
+      'E:\\Shows\\Uploads\\Skilager\\a.jpg'
+    ])
+  })
+
   it('removes media content, face descriptors and share tokens', () => {
     const descriptor = Array.from({ length: 128 }, (_, i) => (i / 1000 - 0.05).toFixed(4)).join(',')
     const out = redact(`img data:image/jpeg;base64,${'A'.repeat(500)} desc [${descriptor}] b64 ${'x'.repeat(300)} url http://192.168.1.5:51234/${'k'.repeat(32)}/upload`, { home })

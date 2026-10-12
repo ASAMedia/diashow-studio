@@ -1,5 +1,7 @@
 import type { Entry, MediaItem, PhotoEntry, ProjectSettings, Rect, TextPosition, TextStyle } from '@shared/types'
 import { DEFAULT_TEXT_STYLE } from '@shared/types'
+import { faceCentre } from '@shared/people'
+import { facesInEdit, isEdited, pointToEdit, shownAspect, sourceAspect } from '@shared/mediaEdit'
 import type { TimelineSlide } from '@shared/timeline'
 import type { QuadSpec, Tex, UvRect } from './gl'
 import type { Ctx, SlideState } from './types'
@@ -55,18 +57,26 @@ export function containBox(mediaAspect: number, box: Box): Box {
   return { x: box.x + (box.w - w) / 2, y: box.y, w, h: box.h }
 }
 
+/** Width / height of a picture as it is shown (with its rotate, straighten and crop). */
 export function aspectOf(m: MediaItem | undefined, tex?: Tex | null): number {
-  if (m && m.width > 0 && m.height > 0) return m.width / m.height
+  if (m && m.width > 0 && m.height > 0) return shownAspect(m)
   return tex ? tex.w / tex.h : 1.5
 }
 
+/** Face boxes and the faces' kept centre on the edited picture (they are stored for the original). */
+export function shownFaceData(m: MediaItem | undefined): Pick<MediaItem, 'faces' | 'faceFocus'> {
+  if (!m || !isEdited(m.edit)) return { faces: m?.faces, faceFocus: m?.faceFocus }
+  const a = sourceAspect(m)
+  return { faces: facesInEdit(m.faces, m.edit, a), faceFocus: m.faceFocus && pointToEdit(m.faceFocus, m.edit, a) }
+}
+
 /** Default Ken Burns motion: zoom in or out and drift in a direction picked from the seed. */
-export function defaultKenBurns(mediaAspect: number, frameAspect: number, seed: string, faces?: Rect[]): { start: Rect; end: Rect } {
+export function defaultKenBurns(mediaAspect: number, frameAspect: number, seed: string, faces?: Rect[], faceFocus?: { x: number; y: number }): { start: Rect; end: Rect } {
   const full = coverRect(mediaAspect, frameAspect)
   const r = rng(seed)
-  if (faces?.length) {
-    // move towards (or away from) the faces instead of a random spot
-    const f = facesFocus({ faces } as MediaItem)
+  if (faces?.length || faceFocus) {
+    // move towards (or away from) the faces instead of a random spot; after the clean-up their centre is all that is left
+    const f = facesFocus({ faces, faceFocus } as MediaItem)
     const wide = { ...full, x: Math.min(1 - full.w, Math.max(0, f.x - full.w / 2)), y: Math.min(1 - full.h, Math.max(0, f.y - full.h / 2)) }
     const zoom = 0.78 + r() * 0.06
     const w = full.w * zoom
@@ -93,20 +103,10 @@ export function defaultKenBurns(mediaAspect: number, frameAspect: number, seed: 
 /** Default vertical focus: slightly above the middle, where heads usually are. */
 export const DEFAULT_FOCUS_Y = 0.42
 
-/** Centre of the detected faces (weighted by size), or the default focus. */
+/** Centre of the detected faces (weighted by size), the centre kept by the clean-up, or the default focus. */
 export function facesFocus(m: MediaItem | undefined): { x: number; y: number } {
-  const faces = m?.faces
-  if (!faces?.length) return { x: 0.5, y: DEFAULT_FOCUS_Y }
-  let sum = 0
-  let x = 0
-  let y = 0
-  for (const f of faces) {
-    const a = f.w * f.h
-    sum += a
-    x += (f.x + f.w / 2) * a
-    y += (f.y + f.h / 2) * a
-  }
-  return { x: x / sum, y: y / sum }
+  const f = shownFaceData(m)
+  return faceCentre(f.faces) ?? f.faceFocus ?? { x: 0.5, y: DEFAULT_FOCUS_Y }
 }
 
 /** Crop of a photo filling a cell, honouring the user's framing (focus point and zoom). */
@@ -127,8 +127,28 @@ export function lerpRect(a: Rect, b: Rect, t: number): Rect {
 }
 
 export function kenBurnsUv(entry: PhotoEntry, m: MediaItem, frameAspect: number, t: number): UvRect {
-  const kb = entry.kenBurns ?? defaultKenBurns(aspectOf(m), frameAspect, entry.id, m.faces)
+  const kb = kenBurnsOf(entry, m, frameAspect)
   return lerpRect(kb.start, kb.end, easeInOut(clamp01(t)))
+}
+
+/** The Ken Burns frames of a photo: the user's (in the shape the picture has now) or the default motion. */
+export function kenBurnsOf(entry: PhotoEntry, m: MediaItem | undefined, frameAspect: number): { start: Rect; end: Rect } {
+  const a = aspectOf(m)
+  if (entry.kenBurns) return { start: fitFrame(entry.kenBurns.start, a, frameAspect), end: fitFrame(entry.kenBurns.end, a, frameAspect) }
+  const f = shownFaceData(m)
+  return defaultKenBurns(a, frameAspect, entry.id, f.faces, f.faceFocus)
+}
+
+/**
+ * A Ken Burns frame in the shape the picture needs now, with the same centre and zoom: frames set
+ * before a rotate or crop changed the picture's shape would stretch it otherwise.
+ */
+export function fitFrame(r: Rect, mediaAspect: number, frameAspect: number): Rect {
+  const full = coverRect(mediaAspect, frameAspect)
+  const z = Math.min(1, Math.sqrt((r.w * r.h) / (full.w * full.h)))
+  const w = full.w * z
+  const h = full.h * z
+  return { x: Math.min(1 - w, Math.max(0, r.x + r.w / 2 - w / 2)), y: Math.min(1 - h, Math.max(0, r.y + r.h / 2 - h / 2)), w, h }
 }
 
 /** Texture for entry i of a slide: video frame, live photo motion, or still image. */

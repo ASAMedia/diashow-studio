@@ -80,7 +80,7 @@ export async function stabilizeFile(ff: Ffmpeg, src: string, out: string, opts: 
             // same frames, same timestamps (also for variable frame rate phone clips)
             '-fps_mode', 'passthrough',
             '-enc_time_base', 'demux',
-            ...proxyEncoderArgs(encoder, info.fps || 30),
+            ...proxyEncoderArgs(encoder, info.fps || 30, { qsvLookAhead: opts.encoders?.qsvLookAhead }),
             '-an', '-sn', '-dn',
             '-map_metadata', '-1',
             '-map_chapters', '-1',

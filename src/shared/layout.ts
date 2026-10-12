@@ -1,6 +1,7 @@
 // Grouping of photos into multi-photo slides and choice of slot templates.
 import type { Entry, MediaItem, ThemeId } from './types'
 import { themeMeta } from './themes'
+import { shownAspect } from './mediaEdit'
 
 /** Slot in normalised frame coordinates (0..1 of the output frame). */
 export interface Slot {
@@ -197,6 +198,7 @@ export function groupEntries(
   return groups
 }
 
+/** Width / height of a photo or video as it is shown (turned, straightened, cropped): grids, pairing, portrait or landscape. */
 export function mediaAspect(m: MediaItem | undefined): number {
-  return m && m.width > 0 && m.height > 0 ? m.width / m.height : 1.5
+  return shownAspect(m)
 }

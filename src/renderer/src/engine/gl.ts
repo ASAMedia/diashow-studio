@@ -7,6 +7,11 @@ export interface Tex {
   w: number
   h: number
   mips: boolean
+  /**
+   * A photo or video as edited (rotate, straighten, crop): `m` maps uv of the edited picture to uv of
+   * the texture (affine, shared/mediaEdit.ts), w/h are then the edited size and tw/th the texture's.
+   */
+  view?: { m: readonly [number, number, number, number, number, number]; tw: number; th: number }
 }
 
 export interface UvRect {
@@ -293,6 +298,9 @@ export class Compositor {
     gl.uniform1i(this.u(p, 'u_mode'), tex ? 0 : 1)
     const uv = q.uv ?? { x: 0, y: 0, w: 1, h: 1 }
     gl.uniform4f(this.u(p, 'u_uv'), uv.x, uv.y, uv.w, uv.h)
+    const v = tex?.view?.m
+    gl.uniform3f(this.u(p, 'u_view0'), v ? v[0] : 1, v ? v[2] : 0, v ? v[4] : 0)
+    gl.uniform3f(this.u(p, 'u_view1'), v ? v[1] : 0, v ? v[3] : 1, v ? v[5] : 0)
     const c = q.color ?? [1, 1, 1, 1]
     gl.uniform4f(this.u(p, 'u_color'), c[0], c[1], c[2], c[3])
     gl.uniform2f(this.u(p, 'u_size'), q.w, q.h)
@@ -311,7 +319,8 @@ export class Compositor {
     gl.uniform1i(this.u(p, 'u_privN'), priv?.n ?? 0)
     if (priv && tex) {
       gl.uniform4fv(this.u(p, 'u_priv'), priv.a)
-      gl.uniform2f(this.u(p, 'u_texSize'), tex.w, tex.h)
+      // areas are in texture coordinates (the original picture), also on an edited view
+      gl.uniform2f(this.u(p, 'u_texSize'), tex.view?.tw ?? tex.w, tex.view?.th ?? tex.h)
     }
     gl.uniform4f(this.u(p, 'u_lk1'), lk.saturation, lk.contrast, lk.brightness, lk.warmth)
     gl.uniform4f(this.u(p, 'u_lk2'), lk.tint, lk.fade, lk.mono, lk.vignette)

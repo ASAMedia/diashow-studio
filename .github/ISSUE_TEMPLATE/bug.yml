@@ -1,0 +1,75 @@
+# Bug form. The app's "Problem melden…" button (src/shared/reportProblem.ts) opens it as
+# issues/new?template=bug.yml and fills in the fields with the ids version, windows and gpu.
+name: Fehler melden / Report a bug
+description: Etwas funktioniert nicht wie erwartet. / Something doesn't work as expected.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Danke, dass du hilfst, Diashow Studio besser zu machen! Schreib gern auf Deutsch oder Englisch.
+
+        Thanks for helping to improve Diashow Studio! German or English are both fine.
+
+        > [!WARNING]
+        > **Dieser Bericht ist öffentlich.** Lade keine Fotos oder Videos von Schülerinnen und Schülern hoch und nenne keine Namen.
+        > **This report is public.** Don't upload photos or videos of pupils, and don't name anyone.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: Was ist passiert? / What happened?
+      description: |
+        Was hast du erwartet, und was ist stattdessen passiert? Kopiere Fehlermeldungen bitte mit dem Text unter „Details“.
+        What did you expect, and what happened instead? Please copy error messages including the text under "Details".
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Schritte zum Nachstellen / Steps to reproduce
+      description: Wie kann man den Fehler wieder auslösen? / How can the problem be triggered again?
+      placeholder: |
+        1.
+        2.
+        3.
+
+  - type: input
+    id: version
+    attributes:
+      label: App-Version / App version
+      description: Einstellungen → Über Diashow Studio / Settings → About Diashow Studio
+      placeholder: "1.0.0"
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows-Version / Windows version
+      placeholder: Windows 11 Home (10.0.26100)
+
+  - type: input
+    id: gpu
+    attributes:
+      label: Grafikkarte / Graphics card
+      description: Steht im Systemcheck (Einstellungen → Fehlersuche). / Shown in the system check (Settings → Troubleshooting).
+      placeholder: NVIDIA GeForce RTX 3060 / Intel UHD Graphics 620
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnosepaket (optional) / Diagnostics package (optional)
+      description: |
+        In der App: Einstellungen → Fehlersuche → Diagnosepaket erstellen…, dann die ZIP-Datei hier hineinziehen. Sieh dir im Dialog vorher an, was darin steht (z. B. Dateinamen im Protokoll).
+        In the app: Settings → Troubleshooting → Create diagnostics package…, then drag the zip file here. Check in the dialog what it contains first (e.g. file names in the log).
+      placeholder: ZIP-Datei hierher ziehen / Drag the zip file here
+
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Datenschutz / Privacy
+      options:
+        - label: Ich habe keine Fotos, Videos oder Namen von Schülerinnen und Schülern angehängt. / I haven't attached photos, videos or names of pupils.
+          required: true

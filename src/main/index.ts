@@ -9,6 +9,8 @@ import { denyPopups, loadRenderer, rendererWebPreferences } from './presentation
 import { registerMediaProtocol } from './protocol'
 import { hardenApp } from './security'
 import { APP_ICON } from './appIcon'
+import { readAppSettingsSync } from './appSettings'
+import { chooseGpu } from './gpuChoice'
 
 // Tests (and portable setups) can keep all data in one folder instead of AppData/Documents.
 if (process.env.DIASHOW_DATA_DIR) {
@@ -21,6 +23,10 @@ const securityLog = rateLimiter(30, 10_000)
 hardenApp((message) => securityLog() && log().warn('security', message))
 // CI runners have no GPU: WebGL then runs on SwiftShader.
 if (process.env.DIASHOW_SOFTWARE_GL) app.commandLine.appendSwitch('enable-unsafe-swiftshader')
+// Laptops with two graphics chips render on the high-performance one unless the user chose to save
+// power; DIASHOW_GPU overrides it for tests (gpuChoice.ts). Chromium switches only work before ready.
+const gpuSwitch = chooseGpu(readAppSettingsSync(join(app.getPath('userData'), 'settings.json')))
+if (gpuSwitch) app.commandLine.appendSwitch(gpuSwitch)
 
 // The page's CSP lists dsmedia: where it is needed (img, media, connect); it does not bypass the CSP
 protocol.registerSchemesAsPrivileged([
