@@ -26,9 +26,11 @@ jobs:
       - run: npx vitest run
       - run: npx electron-vite build
       # runners have no GPU: WebGL runs on SwiftShader
-      - run: npx playwright test e2e/app.spec.ts e2e/features.spec.ts e2e/queue.spec.ts e2e/privacy.spec.ts e2e/help.spec.ts e2e/diagnostics.spec.ts e2e/kiosk.spec.ts e2e/present.spec.ts e2e/backups.spec.ts e2e/relink.spec.ts e2e/pack.spec.ts e2e/chapters.spec.ts e2e/keyboard.spec.ts e2e/edit.spec.ts e2e/cleanup.spec.ts e2e/report.spec.ts e2e/thememusic.spec.ts e2e/musiclibrary.spec.ts e2e/adjust.spec.ts e2e/archive.spec.ts e2e/history.spec.ts e2e/filmstrip.spec.ts
+      - run: npx playwright test e2e/app.spec.ts e2e/features.spec.ts e2e/queue.spec.ts e2e/privacy.spec.ts e2e/help.spec.ts e2e/diagnostics.spec.ts e2e/kiosk.spec.ts e2e/present.spec.ts e2e/backups.spec.ts e2e/relink.spec.ts e2e/pack.spec.ts e2e/chapters.spec.ts e2e/keyboard.spec.ts e2e/edit.spec.ts e2e/cleanup.spec.ts e2e/report.spec.ts e2e/thememusic.spec.ts e2e/musiclibrary.spec.ts e2e/adjust.spec.ts e2e/archive.spec.ts e2e/history.spec.ts e2e/filmstrip.spec.ts e2e/regroup.spec.ts e2e/duplicates.spec.ts e2e/panorama.spec.ts
         env:
           DIASHOW_SOFTWARE_GL: '1'
+          # the runner's Windows is English anyway; this makes the specs expect English too
+          DIASHOW_LOCALE: en-US
         timeout-minutes: 40
       - uses: actions/upload-artifact@v4
         if: always()
