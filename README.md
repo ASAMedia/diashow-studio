@@ -224,6 +224,7 @@ npm run notices      # vendor/THIRD_PARTY_NOTICES.txt: licences of FFmpeg, fonts
 npm run theme-music -- <folder>   # theme songs: resources/theme-music from <theme>.mp3 … files and sources.json (see the script)
 npm run site         # rebuilds the generated parts of the website in docs/ (handbook pages, screenshots, icons, link previews)
 npm run samples      # the sample trip: CC0 / public-domain photos and clips from Wikimedia Commons in samples/media/ (sources in samples/SOURCES.md)
+npm run release-check   # before tagging: what the CI and the release workflow will test, then what to push
 ```
 
 `DIASHOW_GPU=integrated` makes a laptop with two graphics chips behave like a PC with only integrated graphics (rendering, Quick Sync, the integrated Vulkan device, no NVENC or CUDA); `DIASHOW_GPU=discrete` renders on the high-performance GPU. `e2e/exportspeed.spec.ts` (with `DIASHOW_ORIGINALS_DIR`) prints which chip WebGL uses, the encoders, and speed and quality of an export.
@@ -234,7 +235,7 @@ The handbook lives in `src/renderer/src/handbook/de.md` and `en.md` (a small Mar
 
 The app icon is drawn in `build/icon.svg` (and `build/icon-small.svg` for 16 px); `npm run icon` writes `build/icon.ico`, `build/icon.png` and the favicon of the phone pages from them.
 
-**Releases:** add a section for the version to `CHANGELOG.md`, set the same version in `package.json`, and push a tag `v<version>`. `.github/workflows/release.yml` then runs the type check and unit tests, builds the installer and the portable exe, and publishes them as a GitHub release with that changelog section, `THIRD_PARTY_NOTICES.txt` and the source of the bundled FFmpeg build.
+**Releases:** add a section for the version to `CHANGELOG.md`, set the same version in `package.json`, run `npm run release-check` on the commit to be tagged, and push a tag `v<version>`. The release check tests what GitHub will: version, changelog and tag, the type check and unit tests with freshly generated test media, and the build with the end-to-end tests and environment of `ci.yml` (`--quick` leaves those out); then it prints what to push. Push one version tag at a time. `.github/workflows/release.yml` then runs the type check and unit tests, builds the installer and the portable exe, and publishes them as a GitHub release with that changelog section, `THIRD_PARTY_NOTICES.txt` and the source of the bundled FFmpeg build.
 
 GitHub Actions (`.github/workflows/ci.yml`) runs the type check, the unit tests and most end-to-end tests on Windows for every push, in English and with software WebGL. Tests that need a graphics card (GPU tone mapping, hardware encoders) skip themselves there.
 

@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json && tsc -p tsconfig.e2e.json",
     "test": "vitest run",
     "test:media": "node scripts/make-test-media.mjs",
+    "release-check": "node scripts/release-check.mjs",
     "e2e": "electron-vite build && playwright test",
     "dist": "electron-vite build && node scripts/third-party-notices.mjs && electron-builder --win",
     "notices": "node scripts/third-party-notices.mjs",
