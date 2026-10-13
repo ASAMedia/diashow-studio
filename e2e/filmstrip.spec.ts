@@ -70,6 +70,23 @@ function clipboardText(): string | null {
 
 /** A real drop of files through Chromium's drag and drop (CDP), at a point of the window. */
 async function dropFiles(page: Page, files: string[], x: number, y: number, check?: () => Promise<void>): Promise<void> {
+  // every drag event the page gets, after its handlers (for the report when the drop never arrives)
+  await page.evaluate(() => {
+    const w = window as any
+    w.__dragLog = []
+    w.__dropSeen = false
+    for (const type of ['dragenter', 'dragover', 'dragleave', 'drop']) {
+      if (w.__dragLogged?.has(type)) continue
+      ;(w.__dragLogged ??= new Set()).add(type)
+      window.addEventListener(type, (e: Event) => {
+        const d = e as DragEvent
+        const el = d.target as Element | null
+        if (type === 'drop') w.__dropSeen = true
+        w.__dragLog.push(`${Math.round(performance.now())} ${type} on ${el?.className?.toString().slice(0, 40) || el?.nodeName} prevented=${d.defaultPrevented} effect=${d.dataTransfer?.dropEffect}`)
+        if (w.__dragLog.length > 40) w.__dragLog.splice(0, w.__dragLog.length - 40)
+      })
+    }
+  })
   const cdp = await page.context().newCDPSession(page)
   const data = { items: [], files, dragOperationsMask: 1 }
   await cdp.send('Input.dispatchDragEvent', { type: 'dragEnter', x, y, data })
@@ -88,17 +105,24 @@ async function dropFiles(page: Page, files: string[], x: number, y: number, chec
     hovering = false
     await hover
   }
-  await page.evaluate(() => {
-    const w = window as any
-    w.__dropSeen = false
-    window.addEventListener('drop', () => (w.__dropSeen = true), { capture: true, once: true })
-  })
   await cdp.send('Input.dispatchDragEvent', { type: 'drop', x, y, data })
-  // the session must stay until the page has the drop: detaching first cancels the drag, which a
-  // slow machine (GitHub's runner) still delivers at that moment
-  await page.waitForFunction(() => (window as any).__dropSeen, null, { timeout: 15_000, polling: 100 }).catch(() => {
-    throw new Error(`the drop at ${x},${y} never reached the page`)
-  })
+  // the session stays until the page has the drop
+  const seen = await page.waitForFunction(() => (window as any).__dropSeen, null, { timeout: 15_000, polling: 100 }).then(
+    () => true,
+    () => false
+  )
+  if (!seen) {
+    const report = await page.evaluate(
+      ([px, py]) => {
+        const el = document.elementFromPoint(px, py)
+        return { at: `${el?.nodeName}.${el?.className?.toString().slice(0, 60)}`, size: `${innerWidth}x${innerHeight}`, log: (window as any).__dragLog }
+      },
+      [x, y]
+    )
+    await page.screenshot({ path: join(shots, 'drop-lost.png') }).catch(() => {})
+    await cdp.detach()
+    throw new Error(`the drop at ${x},${y} never reached the page: ${JSON.stringify(report, null, 1)}`)
+  }
   await cdp.detach()
 }
 
