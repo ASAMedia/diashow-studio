@@ -126,9 +126,29 @@ export function lerpRect(a: Rect, b: Rect, t: number): Rect {
   return { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t), w: lerp(a.w, b.w, t), h: lerp(a.h, b.h, t) }
 }
 
+/**
+ * A print falling onto a table over q 0..1: `lift` goes from 1 (in the air) to 0 like gravity, slow
+ * at first and fastest at the landing; `travel` is the share of the way still to go, of which the
+ * last 4 % slide after the landing.
+ */
+export function dropFall(q: number, land = 0.78): { lift: number; travel: number } {
+  if (q < land) {
+    const t = clamp01(q) / land
+    return { lift: 1 - t * t, travel: 1 - 0.96 * t * t }
+  }
+  return { lift: 0, travel: 0.04 * (1 - easeOut((q - land) / (1 - land))) }
+}
+
+/**
+ * Ken Burns motion over a slide: nearly constant speed, so the camera keeps moving through the
+ * crossfade as in Photos. A full ease-in-out stopped it at the end of every slide and started it
+ * again after the dissolve.
+ */
+export const kenBurnsEase = (t: number): number => 0.8 * clamp01(t) + 0.2 * smooth(t)
+
 export function kenBurnsUv(entry: PhotoEntry, m: MediaItem, frameAspect: number, t: number): UvRect {
   const kb = kenBurnsOf(entry, m, frameAspect)
-  return lerpRect(kb.start, kb.end, easeInOut(clamp01(t)))
+  return lerpRect(kb.start, kb.end, kenBurnsEase(t))
 }
 
 /** The Ken Burns frames of a photo: the user's (in the shape the picture has now) or the default motion. */

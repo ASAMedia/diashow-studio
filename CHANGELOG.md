@@ -24,7 +24,14 @@ All notable changes to Diashow Studio. Versions follow [Semantic Versioning](htt
 
 **Fixes**
 
-- Vintage Prints: each new print now falls onto the pile from above, turning and landing with its shadow. The prints below stay where they landed and get darker and softer as they are covered. Before, the new print zoomed in and faded, and the old one grew bigger in the background.
+- Transitions reviewed in every theme, frame by frame and with a jump detector:
+  - **Vintage Prints:** each new print now falls onto the pile from above, turning and landing with its shadow. The prints below stay where they landed and get darker and softer as they are covered. Before, the new print zoomed in and faded, and the old one grew bigger in the background.
+  - **Origami:** the new picture now folds in from the edge for the whole transition. Before, nothing moved for half a second and then the picture jumped in.
+  - **Classic:** Push, Move in, Reveal, Wipe, Zoom, Cube, Flip and Droplet start and stop gently instead of jumping to full speed and stopping hard.
+  - **Snapshots:** prints on the pile are no longer see-through and don't jump at each change, and the oldest fades away smoothly. Videos slide in and out as a big print instead of fading in and out as a ghost. The handwritten line fades instead of vanishing.
+  - **Scrapbook:** the old page is swept off solid, then the new prints fall onto the paper one after another. Before, the whole page turned see-through. Every print now lands exactly in place.
+  - **Reflections:** two titles in a row no longer slide through each other, and cards are solid as soon as they appear.
+  - **Ken Burns:** the camera keeps moving through the crossfade instead of slowing to a stop at the end of every slide, and two titles in a row fade through black.
 - Faces in a photo were not searched again when a slideshow was closed during its face search.
 - Photos without camera details no longer show their colour profile's maker as the device ("Unknown (saws)").
 - The theme previews show "TITLE" and "Sunday" in the English UI.

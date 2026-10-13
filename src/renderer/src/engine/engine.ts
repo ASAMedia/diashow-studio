@@ -16,6 +16,9 @@ import { PrivacyIndex } from './privacy'
 
 export const THEME_IMPL: Record<ThemeId, Theme> = { classic, kenburns, retro, magazine, origami, panels, reflections, vintage, scrapbook, snapshots, shatter }
 
+/** Transitions that move pictures (eased); dissolves and fades blend linearly. */
+const MOVING = new Set(['push', 'wipe', 'moveIn', 'reveal', 'zoom', 'cube', 'flip', 'droplet'])
+
 // colour looks act on photos and videos only (not on paper, backgrounds or text)
 const LOOKS: Record<LookId, Partial<Look>> = {
   natural: {},
@@ -297,13 +300,16 @@ export class Engine {
   }
 
   /** Cube and flip are drawn as 3D quads; everything else is a full-screen shader. */
-  private composite(kind: string, a: Tex, b: Tex, p: number, dir: [number, number], seed = ''): void {
+  private composite(kind: string, a: Tex, b: Tex, linear: number, dir: [number, number], seed = ''): void {
     const c = this.c
     const { W, H } = c
     if (kind === 'shatter') {
-      drawShatter(c, a, b, p, seed)
+      drawShatter(c, a, b, linear, seed)
       return
     }
+    // moves start and stop gently, like Photos: at constant speed a push jumped from rest to full
+    // speed in one frame and stopped just as hard; blends stay linear
+    const p = MOVING.has(kind) ? smooth(linear) : linear
     if (kind !== 'cube' && kind !== 'flip') {
       c.transition(kind, a, b, p, dir)
       return

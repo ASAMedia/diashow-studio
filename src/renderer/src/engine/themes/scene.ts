@@ -4,7 +4,7 @@ import type { Compositor, Tex } from '../gl'
 import type { Ctx, Theme } from '../types'
 import type { TimelineSlide } from '@shared/timeline'
 import {
-  aspectOf, clamp01, containBox, drawCell, drawMedia, drawText, drawTextBlock, easeIn, easeInOut, easeOut, lerp, rng, slideTexture, textPosition,
+  aspectOf, clamp01, containBox, drawCell, drawMedia, drawText, drawTextBlock, dropFall, easeIn, easeInOut, easeOut, lerp, rng, slideTexture, textPosition,
   slotBoxes, smooth, titleOpacity, type Box
 } from '../draw'
 import { drawCenteredText } from './simple'
@@ -26,13 +26,19 @@ export const origami: Theme = {
     // every slide folds in the same way, from the left edge
     const vertical = false
     const fromEnd = false
-    const fold = (q: number, draw: (o: { rotX?: number; rotY?: number; pivot: [number, number]; shade: number }) => void): void => {
+    const fold = (q: number, draw: (o: { rotX?: number; rotY?: number; pivot: [number, number]; shade: number; opacity: number }) => void): void => {
       if (q <= 0.001) return
       const e = easeInOut(q)
-      const a = (1 - e) * (Math.PI / 2) * (fromEnd ? 1 : -1)
+      // the flap swings up from behind the picture plane: swinging towards the camera it passed
+      // outside the view for the first half and then appeared all at once. Standing upright it is a
+      // wall in perspective, so it fades in over the first moment instead of appearing in one frame
+      const a = (1 - e) * (Math.PI / 2) * (fromEnd ? -1 : 1)
       const pivot: [number, number] = vertical ? [0.5, fromEnd ? 1 : 0] : [fromEnd ? 1 : 0, 0.5]
-      draw({ ...(vertical ? { rotX: -a } : { rotY: a }), pivot, shade: 0.6 * (1 - e) })
+      draw({ ...(vertical ? { rotX: -a } : { rotY: a }), pivot, shade: 0.6 * (1 - e), opacity: smooth(q / 0.15) })
     }
+    // the old picture shows through the gaps between the new cells; it darkens towards the end so
+    // the gaps don't flash from picture to background when the old slide is gone
+    if (s.inP < 1 && s.slide.index > 0) ctx.c.quad({ x: 0, y: 0, w: W, h: H, color: [...origami.clear, 1] as [number, number, number, number], opacity: smooth((s.inP - 0.55) / 0.45) })
     if (sl.kind === 'title' || sl.kind === 'text') {
       const box = { x: 0, y: 0, w: W, h: H }
       fold(s.inP, (o) => ctx.c.quad({ ...box, ...o, color: [0.08, 0.08, 0.085, 1] }))
@@ -87,8 +93,12 @@ export const reflections: Theme = {
     const sl = s.slide
     const base = H * 0.68
     if (sl.kind === 'title' || sl.kind === 'text') {
-      const o = smooth(s.inP) * (1 - smooth(s.outP))
-      const dx = (1 - easeOut(s.inP)) * W * 0.3 - easeIn(s.outP) * W * 0.3
+      // the old text leaves in the first half, the new one comes in the second, so two texts never
+      // slide through each other in the middle
+      const qi = clamp01((s.inP - 0.45) / 0.55)
+      const qo = clamp01(s.outP / 0.55)
+      const o = smooth(qi) * (1 - smooth(qo))
+      const dx = (1 - easeOut(qi)) * W * 0.3 - easeIn(qo) * W * 0.3
       const spec = { text: sl.title?.text ?? '', font: 'light' as const, size: H * 0.1, color: '#4a4a48', maxWidth: W * 0.8 }
       const box = drawText(ctx, spec, W / 2 + dx, base - H * 0.08, { opacity: o })
       if (box) drawText(ctx, spec, W / 2 + dx, box.y + box.h * 1.5, { opacity: o, flipY: true, fade: [0.28, 0] })
@@ -108,7 +118,8 @@ export const reflections: Theme = {
       const tilt = n === 1 ? 0.22 * (sl.index % 2 ? -1 : 1) : lerp(0.38, -0.38, i / (n - 1))
       const rotY = tilt - (1 - qi) * 0.9 + qo * 0.9
       const dx = (1 - qi) * W * 0.85 - qo * W * 0.85
-      const opacity = qi * (1 - qo)
+      // cards are solid soon after they appear and only fade once they are almost gone
+      const opacity = smooth(qi * 3) * (1 - smooth((qo - 0.6) / 0.4))
       if (opacity <= 0.001) {
         x += w + gap
         return
@@ -193,7 +204,7 @@ function drawPrint(
   g: PrintGeo,
   tex: Tex | null,
   aspect: number,
-  o: { scale: number; blur: number; shade: number; rot?: number; dx?: number; dy?: number; lift?: number; opacity?: number }
+  o: { scale: number; blur: number; shade: number; rot?: number; dx?: number; dy?: number; lift?: number; opacity?: number; shadow?: number }
 ): void {
   const { H } = ctx
   const w = g.w * o.scale
@@ -210,7 +221,7 @@ function drawPrint(
     w,
     h,
     blur: H * 0.03 * (1 + 2.5 * lift),
-    opacity: 0.55 * (1 - 0.6 * lift) * (1 - o.shade) * opacity,
+    opacity: 0.55 * (1 - 0.6 * lift) * (1 - o.shade) * opacity * (o.shadow ?? 1),
     rotZ: rot
   })
   ctx.c.quad({ x, y, w, h, rotZ: rot, color: [0.95, 0.94, 0.9, 1], opacity, shade: o.shade })
@@ -236,17 +247,6 @@ function pileLook(depth: number): { scale: number; blur: number; shade: number; 
 /** How far the top print has sunk into the pile while the next one falls: it darkens as it gets covered. */
 const sink = (p: number): number => smooth(clamp01((p - 0.3) / 0.7))
 
-/** The incoming print falls onto the pile: lifted (0..1), how far it still has to travel, landed. */
-const LAND = 0.78
-function fall(q: number): { lift: number; travel: number } {
-  if (q < LAND) {
-    const t = q / LAND
-    // like gravity: slow at first, fastest at the landing; the last 4 % of the way it slides
-    return { lift: 1 - t * t, travel: 1 - (1 - 0.04) * t * t }
-  }
-  return { lift: 0, travel: 0.04 * (1 - easeOut((q - LAND) / (1 - LAND))) }
-}
-
 export const vintage: Theme = {
   mode: 'scene',
   clear: [0.09, 0.08, 0.07],
@@ -269,7 +269,7 @@ export const vintage: Theme = {
   },
   drawSlide(ctx, s) {
     const sl = s.slide
-    const { W } = ctx
+    const { W, H } = ctx
     if (sl.kind === 'title' || sl.kind === 'text') {
       drawCenteredText(ctx, s, 'serif', '#f6f1e6', { opacity: smooth(s.inP) * (1 - smooth(s.outP)), uppercase: true, tracking: 0.12, shadow: true })
       return
@@ -281,8 +281,13 @@ export const vintage: Theme = {
     // from just above the picture's top edge (lifted, so 1.25× its size), a little to one side and
     // turned, onto the pile
     const r = rng(`drop${sl.id}`)
-    const from = { dx: (r() - 0.5) * W * 0.5, dy: -(g.cy + g.h * 0.63), rot: (r() < 0.5 ? -1 : 1) * (0.18 + r() * 0.14) }
-    const { lift, travel } = fall(s.inP)
+    const dx0 = (r() - 0.5) * W * 0.5
+    const rot0 = (r() < 0.5 ? -1 : 1) * (0.18 + r() * 0.14)
+    // half the height of the turned, lifted print: it starts just outside the top edge
+    const half = 1.25 * ((g.h / 2) * Math.abs(Math.cos(g.rot + rot0)) + (g.w / 2) * Math.abs(Math.sin(g.rot + rot0)))
+    const from = { dx: dx0, dy: -(g.cy + half + H * 0.01), rot: rot0 }
+    // the incoming print falls onto the pile
+    const { lift, travel } = dropFall(s.inP)
     // the camera drifts a little closer while the print lies on top
     const drift = lerp(1, 1.025, s.p)
     // once the next print falls, this one becomes the top of the pile
@@ -295,7 +300,9 @@ export const vintage: Theme = {
       rot: g.rot + from.rot * travel,
       dx: from.dx * travel,
       dy: from.dy * travel,
-      lift
+      lift,
+      // the soft shadow of the print in the air would otherwise be on screen before the print
+      shadow: smooth(s.inP / 0.2)
     })
     if (sl.titleOverlay) drawCenteredText(ctx, s, 'serif', '#f6f1e6', { opacity: titleOpacity(s.local), uppercase: true, tracking: 0.12, shadow: true, overlay: true })
   },

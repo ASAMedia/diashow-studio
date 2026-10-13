@@ -5,7 +5,7 @@ import type { Ctx, SlideState, Theme } from '../types'
 import type { TimelineSlide } from '@shared/timeline'
 import { localeTag } from '../../i18n'
 import {
-  aspectOf, containBox, drawCell, drawMedia, drawText, easeOut, lerp, photoUv, rng, slideTexture, slotBoxes, smooth, titleOpacity, type Box
+  aspectOf, clamp01, containBox, drawCell, drawMedia, drawText, dropFall, easeIn, easeOut, lerp, photoUv, rng, slideTexture, slotBoxes, smooth, titleOpacity, type Box
 } from '../draw'
 import { drawCenteredText } from './simple'
 
@@ -85,24 +85,46 @@ function woodTable(g: CanvasRenderingContext2D, w: number, h: number): void {
 const PAPER: [number, number, number, number] = [0.97, 0.96, 0.93, 1]
 const TAPE: [number, number, number, number] = [0.94, 0.9, 0.76, 0.72]
 
-/** A print with a white border, soft shadow and optional tape, rotated around its centre. */
-function print(ctx: Ctx, tex: Tex | null, aspect: number, box: Box, rot: number, o: { opacity: number; border: number; bottom?: number; tape?: boolean; uv?: ReturnType<typeof photoUv> }): void {
+/**
+ * A print with a white border, soft shadow and optional tape, rotated around its centre. `lift`
+ * (0..1) holds it above the table: its shadow is further away and softer. `shade` darkens a print
+ * lying under newer ones.
+ */
+function print(
+  ctx: Ctx,
+  tex: Tex | null,
+  aspect: number,
+  box: Box,
+  rot: number,
+  o: { opacity: number; border: number; bottom?: number; tape?: boolean; uv?: ReturnType<typeof photoUv>; lift?: number; shade?: number; shadow?: number }
+): void {
+  const { H } = ctx
   const b = o.border
   const bb = o.bottom ?? b
+  const lift = o.lift ?? 0
+  const shade = o.shade ?? 0
   const outer = { x: box.x - b, y: box.y - b, w: box.w + 2 * b, h: box.h + b + bb }
-  ctx.c.shadow({ x: outer.x + ctx.H * 0.008, y: outer.y + ctx.H * 0.014, w: outer.w, h: outer.h, blur: ctx.H * 0.022, opacity: 0.5 * o.opacity, rotZ: rot })
-  ctx.c.quad({ ...outer, rotZ: rot, color: PAPER, opacity: o.opacity })
+  ctx.c.shadow({
+    x: outer.x + H * (0.008 + 0.05 * lift),
+    y: outer.y + H * (0.014 + 0.07 * lift),
+    w: outer.w,
+    h: outer.h,
+    blur: H * 0.022 * (1 + 2.5 * lift),
+    opacity: 0.5 * o.opacity * (1 - 0.6 * lift) * (1 - shade) * (o.shadow ?? 1),
+    rotZ: rot
+  })
+  ctx.c.quad({ ...outer, rotZ: rot, color: PAPER, opacity: o.opacity, shade })
   // the picture rotates around the print's centre, not its own
   const pivot: [number, number] = [(outer.x + outer.w / 2 - box.x) / box.w, (outer.y + outer.h / 2 - box.y) / box.h]
-  drawMedia(ctx, tex, aspect, box, { rotZ: rot, pivot, opacity: o.opacity, ...(o.uv ? { uv: o.uv } : { fit: 'cover' }) })
+  drawMedia(ctx, tex, aspect, box, { rotZ: rot, pivot, opacity: o.opacity, shade, ...(o.uv ? { uv: o.uv } : { fit: 'cover' }) })
   if (o.tape) {
-    const tw = Math.min(outer.w * 0.32, ctx.H * 0.12)
-    const th = ctx.H * 0.032
+    const tw = Math.min(outer.w * 0.32, H * 0.12)
+    const th = H * 0.032
     for (const side of [-1, 1]) {
       const cx = outer.x + outer.w / 2 + side * outer.w * 0.38
       const cy = outer.y + th * 0.2
       const pv: [number, number] = [(outer.x + outer.w / 2 - (cx - tw / 2)) / tw, (outer.y + outer.h / 2 - (cy - th / 2)) / th]
-      ctx.c.quad({ x: cx - tw / 2, y: cy - th / 2, w: tw, h: th, color: TAPE, rotZ: rot, pivot: pv, opacity: o.opacity })
+      ctx.c.quad({ x: cx - tw / 2, y: cy - th / 2, w: tw, h: th, color: TAPE, rotZ: rot, pivot: pv, opacity: o.opacity, shade })
       // the tape strip itself sits askew
       ctx.c.quad({ x: cx - tw / 2, y: cy - th / 2, w: tw, h: th, color: [1, 1, 1, 0.12], rotZ: rot + side * 0.6, opacity: o.opacity })
     }
@@ -126,8 +148,9 @@ export const scrapbook: Theme = {
   drawSlide(ctx, s) {
     const { W, H } = ctx
     const sl = s.slide
-    // the old page is cleared off first, then the new prints drop in, so the two don't pile up
-    const out = smooth(Math.min(1, s.outP / 0.6))
+    // the old page is swept off to the left first, then the new prints drop onto the paper, so the
+    // two don't pile up; paper never turns see-through
+    const out = easeIn(Math.min(1, s.outP / 0.55))
     if (sl.kind === 'title' || sl.kind === 'text') {
       const o = smooth(s.inP) * (1 - smooth(Math.min(1, s.outP / 0.5)))
       const card = { x: W * 0.22, y: H * 0.3, w: W * 0.56, h: H * 0.4 }
@@ -138,24 +161,36 @@ export const scrapbook: Theme = {
       return
     }
     const r = rng(`scrap${sl.id}`)
+    const rd = rng(`scrapdrop${sl.id}`)
     const frame = { x: W * 0.07, y: H * 0.08, w: W * 0.86, h: H * 0.76 }
     const boxes = slotBoxes(sl, frame, H * 0.06)
+    // far enough that the rightmost print has left the picture
+    const sweep = -out * W * 1.15
     boxes.forEach((cell, i) => {
       const m = sl.media[i]
       const tex = slideTexture(ctx, s, i)
       const a = aspectOf(m, tex)
       const inner = containBox(a, { x: cell.x + cell.w * 0.06, y: cell.y + cell.h * 0.06, w: cell.w * 0.88, h: cell.h * 0.88 })
       const rot = (r() - 0.5) * 0.12
-      const q = easeOut(Math.min(1, Math.max(0, (s.inP - 0.3 - i * 0.12) / 0.55)))
-      const scale = lerp(1.25, 1, q) * (1 + out * 0.04)
-      const dx = -out * W * 0.9
-      const box = { x: inner.x + (inner.w * (1 - scale)) / 2 + dx, y: inner.y + (inner.h * (1 - scale)) / 2 - (1 - q) * H * 0.05, w: inner.w * scale, h: inner.h * scale }
-      print(ctx, tex, a, box, rot + (1 - q) * 0.08 - out * 0.15, { opacity: smooth(q * 1.4) * (1 - smooth(out * 1.2)), border: Math.min(box.w, box.h) * 0.04, tape: true })
+      // each print falls from above the top edge onto its place, one after another; the last one
+      // lands exactly when the transition ends
+      const step = Math.min(0.12, 0.35 / Math.max(1, boxes.length - 1))
+      const q = clamp01((s.inP - 0.25 - i * step) / (0.75 - (boxes.length - 1) * step))
+      const startDx = (rd() - 0.5) * W * 0.15
+      const startRot = (rd() < 0.5 ? -1 : 1) * (0.12 + rd() * 0.12)
+      if (q <= 0) return
+      const { lift, travel } = dropFall(q)
+      const scale = 1 + 0.15 * lift
+      const w = inner.w * scale
+      const h = inner.h * scale
+      const startDy = -(inner.y + inner.h / 2 + h * 0.75 + H * 0.02)
+      const box = { x: inner.x + (inner.w - w) / 2 + startDx * travel + sweep, y: inner.y + (inner.h - h) / 2 + startDy * travel, w, h }
+      print(ctx, tex, a, box, rot + startRot * travel - out * 0.15, { opacity: 1, border: Math.min(w, h) * 0.04, tape: true, lift, shadow: smooth(q / 0.2) })
     })
     const text = captionLines(sl)
     if (text) {
-      const o = smooth((s.inP - 0.6) / 0.35) * (1 - smooth(s.outP * 2))
-      drawText(ctx, { text, font: 'hand', size: H * 0.06, weight: 700, color: '#3a2716', maxWidth: W * 0.8 }, W / 2 - out * W * 0.9, H * 0.92, { opacity: o, rotZ: -0.015 })
+      const o = smooth((s.inP - 0.6) / 0.35)
+      drawText(ctx, { text, font: 'hand', size: H * 0.06, weight: 700, color: '#3a2716', maxWidth: W * 0.8 }, W / 2 + sweep, H * 0.92, { opacity: o, rotZ: -0.015 })
     }
   }
 }
@@ -199,7 +234,7 @@ function dateLabel(time: number): string {
 }
 
 /** An instant photo: square picture, thick bottom border with a handwritten line. */
-function polaroid(ctx: Ctx, s: SlideState, pose: Pose, opacity: number, text: string): void {
+function polaroid(ctx: Ctx, s: SlideState, pose: Pose, opacity: number, text: string, o: { shade?: number; textOpacity?: number } = {}): void {
   const { H } = ctx
   const size = H * 0.56 * pose.scale
   const b = size * 0.06
@@ -207,8 +242,9 @@ function polaroid(ctx: Ctx, s: SlideState, pose: Pose, opacity: number, text: st
   const box = { x: pose.x - size / 2, y: pose.y - (size + b + bottom) / 2 + b, w: size, h: size }
   const tex = slideTexture(ctx, s, 0)
   const m = s.slide.media[0]
-  print(ctx, tex, aspectOf(m, tex), box, pose.rot, { opacity, border: b, bottom, uv: photoUv(s.slide.entries[0], m, 1, tex) })
-  if (text) {
+  print(ctx, tex, aspectOf(m, tex), box, pose.rot, { opacity, border: b, bottom, uv: photoUv(s.slide.entries[0], m, 1, tex), shade: o.shade })
+  const textOpacity = opacity * (o.textOpacity ?? 1)
+  if (text && textOpacity > 0.001) {
     const cx = pose.x
     const cy = box.y + size + bottom * 0.55
     // rotate the text with the print around the print's centre
@@ -216,7 +252,7 @@ function polaroid(ctx: Ctx, s: SlideState, pose: Pose, opacity: number, text: st
     const dy = cy - pose.y
     const x = pose.x + dx * Math.cos(pose.rot) - dy * Math.sin(pose.rot)
     const y = pose.y + dx * Math.sin(pose.rot) + dy * Math.cos(pose.rot)
-    drawText(ctx, { text, font: 'hand', size: H * 0.045 * pose.scale, weight: 600, color: '#2b2b33', maxWidth: size * 0.95 }, x, y, { opacity, rotZ: pose.rot })
+    drawText(ctx, { text, font: 'hand', size: H * 0.045 * pose.scale, weight: 600, color: '#2b2b33', maxWidth: size * 0.95 }, x, y, { opacity: textOpacity, rotZ: pose.rot })
   }
 }
 
@@ -226,34 +262,48 @@ export const snapshots: Theme = {
   ownCaption: true,
   background(ctx, states) {
     ctx.c.quad({ tex: texture(ctx.c, 'wood', ctx.W, ctx.H, woodTable), x: 0, y: 0, w: ctx.W, h: ctx.H })
-    const anchor = states.length ? states[states.length - 1].slide.index : 0
+    const newest = states.length ? states[states.length - 1] : null
+    const anchor = newest ? newest.slide.index : 0
+    // depth grows smoothly while the next print comes in, so the pile never jumps: deeper prints
+    // only get a little darker (real prints aren't see-through), and the fifth fades away
+    const landing = newest ? smooth(newest.inP) : 1
     const active = new Set(states.map((x) => x.slide.index))
     for (let age = 5; age >= 1; age--) {
       const sl = ctx.tl.slides[anchor - age]
       if (!sl || active.has(sl.index) || sl.kind !== 'photos') continue
+      const depth = age - 1 + landing
+      const opacity = clamp01(5 - depth)
+      if (opacity <= 0.001) continue
       const st: SlideState = { slide: sl, local: sl.duration, p: 1, inP: 1, outP: 1 }
-      polaroid(ctx, st, snapPoses(ctx, sl).pile, 1 - (age - 1) * 0.12, '')
+      polaroid(ctx, st, snapPoses(ctx, sl).pile, opacity, '', { shade: Math.min(0.45, 0.11 * Math.max(0, depth - 1)) })
     }
   },
   drawSlide(ctx, s) {
     const { W, H } = ctx
     const sl = s.slide
     if (sl.kind !== 'photos') {
-      const o = smooth(s.inP) * (1 - smooth(s.outP))
       if (sl.kind === 'video') {
-        // videos play on a big print in the middle
+        // videos play on a big print that slides in like the instant photos and out the other side
         const box = containBox(aspectOf(sl.media[0]), { x: W * 0.12, y: H * 0.1, w: W * 0.76, h: H * 0.8 })
-        print(ctx, slideTexture(ctx, s, 0), aspectOf(sl.media[0]), box, 0, { opacity: o, border: H * 0.02 })
+        const poses = snapPoses(ctx, sl)
+        const away = { x: 2 * poses.center.x - poses.from.x, y: 2 * poses.center.y - poses.from.y }
+        const qi = easeOut(s.inP)
+        const qo = easeIn(s.outP)
+        const dx = (poses.from.x - poses.center.x) * (1 - qi) + (away.x - poses.center.x) * qo
+        const dy = (poses.from.y - poses.center.y) * (1 - qi) + (away.y - poses.center.y) * qo
+        const rot = poses.from.rot * 0.5 * (1 - qi) - poses.from.rot * 0.5 * qo
+        print(ctx, slideTexture(ctx, s, 0), aspectOf(sl.media[0]), { ...box, x: box.x + dx, y: box.y + dy }, rot, { opacity: 1, border: H * 0.02 })
         return
       }
-      drawCenteredText(ctx, s, 'hand', '#f4ead8', { opacity: o, scale: 1.4, shadow: true })
+      drawCenteredText(ctx, s, 'hand', '#f4ead8', { opacity: smooth(s.inP) * (1 - smooth(s.outP)), scale: 1.4, shadow: true })
       return
     }
     const poses = snapPoses(ctx, sl)
     const inP = easeOut(s.inP)
     const pose = s.outP > 0 ? lerpPose(poses.center, poses.pile, smooth(s.outP)) : lerpPose(poses.from, poses.center, inP)
     const text = captionLines(sl) || dateLabel(sl.media[0]?.captureTime ?? 0)
-    polaroid(ctx, s, pose, 1, s.outP > 0.5 ? '' : text)
+    // the handwritten line fades as the print goes onto the pile (pile prints show none)
+    polaroid(ctx, s, pose, 1, text, { textOpacity: 1 - smooth(s.outP / 0.4) })
   }
 }
 
