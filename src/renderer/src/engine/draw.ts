@@ -177,12 +177,15 @@ export function fitFrame(r: Rect, mediaAspect: number, frameAspect: number): Rec
   return { x: Math.min(1 - w, Math.max(0, r.x + r.w / 2 - w / 2)), y: Math.min(1 - h, Math.max(0, r.y + r.h / 2 - h / 2)), w, h }
 }
 
+/** A Live Photo's motion shows: once at the start, or all the slide long as a Loop or Bounce. */
+export const showsMotion = (s: SlideState): boolean => !!s.slide.live && (!!s.slide.live.effect || s.local < s.slide.live.duration)
+
 /** Texture for entry i of a slide: video frame, live photo motion, or still image. */
 export function slideTexture(ctx: Ctx, s: SlideState, i = 0): Tex | null {
   const sl = s.slide
   if (sl.kind === 'video') return ctx.video(sl, s.local)
   if (sl.entries[i]?.type === 'video') return ctx.video(sl, s.local, i) ?? ctx.image(sl.media[i])
-  if (i === 0 && sl.live && s.local < sl.live.duration) {
+  if (i === 0 && showsMotion(s)) {
     const v = ctx.video(sl, s.local)
     if (v) return v
   }

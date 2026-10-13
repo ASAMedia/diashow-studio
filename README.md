@@ -173,7 +173,9 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
 - **Video sound and ducking:** video clips play with their sound, and the music is lowered automatically while a clip with sound plays.
   - You set the level and ramp time, plus a per-clip override and mute.
   - The audio lane under the filmstrip shows the resulting music volume.
-- **Live Photos** (iPhone HEIC + MOV) and **Motion Photos** (Android): you choose per slide whether the motion part plays.
+- **Live Photos** (iPhone HEIC + MOV) and **Motion Photos** (Android): per photo, or for several at once, choose Off, Live (plays once at the start), Loop or Bounce, like on the iPhone.
+  - A Loop repeats all the slide long and its end crossfades into its start (0.4 s); a Bounce plays forward and backward without stalling at the turns. Both last like a photo but at least one cycle, stay alone on their slide, and keep pixelated faces pixelated. The filmstrip's LIVE mark shows a loop or bounce sign.
+  - Preview and export decode the motion part once into memory and show the same frames (`src/shared/livePhoto.ts`). As decoded that is about 1.5 bytes a pixel, about 210 MB for 3 s at 1440×1080; at most 256 MB in the preview and 512 MB in an export, scaled down beyond that.
 - **Preview** in the editor, with a filmstrip that scrolls along with the playhead, a **fullscreen player** (Space, arrow keys, Esc), and **export** to MP4 (H.264/HEVC) up to 4K.
   - Export uses NVENC, Quick Sync or AMF when available.
   - Aspect ratios: 16:9, 4:3, 1:1, 9:16.

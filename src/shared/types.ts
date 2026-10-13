@@ -213,9 +213,17 @@ export interface PhotoEntry extends BaseEntry {
   panReverse?: boolean
   /** Play the motion part of a Live/Motion photo; undefined = project default. */
   playLive?: boolean
+  /**
+   * How the motion plays: for the whole slide as a Loop or a Bounce (shared/livePhoto.ts), once from
+   * the start when undefined. Older versions, and this one for a value it doesn't know, play it once.
+   */
+  liveEffect?: LiveEffect
   /** Areas made unrecognisable (pixelated), normalised to the picture. */
   privacy?: Rect[]
 }
+
+/** Live Photo effects like on the iPhone: the motion repeats with a crossfade at the seam, or plays forward and backward. */
+export type LiveEffect = 'loop' | 'bounce'
 
 export interface VideoEntry extends BaseEntry {
   type: 'video'

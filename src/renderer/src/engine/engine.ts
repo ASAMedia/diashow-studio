@@ -2,9 +2,10 @@ import type { LookId, MediaAdjust, MediaEdit, MediaItem, Project, TextEntry, The
 import { editedSize, editToSource, isEdited, sourceAspect, type Affine } from '@shared/mediaEdit'
 import { panoramaOf } from '@shared/panorama'
 import { adjustParams, type AdjustParams } from '@shared/adjust'
+import { motionFrame } from '@shared/livePhoto'
 import { buildTimeline, clipSeconds, slidesAt, titleStyleOf, type Timeline, type TimelineSlide } from '@shared/timeline'
 import { Compositor, NEUTRAL_LOOK, NEUTRAL_POST, type Look, type PostParams, type Tex } from './gl'
-import { ExportVideoStore, ImageStore, TextStore, VideoPool } from './media'
+import { ExportVideoStore, ImageStore, MotionStore, TextStore, VideoPool } from './media'
 import type { Ctx, SlideState, Theme } from './types'
 import { classic, kenburns, retro } from './themes/simple'
 import { magazine, origami, panels, reflections, vintage } from './themes/scene'
@@ -34,12 +35,20 @@ const LOOKS: Record<LookId, Partial<Look>> = {
 
 export type EngineMode = 'preview' | 'export'
 
+/**
+ * Memory one looping or bouncing Live Photo may take while its slide is near (a 3 s iPhone motion
+ * part, 90 frames of 1440×1080, takes about 210 MB as decoded); bigger ones are kept scaled down.
+ */
+const MOTION_BUDGET = { preview: 256e6, export: 512e6 }
+
 export class Engine {
   readonly c: Compositor
   private images: ImageStore
   private texts: TextStore
   private videos?: VideoPool
   private exportVideos?: ExportVideoStore
+  /** Loop and Bounce: motion parts decoded into memory (preview and export). */
+  private motions: MotionStore
   project?: Project
   tl?: Timeline
   playing = false
@@ -63,6 +72,7 @@ export class Engine {
     this.texts = new TextStore(this.c)
     if (mode === 'preview') this.videos = new VideoPool(this.c)
     else this.exportVideos = new ExportVideoStore(this.c)
+    this.motions = new MotionStore(this.c, MOTION_BUDGET[mode])
   }
 
   setProject(project: Project, tl?: Timeline): Timeline {
@@ -142,11 +152,33 @@ export class Engine {
       const path = e?.type === 'video' && e.stabilize && m.stabilized ? m.stabilized : m.playback
       return { path, time: span.trimIn + Math.max(0, Math.min(local, end)) * span.speed, hold: local >= end, rate: span.speed }
     }
-    if (index === 0 && slide.live && m?.liveVideo) {
+    // (a Loop or Bounce comes from the decoded motion part instead: motion())
+    if (index === 0 && slide.live && !slide.live.effect && m?.liveVideo) {
       const end = slide.live.duration - 0.05
       return { path: m.liveVideo, time: Math.min(local, end), hold: local >= end, rate: 1 }
     }
     return null
+  }
+
+  /**
+   * A looping or bouncing Live Photo at slide time `local`: its frame from the decoded motion part, at
+   * a Loop's seam two frames that the shader blends. Null while the clip is decoded (the still shows
+   * meanwhile, and the frame counts as missing) or when it can't be.
+   */
+  private motion(slide: TimelineSlide, local: number): Tex | null {
+    const m = slide.media[0]
+    const path = m?.liveVideo
+    if (!path || !slide.live?.effect) return null
+    const clip = this.motions.get(path)
+    if (!clip) {
+      if (!this.motions.failed(path)) this.missing++
+      return null
+    }
+    const f = motionFrame(slide.live.effect, local, clip.frames.length, clip.fps)
+    const a = this.motions.frame(path, f.a, 0)
+    const b = f.b != null ? this.motions.frame(path, f.b, 1) : null
+    // the pixelated areas sit on the first texture and apply to both (the motion keeps the photo's areas)
+    return this.markPrivate(m, a && b ? { ...a, mix: { tex: b.tex, w: f.w ?? 0 } } : a, clip.times[f.a])
   }
 
   private ctx(t: number): Ctx {
@@ -167,6 +199,7 @@ export class Engine {
         return this.markPrivate(m, this.images.get(m.thumb))
       },
       video: (slide, local, index) => {
+        if (!index && slide.live?.effect) return this.motion(slide, local)
         const src = this.videoSource(slide, local, index)
         if (!src) return null
         const m = slide.media[index ?? 0]
@@ -211,13 +244,22 @@ export class Engine {
     if (!this.tl || !this.project) return
     await Promise.all(this.neededMedia(t, 0).map((m) => (m.kind === 'photo' ? this.images.ensure(m.display, this.panoNeed(m)) : Promise.resolve())))
     const paths = new Set<string>()
-    for (const s of this.states(t)) for (let i = 0; i < Math.max(1, s.slide.entries.length); i++) {
-      const src = this.videoSource(s.slide, s.local, i)
-      if (!src) continue
-      paths.add(src.path)
-      await this.exportVideos?.prepare(src.path, src.time)
+    const motions = new Set<string>()
+    for (const s of this.states(t)) {
+      const motion = s.slide.live?.effect ? s.slide.media[0]?.liveVideo : undefined
+      if (motion) {
+        motions.add(motion)
+        await this.motions.ensure(motion)
+      }
+      for (let i = 0; i < Math.max(1, s.slide.entries.length); i++) {
+        const src = this.videoSource(s.slide, s.local, i)
+        if (!src) continue
+        paths.add(src.path)
+        await this.exportVideos?.prepare(src.path, src.time)
+      }
     }
     this.exportVideos?.keepOnly(paths)
+    this.motions.keepOnly(motions)
   }
 
   render(t: number): void {
@@ -229,10 +271,13 @@ export class Engine {
     const ctx = this.ctx(t)
     if (this.mode === 'preview') {
       for (const m of this.neededMedia(t, 6)) if (m.kind === 'photo') ctx.image(m)
-      // open the videos of the next seconds early, so a cell doesn't start with a blank frame
+      // open the videos of the next seconds early, so a cell doesn't start with a blank frame; a Loop's or
+      // Bounce's motion part is decoded a little earlier, it takes longer
       for (const s of this.tl.slides) {
-        if (s.start > t + 2.5) break
+        if (s.start > t + 4) break
         if (s.start <= t) continue
+        if (s.live?.effect && s.media[0]?.liveVideo) this.motions.get(s.media[0].liveVideo)
+        if (s.start > t + 2.5) continue
         s.entries.forEach((_, i) => {
           const src = this.videoSource(s, 0, i)
           if (src) this.videos!.preload(src.path, src.time)
@@ -269,6 +314,7 @@ export class Engine {
     this.images.tick()
     this.texts.tick()
     this.videos?.sweep()
+    if (this.mode === 'preview') this.motions.sweep()
   }
 
   /** Title and chapter slides with an animated style are drawn here instead of by the theme. */
@@ -350,14 +396,15 @@ export class Engine {
     }
   }
 
-  /** Diagnostics for tests: image texture traffic and preview video state. */
-  stats(): { imageLoads: number; imageEvictions: number; videos: { path: string; seeks: number; paused: boolean; time: number }[] } {
-    return { imageLoads: this.images.loads, imageEvictions: this.images.evictions, videos: this.videos?.stats() ?? [] }
+  /** Diagnostics for tests: image texture traffic, preview video state and the decoded motion parts. */
+  stats(): { imageLoads: number; imageEvictions: number; videos: { path: string; seeks: number; paused: boolean; time: number }[]; motions: ReturnType<MotionStore['stats']> } {
+    return { imageLoads: this.images.loads, imageEvictions: this.images.evictions, videos: this.videos?.stats() ?? [], motions: this.motions.stats() }
   }
 
-  /** Preview only: size photos are loaded at. */
+  /** Preview only: size photos are loaded at; a lower preview quality also keeps looping Live Photos smaller. */
   setImageSize(px: number): void {
     this.images.maxSize = px
+    this.motions.budget = MOTION_BUDGET.preview * Math.min(1, px / 2048) ** 2
   }
 
   readPixels(out: Uint8Array): void {
@@ -382,6 +429,7 @@ export class Engine {
     this.texts.dispose()
     this.videos?.dispose()
     this.exportVideos?.dispose()
+    this.motions.dispose()
     this.c.dispose()
   }
 }

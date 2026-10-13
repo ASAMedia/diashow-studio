@@ -35,6 +35,7 @@ Der Editor hat drei Bereiche: die **Vorschau** in der Mitte, rechts die Reiter *
 - **Texte:** **Text hinzufügen** erzeugt eine Textfolie. Im Reiter **Folie** fügst du Textfelder auf ein Foto ein.
 - **Kapitel:** im Menü **⋯** gibt es **Tagestitel aus Aufnahmedatum** und **Kapitel aus Ordnernamen**, außerdem **Nach Aufnahmedatum sortieren** und **Abspann hinzufügen**.
 - **Videos:** im Reiter **Folie** kürzen, Tempo ändern (Zeitlupe/Zeitraffer) und **Verwacklung beruhigen**.
+- **Live Photos und Bewegte Fotos:** im Reiter **Folie** unter **Live Photo** wählen, wie die Bewegung läuft (auch für mehrere Fotos zugleich): **Aus (Standbild)**, **Live (einmal)** am Anfang der Folie, **Endlosschleife** (das Ende blendet weich in den Anfang über) oder **Abpraller** (vorwärts und rückwärts). Endlosschleife und Abpraller laufen die ganze Folie lang, mindestens einen Durchlauf; das Foto steht dann allein auf seiner Folie, verpixelte Gesichter bleiben verpixelt. **Standard** folgt **Live Photos / Bewegte Fotos abspielen** im Reiter **Dauer**. Im Filmstreifen steht das Zeichen der Endlosschleife oder des Abprallers neben **LIVE**.
 - **Rückgängig:** [[Strg+Z]], wiederholen mit [[Strg+Y]]. Das geht auch nach einem Neustart: Jede Diashow behält ihre letzten 100 Schritte.
 
 > Tipp: Mit [[Leertaste]] spielst du die Vorschau ab, mit [[←]] und [[→]] springst du von Folie zu Folie.

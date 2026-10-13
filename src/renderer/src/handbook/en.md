@@ -35,6 +35,7 @@ The editor has three areas: the **preview** in the middle, the tabs **Themes**, 
 - **Text:** **Add text** creates a text slide. The **Slide** tab adds text boxes on top of a photo.
 - **Chapters:** the **⋯** menu has **Day titles from capture date** and **Chapters from folder names**, as well as **Sort by capture date** and **Add end credits**.
 - **Videos:** trim them, change their speed (slow motion, time lapse) and **Reduce shake** in the **Slide** tab.
+- **Live Photos and Motion Photos:** under **Live Photo** in the **Slide** tab, choose how the motion plays (for several photos at once too): **Off (still)**, **Live (once)** at the start of the slide, **Loop** (the end fades smoothly into the start) or **Bounce** (forward and backward). Loop and Bounce play all the slide long, at least one cycle; the photo then has a slide of its own, and pixelated faces stay pixelated. **Default** follows **Play Live Photos / Motion Photos** in the **Duration** tab. In the filmstrip, the loop or bounce sign sits next to **LIVE**.
 - **Undo:** [[Ctrl+Z]], redo with [[Ctrl+Y]]. This works after a restart too: each slideshow keeps its last 100 steps.
 
 > Tip: [[Space]] plays the preview, [[←]] and [[→]] step from slide to slide.

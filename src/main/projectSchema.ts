@@ -391,6 +391,8 @@ function validateEntry(raw: Data, mediaKinds: Map<string, string>): { entry: Dat
   if (e.type === 'photo') {
     fixes += dropBad(e, ['kenBurns'], (v) => isObj(v) && rect(v.start) && rect(v.end))
     fixes += dropBad(e, ['playLive', 'panReverse'], (v) => typeof v === 'boolean')
+    // Loop / Bounce; an effect of a newer version is kept (it survives a round trip) and plays once here
+    fixes += dropBad(e, ['liveEffect'], (v) => str(v) && v.length > 0 && v.length <= 32)
   }
   if (e.type === 'video') {
     fixes += dropBad(e, ['trimIn', 'trimOut', 'volume', 'speed'], num)

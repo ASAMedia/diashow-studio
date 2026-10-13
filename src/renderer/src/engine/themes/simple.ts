@@ -3,7 +3,7 @@
 import type { PhotoEntry } from '@shared/types'
 import type { Ctx, SlideState, Theme } from '../types'
 import {
-  aspectOf, dirVector, drawCell, drawMedia, drawText, drawTextBlock, drawWhole, kenBurnsEase, kenBurnsOf, kenBurnsUv, lerpRect, panProgress, showsWhole, textPosition, titleOpacity, rng
+  aspectOf, dirVector, drawCell, drawMedia, drawText, drawTextBlock, drawWhole, kenBurnsEase, kenBurnsOf, kenBurnsUv, lerpRect, panProgress, showsMotion, showsWhole, slideTexture, textPosition, titleOpacity, rng
 } from '../draw'
 import type { FontRole } from '../media'
 import type { Box } from '../draw'
@@ -83,9 +83,10 @@ export const kenburns: Theme = {
       drawCenteredText(ctx, s, 'light', '#ffffff', { scale: 1.05, tracking: 0.02 })
       return
     }
-    if (sl.kind === 'photos' && !(sl.live && s.local < sl.live.duration)) {
+    // a Live Photo playing once stands still while it plays; a Loop or Bounce moves like the photo
+    if (sl.kind === 'photos' && !(showsMotion(s) && !sl.live?.effect)) {
       const m = sl.media[0]
-      const tex = ctx.image(m)
+      const tex = slideTexture(ctx, s, 0)
       const a = aspectOf(m, tex)
       const box = { x: 0, y: 0, w: W, h: H }
       const entry = sl.entries[0] as PhotoEntry

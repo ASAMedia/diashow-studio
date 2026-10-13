@@ -2,6 +2,19 @@
 
 All notable changes to Diashow Studio. Versions follow [Semantic Versioning](https://semver.org). The release workflow publishes the section of a version as its release notes.
 
+## [1.6.0] - 2026-10-13
+
+**Downloads**
+
+- `Diashow.Studio-Setup-1.6.0.exe`: installer (no admin rights needed); it updates an installed version and keeps your slideshows and settings.
+- `Diashow.Studio-1.6.0-portable.exe`: runs without installing, e.g. from a USB stick.
+- The installer is not code-signed. If Windows SmartScreen says "Windows protected your PC", choose "More info" and then "Run anyway".
+- `THIRD_PARTY_NOTICES.txt` lists the licences of everything bundled, including all songs. The `ffmpeg-*` archives contain the source code of the bundled FFmpeg build and of every library compiled into it (GPL), listed in `ffmpeg-deps-sources-*.txt`.
+
+**New**
+
+- Live Photos and Motion Photos as Loop and Bounce, like on the iPhone: the Slide tab chooses Off, Live, Loop or Bounce for one or several photos. A Loop repeats with a soft crossfade at its seam, a Bounce plays forward and backward; both play all the slide long, in the preview and in the export frame by frame, in every theme, with pixelated faces kept. The filmstrip shows the effect next to LIVE.
+
 ## [1.5.0] - 2026-10-13
 
 **Downloads**

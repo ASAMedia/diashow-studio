@@ -1,10 +1,11 @@
 // Turns a project into a timed sequence of slides. Pure and deterministic: the editor
 // preview, the fullscreen player and the export all use the same result.
-import type { AspectRatio, CollagePlace, Entry, MediaItem, MusicTrack, Project, ProjectSettings, TextEntry, TitleStyle, VideoEntry } from './types'
+import type { AspectRatio, CollagePlace, Entry, LiveEffect, MediaItem, MusicTrack, Project, ProjectSettings, TextEntry, TitleStyle, VideoEntry } from './types'
 import { classicTransitionSeconds, themeMeta } from './themes'
 import { effectiveMusic, placementAudio, type ThemeTrack } from './themeMusic'
 import { groupEntries, mediaAspect, pickTemplate, templatesFor, type Slot, type Template } from './layout'
 import { panoMode, panoramaOf, panTimeFactor, type PanoSlide } from './panorama'
+import { liveEffectOf, liveMinSeconds } from './livePhoto'
 
 export type SlideKind = 'photos' | 'video' | 'text' | 'title'
 
@@ -29,8 +30,11 @@ export interface TimelineSlide {
   clips?: (ClipSpan | null)[]
   /** Free collage (layout 'free'): where each item sits, aligned with entries. */
   places?: CollagePlace[]
-  /** Photo slide playing a Live/Motion photo first. */
-  live?: { duration: number }
+  /**
+   * Photo slide playing a Live/Motion photo: once at the start, or with an effect for the whole slide
+   * (shared/livePhoto.ts motionFrame).
+   */
+  live?: { duration: number; effect?: LiveEffect }
   /** A panorama, always alone on its slide: how it is shown and which way it pans (shared/panorama.ts). */
   pano?: PanoSlide
   /** Title drawn over this slide (themes without a separate title slide). */
@@ -296,7 +300,8 @@ export function buildTimeline(project: Project, locale = 'de-DE', themeTracks: r
           media = placed.order.map((i) => media[i])
         }
       }
-      const live = playsLive(first) ? { duration: media[0].live!.duration } : undefined
+      const effect = liveEffectOf(first)
+      const live = playsLive(first) ? { duration: media[0].live!.duration, ...(effect ? { effect } : {}) } : undefined
       const axis = entries.length === 1 && !live ? panoAxis(first) : null
       const pano: PanoSlide | undefined = axis ? { axis, mode: panoMode(first), reverse: first.type === 'photo' && !!first.panReverse } : undefined
       // a slide's own time lives on its first entry (in show order)
@@ -309,7 +314,8 @@ export function buildTimeline(project: Project, locale = 'de-DE', themeTracks: r
         fixed: custom ? first.duration : undefined,
         // a pan takes longer the wider the panorama (as a weight: fitting to the music or a total stays exact)
         weight: pano?.mode === 'pan' ? panTimeFactor(mediaAspect(media[0]), aspect, pano.axis) : 1 + 0.4 * (g.entries.length - 1),
-        min: Math.max(live ? live.duration + 0.8 : 0, settings.playFullVideos ? longest : 0)
+        // a Loop or Bounce lasts like a photo, but at least one cycle of its motion
+        min: Math.max(live ? liveMinSeconds(live.duration, live.effect) : 0, settings.playFullVideos ? longest : 0)
       })
     }
   }

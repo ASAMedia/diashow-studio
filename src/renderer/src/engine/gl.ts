@@ -15,6 +15,8 @@ export interface Tex {
   view?: { m: readonly [number, number, number, number, number, number]; tw: number; th: number }
   /** Light and colour of the photo or video (shared/adjust.ts), applied wherever it is drawn. */
   adjust?: AdjustParams
+  /** The seam of a looping Live Photo: a second frame (same size) blended over this one by w. */
+  mix?: { tex: WebGLTexture; w: number }
 }
 
 export interface UvRect {
@@ -336,6 +338,11 @@ export class Compositor {
       gl.uniform4f(this.u(p, 'u_adj'), adj.q, adj.m, adj.sat, 0)
       gl.uniform3f(this.u(p, 'u_warm'), adj.warm[0], adj.warm[1], adj.warm[2])
     }
+    // always bound: a render target left on unit 1 by transition() would count as a feedback loop
+    gl.activeTexture(gl.TEXTURE1)
+    gl.bindTexture(gl.TEXTURE_2D, tex?.mix?.tex ?? this.white.tex)
+    gl.uniform1i(this.u(p, 'u_tex2'), 1)
+    gl.uniform1f(this.u(p, 'u_mix'), tex?.mix?.w ?? 0)
     gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_2D, (tex ?? this.white).tex)
     gl.uniform1i(this.u(p, 'u_tex'), 0)
@@ -386,6 +393,8 @@ export class Compositor {
     gl.uniform2f(this.u(prog, 'u_dir'), dir[0], dir[1])
     gl.uniform1f(this.u(prog, 'u_aspect'), this.W / this.H)
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+    // no render target stays on unit 1, where the quad program's second sampler looks (shadow() doesn't bind it)
+    gl.bindTexture(gl.TEXTURE_2D, this.white.tex)
     gl.activeTexture(gl.TEXTURE0)
     gl.enable(gl.BLEND)
   }

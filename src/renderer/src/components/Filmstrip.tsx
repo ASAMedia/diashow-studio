@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useLayoutEffect, type CSSProperties } from 'react'
-import { Clock, Film, FolderPlus, ImagePlus, Plus, Type, Volume2, VolumeX, Trash2, Split, Merge, Move, EyeOff, Crop as CropIcon, RotateCcw, SlidersHorizontal, LayoutGrid, MoveHorizontal, MoveVertical } from 'lucide-react'
+import { Clock, Film, FolderPlus, ImagePlus, Plus, Type, Volume2, VolumeX, Trash2, Split, Merge, Move, EyeOff, Crop as CropIcon, RotateCcw, SlidersHorizontal, LayoutGrid, MoveHorizontal, MoveVertical, Repeat, ArrowLeftRight } from 'lucide-react'
 import { isChanged } from '@shared/mediaEdit'
 import type { Timeline, TimelineSlide } from '@shared/timeline'
 import { prioritize } from '../priority'
@@ -662,7 +662,13 @@ function SlideCard(props: {
                 <Film size={10} /> {gridVideos}
               </span>
             )}
-            {m0?.live && <span className="badge">LIVE</span>}
+            {m0?.live && (
+              <span className="badge live-mark" data-effect={s.live?.effect ?? (s.live ? 'live' : 'off')} title={s.live?.effect ? t(s.live.effect === 'loop' ? 'liveLoop' : 'liveBounce') : undefined}>
+                LIVE
+                {s.live?.effect === 'loop' && <Repeat size={10} />}
+                {s.live?.effect === 'bounce' && <ArrowLeftRight size={10} />}
+              </span>
+            )}
             {s.pano && (
               <span className="badge pano-mark" title={t('panorama')}>
                 {s.pano.axis === 'x' ? <MoveHorizontal size={10} /> : <MoveVertical size={10} />}

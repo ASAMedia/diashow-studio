@@ -30,6 +30,8 @@ precision highp float;
 in vec2 v_uv;
 in vec2 v_local;
 uniform sampler2D u_tex;
+uniform sampler2D u_tex2;  // a looping Live Photo's seam: the next frame, blended over u_tex by u_mix
+uniform float u_mix;
 uniform int u_mode;        // 0 textured, 1 solid, 2 shadow
 uniform vec4 u_uv;
 uniform vec3 u_view0;      // rotate / straighten / crop: uv of the edited picture -> texture uv (affine rows)
@@ -120,8 +122,14 @@ void main() {
     uv = u_uv.xy + uv * u_uv.zw;
     uv = vec2(dot(u_view0, vec3(uv, 1.0)), dot(u_view1, vec3(uv, 1.0)));
     float lod;
-    if (u_privN > 0 && privacy(uv, lod)) c = textureLod(u_tex, uv, lod + u_blur);
-    else c = u_blur > 0.0 ? texture(u_tex, uv, u_blur) : texture(u_tex, uv);
+    // both frames of a seam are sampled the same way, so a pixelated block stays one colour
+    if (u_privN > 0 && privacy(uv, lod)) {
+      c = textureLod(u_tex, uv, lod + u_blur);
+      if (u_mix > 0.0) c = mix(c, textureLod(u_tex2, uv, lod + u_blur), u_mix);
+    } else {
+      c = u_blur > 0.0 ? texture(u_tex, uv, u_blur) : texture(u_tex, uv);
+      if (u_mix > 0.0) c = mix(c, u_blur > 0.0 ? texture(u_tex2, uv, u_blur) : texture(u_tex2, uv), u_mix);
+    }
     // the picture's own adjustment, before the look; per pixel, so a pixelated block stays one colour
     if (u_adjust == 1) c.rgb = adjustColor(c.rgb, u_adj, u_warm);
     c *= u_color;

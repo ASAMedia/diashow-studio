@@ -1,9 +1,10 @@
-// Slide tab tools: pixelated areas, clip speed, free text boxes, and editing many slides at once.
+// Slide tab tools: pixelated areas, panoramas, Live Photos, clip speed, free text boxes, and editing many slides at once.
 import { Crop as CropIcon, EyeOff, Plus, RotateCcw, RotateCw, ScanFace, Trash2, Merge } from 'lucide-react'
 import { isChanged, isEdited, rotateEdit } from '@shared/mediaEdit'
 import { closePhotoEdit, openPhotoEdit, rotateSelection, selectedMediaIds, setMediaEdit } from '../photoEdit'
-import type { AspectRatio, Entry, FreeText, MediaItem, PhotoEntry, Rect, VideoEntry } from '@shared/types'
+import type { AspectRatio, Entry, FreeText, LiveEffect, MediaItem, PhotoEntry, Rect, VideoEntry } from '@shared/types'
 import { themeMeta } from '@shared/themes'
+import { liveEffectOf } from '@shared/livePhoto'
 import { aspectValue, MAX_SPEED, MIN_SPEED, speedHasSound, type TimelineSlide } from '@shared/timeline'
 import { panoMode, panoramaOf, type PanAxis, type PanoMode } from '@shared/panorama'
 import { useStore } from '../store'
@@ -191,6 +192,53 @@ export function PanoramaControls({ entries }: { entries: { e: PhotoEntry; axis: 
           </Field>
         )}
         <p className="hint">{t('panHint')}</p>
+      </div>
+    </Section>
+  )
+}
+
+// ---------------------------------------------------------------- Live Photos
+
+type LiveChoice = 'default' | 'off' | 'on' | LiveEffect
+
+/** A photo's motion as one choice: the show's "Play Live Photos", off, once, or an effect. */
+const liveChoice = (e: PhotoEntry): LiveChoice => (e.playLive == null ? 'default' : !e.playLive ? 'off' : (liveEffectOf(e) ?? 'on'))
+
+/** How one or several Live Photos play: as the show says, still, once, as a Loop or as a Bounce (shared/livePhoto.ts). */
+export function LivePhotoControls({ entries }: { entries: PhotoEntry[] }) {
+  const updateEntries = useStore((s) => s.updateEntries)
+  const showPlays = useStore((s) => !!s.project?.settings.playLivePhotos)
+  if (!entries.length) return null
+  const value = common(entries, liveChoice)
+  return (
+    <Section title={t('livePhotoTitle')}>
+      <div className="stack">
+        <Field label={t('livePhoto')}>
+          <select
+            data-testid="live-mode"
+            value={value}
+            onChange={(ev) => {
+              const v = ev.target.value as LiveChoice | 'mixed'
+              if (v === 'mixed') return
+              // an effect plays the motion: older versions then play it once
+              updateEntries(entries.map((x) => x.id), (x) => {
+                if (x.type !== 'photo') return
+                if (v === 'default') delete x.playLive
+                else x.playLive = v !== 'off'
+                if (v === 'loop' || v === 'bounce') x.liveEffect = v
+                else delete x.liveEffect
+              })
+            }}
+          >
+            {value === 'mixed' && <option value="mixed">{t('unchanged')}</option>}
+            <option value="default">{`${t('default')} (${showPlays ? 'Live' : t('off')})`}</option>
+            <option value="off">{t('liveOff')}</option>
+            <option value="on">{t('liveOnce')}</option>
+            <option value="loop">{t('liveLoop')}</option>
+            <option value="bounce">{t('liveBounce')}</option>
+          </select>
+        </Field>
+        <p className="hint">{t('liveHint')}</p>
       </div>
     </Section>
   )
@@ -390,7 +438,6 @@ export function BatchPanel({ entries, slides }: { entries: Entry[]; slides: Time
   const framing = common(visual, (e) => (e.whole == null ? 'default' : e.whole ? 'whole' : 'crop'))
   const speed = common(videos, (e) => String(e.speed ?? 1))
   const sound = common(videos, (e) => (e.muted ? 'off' : 'on'))
-  const live = common(lives, (e) => (e.playLive == null ? 'default' : e.playLive ? 'on' : 'off'))
   const withFaces = visual.filter((e) => media.get(e.mediaId)?.faces?.length || media.get(e.mediaId)?.videoFaces?.some((s) => s.faces.length))
   const pixelated = visual.filter((e) => e.privacy?.length || (e.type === 'video' && e.privacyTracks?.length)).length
   const panos = panoramaEntries(visual, (id) => media.get(id), project.settings.aspect)
@@ -495,28 +542,10 @@ export function BatchPanel({ entries, slides }: { entries: Entry[]; slides: Time
               </div>
             </>
           )}
-          {lives.length > 0 && (
-            <div className="row">
-              <label htmlFor="batch-live">{t('livePhoto')}</label>
-              <select
-                id="batch-live"
-                value={live}
-                onChange={(e) => {
-                  const v = e.target.value
-                  if (v === 'mixed') return
-                  updateEntries(lives.map((x) => x.id), (x) => x.type === 'photo' && (x.playLive = v === 'default' ? undefined : v === 'on'))
-                }}
-              >
-                {live === 'mixed' && mixed}
-                <option value="default">{t('default')}</option>
-                <option value="on">{t('on')}</option>
-                <option value="off">{t('off')}</option>
-              </select>
-            </div>
-          )}
         </div>
       </Section>
       <PanoramaControls entries={panos} />
+      <LivePhotoControls entries={lives} />
       {visual.length > 0 && (
         <Section title={t('pePicture')}>
           <div className="row wrap">

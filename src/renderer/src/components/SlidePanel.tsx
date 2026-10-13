@@ -10,7 +10,7 @@ import { useStore } from '../store'
 import { timelineOf, useTimeline } from '../timeline'
 import { fmtTime, localeTag, t } from '../i18n'
 import { Check, Field, Section, Slider, TITLE_STYLES } from './ui'
-import { BatchAdjust, BatchPanel, EditSection, FreeTextSection, PanoramaControls, panoramaEntries, PrivacySection, SpeedSelect } from './SlideTools'
+import { BatchAdjust, BatchPanel, EditSection, FreeTextSection, LivePhotoControls, PanoramaControls, panoramaEntries, PrivacySection, SpeedSelect } from './SlideTools'
 import { MediaThumb } from './EditedPicture'
 import { openPhotoEdit } from '../photoEdit'
 import { TrimStrip } from './TrimStrip'
@@ -436,17 +436,7 @@ export function SlidePanel() {
       <CaptionField entry={pe} />
       {slide && <FreeTextSection slide={slide} />}
       <PrivacySection entry={pe} media={m} />
-      {m.live && (
-        <Section title={t('livePhotoTitle')}>
-          <Field label={t('livePhoto')}>
-            <select value={pe.playLive == null ? 'default' : pe.playLive ? 'on' : 'off'} onChange={(ev) => setEntry(pe.id, { playLive: ev.target.value === 'default' ? undefined : ev.target.value === 'on' })}>
-              <option value="default">{t('default')}</option>
-              <option value="on">{t('on')}</option>
-              <option value="off">{t('off')}</option>
-            </select>
-          </Field>
-        </Section>
-      )}
+      {m.live && <LivePhotoControls entries={[pe]} />}
       {meta.kenBurns && (
         <Section title={t('kenBurns')}>
           <div className="row">
