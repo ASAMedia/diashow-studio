@@ -100,6 +100,8 @@ export interface ExportQueue {
   jobsOf(projectId: string): { id: string; dir: string; state: ExportJobState; outPath: string }[]
   /** The clean-up: a finished (done, cancelled, failed) job leaves the queue; its folder is deleted by the caller. */
   forget(id: unknown): Promise<void>
+  /** A job's folder came back (a show restored from the trash): the job is listed again as after a restart. */
+  adopt(id: unknown): Promise<void>
   /** paused / error → queued. */
   resume(id: unknown): Promise<void>
 
@@ -481,6 +483,16 @@ export async function openExportQueue(opts: ExportQueueOptions): Promise<ExportQ
       if (!['done', 'cancelled', 'error'].includes(job.file.state)) throw new Error(`a ${job.file.state} export stays in the queue`)
       await stopWork(job)
       jobs.delete(job.file.id)
+      changed()
+    },
+
+    async adopt(id) {
+      const name = validateId(id)
+      if (jobs.has(name)) return
+      for (const job of await loadJobs(root, [name])) {
+        lastCreated = Math.max(lastCreated, job.file.createdAt)
+        jobs.set(job.file.id, job)
+      }
       changed()
     },
 

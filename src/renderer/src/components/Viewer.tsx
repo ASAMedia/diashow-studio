@@ -18,6 +18,7 @@ import { previewQuality, QUALITY } from './Settings'
 import { FreeTextLayer, PrivacyEditor } from './Overlays'
 import { CollageEditor } from './CollageEditor'
 import { prioritize } from '../priority'
+import { followPointer } from '../pointerDrag'
 import { Seg } from './ui'
 
 function useBox(ref: React.RefObject<HTMLElement | null>): { w: number; h: number } {
@@ -218,15 +219,7 @@ function KenBurnsEditor(props: { entry: PhotoEntry; display?: string; mediaAspec
   const drag = (e: React.PointerEvent, r: Rect): void => {
     const sx = e.clientX
     const sy = e.clientY
-    const el = e.currentTarget as HTMLElement
-    el.setPointerCapture(e.pointerId)
-    const move = (ev: PointerEvent): void => save({ ...r, x: r.x + (ev.clientX - sx) / iw, y: r.y + (ev.clientY - sy) / ih })
-    const up = (): void => {
-      el.removeEventListener('pointermove', move)
-      el.removeEventListener('pointerup', up)
-    }
-    el.addEventListener('pointermove', move)
-    el.addEventListener('pointerup', up)
+    followPointer(e, (ev) => save({ ...r, x: r.x + (ev.clientX - sx) / iw, y: r.y + (ev.clientY - sy) / ih }))
   }
   const zoom = (r: Rect, factor: number): void => {
     const ww = r.w * factor
@@ -317,8 +310,6 @@ function CropEditor({ slide, scale }: { slide: TimelineSlide; scale: number }) {
             title={t('cropHint')}
             onPointerDown={(ev) => {
               if (ev.button !== 0 || whole) return
-              const el = ev.currentTarget
-              el.setPointerCapture(ev.pointerId)
               setActive(e.id)
               const c0 = center(e, m, b)
               const sx = ev.clientX
@@ -328,13 +319,7 @@ function CropEditor({ slide, scale }: { slide: TimelineSlide; scale: number }) {
                 const dy = (pe.clientY - sy) / scale / b.h
                 write(e.id, { x: c0.x - dx * c0.uv.w, y: c0.y - dy * c0.uv.h, zoom: c0.zoom })
               }
-              const up = (): void => {
-                el.removeEventListener('pointermove', move)
-                el.removeEventListener('pointerup', up)
-                setActive(null)
-              }
-              el.addEventListener('pointermove', move)
-              el.addEventListener('pointerup', up)
+              followPointer(ev, move, () => setActive(null))
             }}
             onWheel={(ev) => {
               if (whole) return

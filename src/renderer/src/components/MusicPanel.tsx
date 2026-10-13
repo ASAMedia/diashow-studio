@@ -1,6 +1,6 @@
 // Music tab: theme music, the playlist (order, song sections, chapters), music levels and fades, video
 // sound and ducking.
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { GripVertical, Plus, Scissors, Trash2 } from 'lucide-react'
 import type { TextEntry } from '@shared/types'
 import { trackSpan } from '@shared/timeline'
@@ -18,7 +18,9 @@ export function MusicPanel() {
   const setSettings = useStore((s) => s.setSettings)
   const a = project.settings.audio
   const setAudio = (patch: Partial<typeof a>): void => setSettings({ audio: { ...a, ...patch } })
-  const [dragIdx, setDragIdx] = useState<number | null>(null)
+  // a song dragged to another place in the list (a ref: drag events can arrive faster than React
+  // re-renders); files from Explorer aren't taken here, they go to the window's drop, into the playlist
+  const dragRef = useRef<number | null>(null)
   const [overIdx, setOverIdx] = useState<number | null>(null)
   const [trimming, setTrimming] = useState<string | null>(null)
   const total = timelineOf(project).musicDuration
@@ -33,6 +35,22 @@ export function MusicPanel() {
       p.music.splice(to, 0, m)
     })
   }
+  const endDrag = (): void => {
+    dragRef.current = null
+    setOverIdx(null)
+  }
+  // dragenter is accepted like dragover, with the same effect: when the element under the pointer has
+  // just changed (from one song to the next), Chromium decides on the drop by the dragenter alone
+  const songOver = (i: number) => (e: React.DragEvent): void => {
+    if (dragRef.current == null) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setOverIdx(i)
+  }
+  // the dragleave of a song's title or buttons bubbles up to the song: only leaving the song clears its mark
+  const songLeave = (i: number) => (e: React.DragEvent): void => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOverIdx((o) => (o === i ? null : o))
+  }
 
   return (
     <>
@@ -45,21 +63,20 @@ export function MusicPanel() {
               <div
                 className={`track ${overIdx === i ? 'drag-over' : ''}`}
                 draggable
-                onDragStart={() => setDragIdx(i)}
-                onDragOver={(e) => {
-                  e.preventDefault()
-                  setOverIdx(i)
+                onDragStart={(e) => {
+                  e.dataTransfer.effectAllowed = 'move'
+                  dragRef.current = i
                 }}
-                onDragEnd={() => {
-                  setDragIdx(null)
-                  setOverIdx(null)
-                }}
+                onDragEnter={songOver(i)}
+                onDragOver={songOver(i)}
+                onDragLeave={songLeave(i)}
+                onDragEnd={endDrag}
                 onDrop={(e) => {
+                  const from = dragRef.current
+                  if (from == null) return
                   e.preventDefault()
-                  if (dragIdx == null || dragIdx === i) return
-                  move(dragIdx, i)
-                  setDragIdx(null)
-                  setOverIdx(null)
+                  move(from, i)
+                  endDrag()
                 }}
               >
                 <button

@@ -148,6 +148,7 @@ Faces of pupils without photo consent can be pixelated. Face detection runs offl
 
 - In videos, a clicked face is followed through the whole clip.
 - Before exporting, **Check faces…** (**⋯** menu or the export dialog) lists every slide with faces that are not pixelated yet.
+- The face data stays with the slideshow until you [clean up](#cleanup). A deleted slideshow takes it into the trash until it is deleted there for good (after 30 days at the latest).
 
 > Always check the result yourself: detection doesn't find every face, e.g. in profile or very small.
 
@@ -188,11 +189,20 @@ When the slideshow is finished, you remove what the app keeps for it in one plac
 
 ![Cleaning up after a project](cleanup.jpg)
 
-Your own photos, videos and music and the exported videos are not touched. Deleting is final, not to the recycle bin.
+Your own photos, videos and music and the exported videos are not touched. What the clean-up removes is deleted for good at once, without going to the trash.
 
 **Deletion date:** in the same dialog (or after the export) you decide when to clean up: in 1, 3, 6 or 12 months, or on a date. When the day has come, the home screen shows a hint on the slideshow and **Deletion date reached: clean up?**; **Remind me in a month** postpones it.
 
-> When you **delete** a slideshow, the app asks whether its cache, the uploaded photos and the export jobs go with it.
+### Deleting slideshows and the trash
+
+**Delete** (the trash symbol on the slideshow on the home screen) moves the slideshow to the **trash** for 30 days, with its older versions, its undo history, the uploaded photos and the finished export jobs. Its cache is deleted right away; it is made again when you restore and open the slideshow. While an export of the slideshow is still waiting or running, it can't be deleted.
+
+- **Trash (n)** at the bottom of the home screen lists the deleted slideshows: when they were deleted, when they go for good, and their size.
+- **Restore** brings a slideshow back as it was, also after a restart: with its older versions, the uploaded photos and its undo history. Another slideshow is never overwritten. [[Ctrl+Z]] in the editor has nothing to do with this.
+- **Delete permanently** and **Empty trash…** delete at once, after asking. After 30 days the app deletes a slideshow in the trash for good by itself.
+- The deletion date stays in the trash. When it has come, the home screen offers **Delete permanently…**.
+
+> In the trash, a slideshow still holds its face data and the class's photos. **Settings → Privacy** shows how much is in the trash and empties it.
 
 A [ZIP archive of the slideshow](#projects) is a copy that the clean-up cannot reach; delete it yourself.
 

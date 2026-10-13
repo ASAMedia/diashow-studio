@@ -25,3 +25,19 @@
 .project .clean { position: absolute; top: 6px; right: 40px; opacity: 0; background: rgba(0, 0, 0, 0.6); border-color: transparent; color: #fff; }
 .project:hover .clean, .project:focus-within .clean { opacity: 1; }
 .home .cleanup-banner { margin: 0 0 18px; }
+/* the trash for slideshows (Trash.tsx): the entry on the home screen, its dialog and Settings → Privacy */
+.home .trash-link { display: flex; justify-content: flex-end; margin-top: 16px; }
+.trash-list { display: flex; flex-direction: column; gap: 6px; }
+.trash-entry { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line-soft); border-radius: 8px; }
+.trash-entry.damaged { border-color: var(--danger); }
+.trash-entry.damaged .notice-icon { color: var(--danger); flex: none; }
+.trash-entry .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.trash-entry .grow b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trash-entry .hint { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.trash-entry .chip { height: 20px; padding: 0 7px; gap: 4px; font-size: 11px; }
+.trash-entry .chip.due { color: var(--warn-text); background: var(--warn-soft); border-color: transparent; }
+.trash-dialog .callout { margin: 0 0 10px; }
+.trash-setting { margin-top: 12px; border-top: 1px solid var(--line-soft); padding-top: 10px; }
+.trash-setting .hint { margin: 0 0 6px; }
+.trash-setting .row { gap: 8px; align-items: center; }
+.trash-setting .trash-size { font-variant-numeric: tabular-nums; }

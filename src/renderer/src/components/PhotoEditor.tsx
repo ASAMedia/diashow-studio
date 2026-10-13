@@ -17,6 +17,7 @@ import {
 import { isAdjusted } from '@shared/adjust'
 import { useStore } from '../store'
 import { closePhotoEdit, setMediaEdit } from '../photoEdit'
+import { followPointer } from '../pointerDrag'
 import { localeTag, t } from '../i18n'
 import { EditedPicture } from './EditedPicture'
 import { AdjustSliders } from './AdjustSliders'
@@ -150,8 +151,6 @@ export function PhotoEditor({ w, h }: { w: number; h: number }) {
     if (ev.button !== 0) return
     ev.preventDefault()
     ev.stopPropagation()
-    const el = ev.currentTarget as HTMLElement
-    el.setPointerCapture(ev.pointerId)
     cropRef.current?.focus({ preventScroll: true })
     const base = edit
     const start = crop
@@ -159,18 +158,15 @@ export function PhotoEditor({ w, h }: { w: number; h: number }) {
     const sy = ev.clientY
     const at = (pe: PointerEvent): MediaEdit => ({ ...base, crop: dragCrop(start, handle, (pe.clientX - sx) / fw, (pe.clientY - sy) / fh, lock, fa) })
     setGuides(true)
-    const move = (pe: PointerEvent): void => setDraft(at(pe))
-    const end = (pe: PointerEvent): void => {
-      el.removeEventListener('pointermove', move)
-      el.removeEventListener('pointerup', end)
-      el.removeEventListener('pointercancel', end)
-      setGuides(false)
-      setDraft(null)
-      if (pe.type === 'pointerup') commit(at(pe))
-    }
-    el.addEventListener('pointermove', move)
-    el.addEventListener('pointerup', end)
-    el.addEventListener('pointercancel', end)
+    followPointer(
+      ev,
+      (pe) => setDraft(at(pe)),
+      (kept, pe) => {
+        setGuides(false)
+        setDraft(null)
+        if (kept) commit(at(pe))
+      }
+    )
   }
 
   const nudge = (e: React.KeyboardEvent): void => {

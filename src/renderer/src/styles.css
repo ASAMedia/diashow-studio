@@ -145,6 +145,9 @@ body {
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: default; }
+/* pictures can't be dragged: a native drag of a picture offers it as a file, which the window and the
+   filmstrip took for files from Explorer (and a text field for its address) */
+img { -webkit-user-drag: none; }
 input[type='text'], input[type='number'], input[type='search'], select, textarea {
   background: var(--input-bg);
   border: 1px solid var(--line);
@@ -306,7 +309,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline-offs
 .card.selected { outline-color: var(--accent); }
 .card:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
 .card.dragging { opacity: 0.4; }
-.card .tiles { position: absolute; inset: 0; display: flex; gap: 2px; overflow: hidden; border-radius: 6px; }
+/* the pictures are not hit by the pointer, the card is: no edges between pictures for a drag to cross */
+.card .tiles { position: absolute; inset: 0; display: flex; gap: 2px; overflow: hidden; border-radius: 6px; pointer-events: none; }
 .card .tiles img { flex: 1; min-width: 0; height: 100%; object-fit: cover; }
 .card .tiles .empty { flex: 1; background: var(--thumb-empty); }
 /* the slide number sits above its card (below it is the audio lane) */
@@ -315,7 +319,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline-offs
 .card .badges { position: absolute; left: 4px; right: 4px; top: 4px; display: flex; gap: 4px; justify-content: space-between; pointer-events: none; }
 .card .badges > span { display: flex; gap: 4px; }
 .badge { display: inline-flex; align-items: center; gap: 3px; background: rgba(0, 0, 0, 0.66); color: #fff; font-size: 10px; padding: 1px 5px; border-radius: 4px; }
-.card .text-card { position: absolute; inset: 0; display: grid; place-items: center; background: #0f0f10; color: #fff; font-weight: 700; font-size: 20px; border-radius: 6px; }
+.card .text-card { position: absolute; inset: 0; display: grid; place-items: center; background: #0f0f10; color: #fff; font-weight: 700; font-size: 20px; border-radius: 6px; pointer-events: none; }
 .card .progress { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--accent); border-radius: 0 0 0 6px; }
 .card .err { border-radius: 6px; position: absolute; inset: 0; display: grid; place-items: center; background: rgba(60, 0, 0, 0.74); color: #ffb3b3; font-size: 11px; text-align: center; padding: 4px; }
 .card.add { display: grid; place-items: center; background: transparent; border: 1px dashed var(--line); color: var(--text-2); padding: 0; }
@@ -508,7 +512,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline-offs
 .card:hover .dur-handle { background: linear-gradient(90deg, transparent, rgba(77, 159, 255, 0.85)); }
 .dur-handle.active { background: var(--accent); }
 .dur-tip { position: absolute; right: -4px; top: -22px; background: var(--primary); color: var(--on-primary); font-size: 11px; padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
-.card.merge-target { outline: 2px dashed var(--accent); outline-offset: 2px; transform: scale(0.96); }
+/* the pictures shrink a little, not the card: the box under the pointer stays as it is while the mark
+   comes and goes (a shrinking card moved its edge under the pointer, and the mark flickered there) */
+.card.merge-target { outline: 2px dashed var(--accent); outline-offset: 2px; }
+.card.merge-target .tiles, .card.merge-target .text-card { transform: scale(0.96); }
 .items { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
 .item { position: relative; border-radius: 5px; overflow: hidden; aspect-ratio: 4 / 3; background: var(--thumb-empty); }
 .item img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -677,6 +684,8 @@ input[type='color'].color-pick { width: 32px; height: 26px; padding: 0; border: 
 .collage-turn::after { content: ''; position: absolute; left: 5px; top: 12px; width: 2px; height: 10px; background: var(--accent); }
 .collage-size { position: absolute; right: -6px; bottom: -6px; width: 12px; height: 12px; background: var(--accent); border-radius: 2px; cursor: nwse-resize; opacity: 0; }
 .collage-item:hover .collage-turn, .collage-item:hover .collage-size, .collage-item.active .collage-turn, .collage-item.active .collage-size { opacity: 1; }
+/* pointer drags (pointerDrag.ts): a finger drags them too, instead of scrolling, which cancelled the drag */
+.collage-item, .collage-turn, .collage-size, .crop-cell, .kb .rect, .free-text:not(.editing), .privacy-area, .trim-handle, .dur-handle { touch-action: none; }
 
 /* share over the local network (ShareDialog) */
 .share-body { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 18px; margin-top: 14px; align-items: start; }
@@ -764,7 +773,7 @@ input[type='color'].color-pick { width: 32px; height: 26px; padding: 0; border: 
   }
   .spin { animation: spin 2.4s linear infinite !important; }
   .btn:active:not(:disabled) { transform: none; }
-  .card.merge-target { transform: none; }
+  .card.merge-target .tiles, .card.merge-target .text-card { transform: none; }
 }
 
 /* small helpers added with the 1.0 polish */

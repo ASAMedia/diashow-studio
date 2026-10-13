@@ -10,7 +10,8 @@
 // repair, saved by an older version) it is discarded and logged. Every state it leads to goes
 // through the same validation as a project file (projectSchema.ts); a damaged file is discarded
 // too, and never stops a show from opening. Restoring a backup, a repair, the clean-up and an import
-// start with an empty history (ipc.ts, cleanup.ts). Electron-free.
+// start with an empty history (ipc.ts, cleanup.ts). A deleted show's history goes into the trash with
+// it and comes back when the show is restored (trash.ts). Electron-free.
 import { createHash } from 'node:crypto'
 import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -65,6 +66,8 @@ export interface HistoryStore {
   rebase(id: string, before: string, after: string): Promise<boolean>
   /** Writes what is waiting: of one show, or of all. */
   flush(id?: string): Promise<void>
+  /** Writes what is waiting for a show and forgets it, leaving its file (the show goes into the trash, trash.ts). */
+  release(id: string): Promise<void>
   /** Deletes a show's history (and forgets what was waiting); returns what was removed, and what could not be. */
   clear(id: string): Promise<{ files: number; bytes: number; failed: string[] }>
   /** Deletes the history of every show. */
@@ -332,6 +335,14 @@ export function createHistoryStore(opts: HistoryStoreOptions): HistoryStore {
     async flush(id) {
       if (id !== undefined) return flushOne(checkId(id))
       await Promise.all([...lives.keys()].map(flushOne))
+    },
+
+    async release(id) {
+      await flushOne(checkId(id))
+      lives.delete(id)
+      openedShows.delete(id)
+      // a write or load still running ends first
+      await serial(id, async () => {})
     },
 
     async clear(id) {

@@ -6,6 +6,7 @@ import type { MusicTrack } from '@shared/types'
 import { trackSpan } from '@shared/timeline'
 import { useStore } from '../store'
 import { fmtTime, t } from '../i18n'
+import { followPointer } from '../pointerDrag'
 import { handleProps } from './TrimStrip'
 
 const BARS = 160
@@ -45,19 +46,11 @@ export function MusicTrim({ track }: { track: MusicTrack }) {
 
   const drag = (which: 'in' | 'out') => (e: React.PointerEvent) => {
     const bar = barRef.current!.getBoundingClientRect()
-    const el = e.currentTarget as HTMLElement
-    el.setPointerCapture(e.pointerId)
-    const move = (ev: PointerEvent): void => {
+    followPointer(e, (ev) => {
       const v = Math.round(Math.min(1, Math.max(0, (ev.clientX - bar.left) / bar.width)) * len * 10) / 10
       if (which === 'in') save({ trimIn: v <= 0.05 ? undefined : Math.min(v, to - 5) })
       else save({ trimOut: v >= len - 0.05 ? undefined : Math.max(v, from + 5) })
-    }
-    const up = (): void => {
-      el.removeEventListener('pointermove', move)
-      el.removeEventListener('pointerup', up)
-    }
-    el.addEventListener('pointermove', move)
-    el.addEventListener('pointerup', up)
+    })
   }
 
   const stop = (): void => {

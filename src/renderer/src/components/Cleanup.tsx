@@ -1,8 +1,9 @@
 // "Nach dem Projekt aufräumen": the dialog that lists what the app keeps for a show (face data, the
 // pupils' uploads, caches, older versions, undo history, export jobs) with sizes and removes what the user picks, for
-// good (src/main/cleanup.ts); the same dialog deletes a whole show from the home screen. Also the
-// deletion reminder: the date picker, the hint on the project card and the banner on the home screen.
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+// good (src/main/cleanup.ts); deleting a whole show from the home screen moves it into the trash
+// (Trash.tsx). Also the deletion reminder: the date picker, the hint on the project card and the
+// banner on the home screen.
+import { useEffect, useState, type ReactNode } from 'react'
 import { create } from 'zustand'
 import { AlertTriangle, CalendarClock, Loader2, X } from 'lucide-react'
 import { addMonths, CLEANUP_CATEGORIES, DELETE_MONTHS, deletionDue, historyGoes, NOTHING, startOfDay, type CleanupCategory, type CleanupChoice, type CleanupInventory, type CleanupResult } from '@shared/cleanup'
@@ -14,6 +15,7 @@ import { localeTag, t, type StringKey } from '../i18n'
 import { ErrorText } from '../errors'
 import { Modal } from './Modal'
 import { Section } from './ui'
+import { loadTrash, TrashDueBanner, TrashHost, TrashSetting } from './Trash'
 import './cleanup.css'
 
 type Mode = 'cleanup' | 'delete'
@@ -25,12 +27,16 @@ export function openCleanup(projectId: string, mode: Mode = 'cleanup'): void {
   useCleanup.setState({ open: { projectId, mode } })
 }
 
-/** Mounted once (App.tsx): the dialog while one is open. */
+/** Mounted once (App.tsx): the dialog while one is open, and the trash's. */
 export function CleanupHost() {
   const open = useCleanup((s) => s.open)
-  if (!open) return null
   const close = (): void => useCleanup.setState({ open: null })
-  return open.mode === 'delete' ? <DeleteDialog projectId={open.projectId} onClose={close} /> : <CleanupDialog projectId={open.projectId} onClose={close} />
+  return (
+    <>
+      {open && (open.mode === 'delete' ? <DeleteDialog projectId={open.projectId} onClose={close} /> : <CleanupDialog projectId={open.projectId} onClose={close} />)}
+      <TrashHost />
+    </>
+  )
 }
 
 /** Bytes as KB, MB or GB. */
@@ -164,10 +170,22 @@ export function DeadlineBadge({ project }: { project: ProjectSummary }) {
   )
 }
 
-/** Shown once per start, when shows have reached their deletion date: open the clean-up or postpone. */
+/**
+ * Shown once per start, when shows have reached their deletion date: open the clean-up or postpone;
+ * for shows in the trash, deleting them permanently (Trash.tsx).
+ */
 let bannerDismissed = false
 
 export function CleanupBanner() {
+  return (
+    <>
+      <DueBanner />
+      <TrashDueBanner />
+    </>
+  )
+}
+
+function DueBanner() {
   const projects = useStore((s) => s.projects)
   const [, redraw] = useState(0)
   const due = projects.filter((p) => deletionDue(p.deleteAt))
@@ -238,6 +256,7 @@ export function CleanupSetting() {
       )}
       <p className="hint">{t('cleanupSettingHint')}</p>
       <HistorySetting projectId={id} />
+      <TrashSetting />
     </Section>
   )
 }
@@ -553,16 +572,18 @@ export function CleanupDialog({ projectId, onClose }: { projectId: string; onClo
   )
 }
 
-/** Deleting a whole show (home screen): the file and older versions, and what else is chosen. */
+/**
+ * Deleting a whole show (home screen): it goes into the trash with its older versions, undo history,
+ * uploads and finished export jobs, listed with their sizes; its cache is deleted (src/main/cleanup.ts).
+ */
 export function DeleteDialog({ projectId, onClose }: { projectId: string; onClose: () => void }) {
   const [inv, setInv] = useState<CleanupInventory | null>(null)
   const [error, setError] = useState<unknown>(null)
-  const [wanted, setExtras] = useState({ caches: true, uploads: false, exports: true })
+  const [refused, setRefused] = useState<{ unfinished?: number; gone?: boolean } | null>(null)
   const [busy, setBusy] = useState(false)
   const name = useStore((s) => s.projects.find((p) => p.id === projectId)?.name)
-  // an export still to run needs its sources
-  const blocked = !!inv?.exports.unfinished
-  const extras = blocked ? { ...wanted, caches: false, uploads: false } : wanted
+  // an export still to run needs the show's files
+  const unfinished = refused?.unfinished ?? inv?.exports.unfinished ?? 0
 
   useEffect(() => {
     let alive = true
@@ -576,17 +597,29 @@ export function DeleteDialog({ projectId, onClose }: { projectId: string; onClos
     }
   }, [projectId])
 
-  const size = useMemo(
-    () => (inv ? inv.backups.bytes + inv.history.bytes + (extras.caches ? inv.caches.bytes : 0) + (extras.uploads ? inv.uploads.bytes : 0) + (extras.exports ? inv.exports.bytes : 0) : 0),
-    [inv, extras]
-  )
+  // what goes into the trash with it (the uploads another show uses stay with that one)
+  const parts = inv
+    ? [
+        { id: 'backups', title: t('backupsTitle'), n: inv.backups.files ? fill('cleanupVersions', { n: inv.backups.files }) : '', bytes: inv.backups.bytes },
+        { id: 'history', title: t('cleanupHistory'), n: '', bytes: inv.history.files ? inv.history.bytes : 0 },
+        { id: 'uploads', title: t('cleanupUploads'), n: inv.uploads.files ? fill('cleanupFiles', { n: inv.uploads.files }) : '', bytes: inv.uploads.bytes },
+        { id: 'exports', title: t('cleanupExports'), n: inv.exports.jobs ? fill('cleanupJobs', { n: inv.exports.jobs }) : '', bytes: inv.exports.bytes }
+      ].filter((x) => x.bytes > 0 || x.n)
+    : []
   const remove = async (): Promise<void> => {
     setBusy(true)
+    setError(null)
     // a save still pending for the show (just closed) must not bring its file back
     const resume = await holdSaves().catch(() => () => {})
     try {
-      await window.api.deleteProject(projectId, extras)
+      const r = await window.api.deleteProject(projectId)
+      if ('refused' in r) {
+        setRefused(r.refused === 'export-pending' ? { unfinished: r.unfinished ?? 1 } : { gone: true })
+        setBusy(false)
+        return
+      }
       await useStore.getState().loadProjects()
+      void loadTrash()
       onClose()
     } catch (e) {
       setError(e)
@@ -606,8 +639,8 @@ export function DeleteDialog({ projectId, onClose }: { projectId: string; onClos
           <button className="btn" onClick={onClose} disabled={busy}>
             {t('cancel')}
           </button>
-          <button className="btn danger" data-testid="delete-run" disabled={busy} onClick={() => void remove()}>
-            {busy ? <Loader2 size={14} className="spin" aria-hidden /> : null} {t('deleteFinal')}
+          <button className="btn danger" data-testid="delete-run" disabled={busy || unfinished > 0 || !!refused?.gone} onClick={() => void remove()}>
+            {busy ? <Loader2 size={14} className="spin" aria-hidden /> : null} {t('deleteRun')}
           </button>
         </>
       }
@@ -616,31 +649,29 @@ export function DeleteDialog({ projectId, onClose }: { projectId: string; onClos
       <p className="hint lead">{t('deleteIntro')}</p>
       {inv && (
         <>
-          <h3 className="subhead">{t('deleteAlso')}</h3>
-          <div className="cleanup-list">
-            <Category id="caches" title={t('cleanupCaches')} size={fmtBytes(inv.caches.bytes)} checked={extras.caches} disabled={busy || !inv.caches.folders || blocked} onChange={(v) => setExtras({ ...extras, caches: v })}>
-              <p className="hint">{t('cleanupCachesHint')}</p>
-            </Category>
-            <Category id="uploads" title={t('cleanupUploads')} size={fmtBytes(inv.uploads.bytes)} checked={extras.uploads} disabled={busy || !inv.uploads.files || blocked} onChange={(v) => setExtras({ ...extras, uploads: v })}>
-              {inv.uploads.files ? <UploadsInfo inv={inv} /> : <p className="hint">{t('cleanupUploadsNone')}</p>}
-            </Category>
-            <Category id="exports" title={t('cleanupExports')} size={fmtBytes(inv.exports.bytes)} checked={extras.exports} disabled={busy || !inv.exports.jobs} onChange={(v) => setExtras({ ...extras, exports: v })}>
-              <p className="hint">{t('cleanupExportsHint')}</p>
-            </Category>
-          </div>
-          {blocked && (
-            <p className="callout warn">
-              <AlertTriangle size={14} aria-hidden /> <span>{fill('cleanupUnfinished', { n: inv.exports.unfinished })}</span>
-            </p>
+          {parts.length > 0 && (
+            <>
+              <h3 className="subhead">{t('deleteAlso')}</h3>
+              <ul className="cleanup-confirm-list trash-goes">
+                {parts.map((x) => (
+                  <li key={x.id} data-category={x.id}>
+                    {x.title}
+                    {x.n ? `: ${x.n}` : ''} · {fmtBytes(x.bytes)}
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
-          <p>
-            <b>{fmtBytes(size)}</b>
-          </p>
+          {inv.uploads.shared > 0 && <p className="hint">{fill('cleanupUploadsShared', { n: inv.uploads.shared })}</p>}
+          {inv.caches.folders > 0 && <p className="hint">{fill('deleteCache', { size: fmtBytes(inv.caches.bytes) })}</p>}
         </>
       )}
-      <p className="callout warn">
-        <AlertTriangle size={14} aria-hidden /> <span>{t('cleanupFinal')}</span>
-      </p>
+      {unfinished > 0 && (
+        <p className="callout warn" data-testid="delete-blocked">
+          <AlertTriangle size={14} aria-hidden /> <span>{fill('deleteBlocked', { n: unfinished })}</span>
+        </p>
+      )}
+      {refused?.gone && <p className="callout warn">{t('deleteGone')}</p>}
       {!!error && <ErrorText err={error} context="save" />}
     </Modal>
   )

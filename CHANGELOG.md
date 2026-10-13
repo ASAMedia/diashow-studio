@@ -2,6 +2,29 @@
 
 All notable changes to Diashow Studio. Versions follow [Semantic Versioning](https://semver.org). The release workflow publishes the section of a version as its release notes.
 
+## [1.7.0] - 2026-10-13
+
+**Downloads**
+
+- `Diashow.Studio-Setup-1.7.0.exe`: installer (no admin rights needed); it updates an installed version and keeps your slideshows and settings.
+- `Diashow.Studio-1.7.0-portable.exe`: runs without installing, e.g. from a USB stick.
+- The installer is not code-signed. If Windows SmartScreen says "Windows protected your PC", choose "More info" and then "Run anyway".
+- `THIRD_PARTY_NOTICES.txt` lists the licences of everything bundled, including all songs. The `ffmpeg-*` archives contain the source code of the bundled FFmpeg build and of every library compiled into it (GPL), listed in `ffmpeg-deps-sources-*.txt`.
+
+**New**
+
+- Trash for slideshows: Delete moves a show to the trash for 30 days instead of deleting it. Restore brings it back with its older versions, undo history, uploaded photos and export jobs, also after a restart; "Delete permanently" and "Empty trash" delete at once, and after 30 days it goes by itself. Settings → Privacy shows and empties the trash. A show with an unfinished export can only be deleted once the export is done or removed.
+- Touch screens: text boxes, the free collage, framing, crop and trim handles and a card's time can be dragged with a finger.
+
+**Fixes**
+
+- Moving a slide or song no longer gets lost or ends up in the wrong place when it is let go right after the pointer crossed onto another card or song.
+- The "drop here" overlay and the filmstrip's marks go away as soon as files leave the window or Esc is pressed, also when the filmstrip scrolled meanwhile. Files dragged over the song list no longer leave a mark there.
+- A slide whose card scrolled out of view while it was dragged no longer stays half transparent, and files dropped afterwards are inserted instead of moving that slide.
+- A card marked for joining no longer shrinks under the pointer; its pictures do.
+- Dragging a card's time, text boxes, the Ken Burns frame, a photo in its cell, the free collage, trim handles, the edit view's crop and pixelated areas stops when the mouse button is let go while another window has the mouse.
+- Pictures in the app can no longer be dragged by mistake (they were taken for files from Explorer).
+
 ## [1.6.0] - 2026-10-13
 
 **Downloads**

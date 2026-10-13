@@ -19,7 +19,8 @@ import type { ExportJobInfo, ExportTask, NewExportJob, SegmentInput } from './ex
 import type { ThemeTrack } from './themeMusic'
 import type { ShareCommand, ShareFilesEvent, ShareStatus } from './share'
 import type { ImportNewResult, RepeatCandidate } from './repeats'
-import type { CleanupChoice, CleanupInventory, CleanupResult, DeleteExtras } from './cleanup'
+import type { CleanupChoice, CleanupInventory, CleanupResult } from './cleanup'
+import type { TrashContents, TrashMoveResult, TrashRemoveResult, TrashRestoreResult } from './trash'
 import type { HistoryRestore, HistoryUpload } from './history'
 import type { ArchiveChoice, ArchiveInventory, ArchiveProgress, ArchiveResult, ArchiveTarget, ArchiveVideo } from './archive'
 import type { BenchMedia, EncoderTest, SystemInfo } from './systemCheck'
@@ -70,8 +71,22 @@ export interface DiashowApi {
    * the main process misses patches the upload referred to, the next save must send all of them.
    */
   saveProject(project: Project, history?: HistoryUpload): Promise<{ resendHistory?: boolean } | void>
-  /** Deletes a project with its older versions, undo history and the face data of its media; `extras`: its caches, uploads, finished exports too. */
-  deleteProject(id: string, extras?: DeleteExtras): Promise<CleanupResult>
+  /**
+   * Deletes a project: it goes into the trash (src/main/trash.ts) with its older versions, undo
+   * history, the pupils' uploads and finished export jobs; its cache is deleted. Refused while an
+   * export of it is still to run.
+   */
+  deleteProject(id: string): Promise<TrashMoveResult>
+
+  // The trash: deleted shows for TRASH_DAYS days (src/shared/trash.ts)
+  trashList(): Promise<TrashContents>
+  /** Brings a show back as it was (never over another show). */
+  trashRestore(id: string): Promise<TrashRestoreResult>
+  /** Deletes a show in the trash for good (`key`: its id, or a problem's key). */
+  trashPurge(key: string): Promise<TrashRemoveResult>
+  trashEmpty(): Promise<TrashRemoveResult>
+  /** The trash changed by itself (shows whose days were over went). */
+  onTrashChanged(cb: () => void): () => void
 
   // Undo history kept per show in the app's data folder (src/main/history.ts)
   /** The stored history of the show loaded last with loadProject, checked and validated; null when there is none that fits. */

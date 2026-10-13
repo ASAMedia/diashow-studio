@@ -8,9 +8,10 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { DEFAULT_SETTINGS, type Entry, type MediaItem, type Project, type Rect } from '@shared/types'
 import { addMonths, deletionDue, NOTHING, withoutFaceData } from '@shared/cleanup'
 import { faceArea, faceCentre } from '@shared/people'
-import { cleanupRoots, deleteProjectData, inventoryOf, planCleanup, runCleanup, scanProject, type CleanupDeps } from '../src/main/cleanup'
+import { cleanupRoots, inventoryOf, planCleanup, runCleanup, scanProject, trashProjectData, type CleanupDeps } from '../src/main/cleanup'
 import { checkChoice } from '../src/main/cleanupMain'
 import { createProjectStore } from '../src/main/projects'
+import { createTrash } from '../src/main/trash'
 import { validateProject } from '../src/main/projectSchema'
 import { isInsideRoot } from '../src/main/safeDelete'
 
@@ -254,21 +255,50 @@ describe('clean-up', () => {
 })
 
 describe('deleting a project', () => {
-  it('removes the file, its older versions, the face data in the cache and the chosen extras', async () => {
+  it('moves it into the trash with its versions, its own uploads and finished exports; its cache and the face data in shared cache go', async () => {
     const s = setup('delete')
-    const result = await deleteProjectData(s.deps, 'showA', { caches: true, uploads: true, exports: false })
+    const userData = join(tmp, 'delete', 'userData')
+    const trash = createTrash({ projectsDir: s.docs, dataDir: join(userData, 'trash'), historyDir: join(userData, 'history'), exportsDir: s.exportsDir })
+    const adopted: string[] = []
+    const deps = { ...s.deps, trash, exports: { ...s.deps.exports, adopt: async (id: string) => void adopted.push(id) } }
+    const result = await trashProjectData(deps, 'showA')
+    if (!('entry' in result)) throw new Error('refused')
+    expect(result.entry).toMatchObject({ id: 'showA', name: 'Klassenfahrt', slideCount: 5, versions: 1, uploads: 3, exports: 2, faces: true })
     expect(existsSync(join(s.docs, 'showA.dshow'))).toBe(false)
     expect(existsSync(join(s.docs, '.backups', 'showA'))).toBe(false)
-    // cache folders that stay lose the face data; deleted ones are simply gone
-    expect(s.forgottenFaces).toEqual([[P1]])
-    expect(existsSync(join(s.cacheDir, V1))).toBe(false)
-    expect(existsSync(join(s.cacheDir, P1))).toBe(true)
-    expect(existsSync(s.files.mia)).toBe(false)
+    // the show's own uploads (in the show or not) go with it; what show B uses and the user's export stay
+    for (const f of [s.files.mia, s.files.ben, s.files.stray]) expect(existsSync(f)).toBe(false)
     expect(existsSync(s.files.shared)).toBe(true)
-    expect(existsSync(join(s.exportsDir, 'j1'))).toBe(true)
+    expect(existsSync(join(s.uploadsRoot, 'Klassenfahrt', 'Ben'))).toBe(false)
+    expect(s.forgottenJobs).toEqual(['j1', 'j2'])
+    expect(existsSync(join(s.exportsDir, 'j1'))).toBe(false)
+    // cache folders that stay lose the face data; the show's own are deleted
+    expect(s.forgottenFaces).toEqual([[P1]])
+    for (const id of [V1, U1, U2, T1]) expect(existsSync(join(s.cacheDir, id))).toBe(false)
+    expect(existsSync(join(s.cacheDir, P1))).toBe(true)
+    expect(result.cache.files).toBeGreaterThan(0)
     for (const kept of [s.files.photo, s.files.video, s.files.song, s.files.exported, s.files.savedThere]) expect(existsSync(kept)).toBe(true)
-    expect(result.removed.uploads.files).toBe(3)
-    expect(result.freed).toBeGreaterThan(0)
+    expect((await deps.projects.list()).map((p) => p.id)).toEqual(['showB'])
+    // and back, as it was
+    const back = await trash.restore('showA')
+    expect(back).toMatchObject({ renamed: 0, jobs: ['j1', 'j2'] })
+    expect(readA(s.docs).people).toHaveLength(1)
+    // it no longer points at its deleted cache: made again when it is opened
+    const video = readA(s.docs).media.find((m) => m.id === V1)!
+    expect([video.status, video.thumb]).toEqual(['pending', undefined])
+    for (const f of [s.files.mia, s.files.ben, s.files.stray, s.files.backup, join(s.exportsDir, 'j1', 'job.json')]) expect(existsSync(f), f).toBe(true)
+    expect((await trash.list()).entries).toEqual([])
+  })
+
+  it('is refused while an export of the show is still to run', async () => {
+    const s = setup('delete-pending')
+    const userData = join(tmp, 'delete-pending', 'userData')
+    const trash = createTrash({ projectsDir: s.docs, dataDir: join(userData, 'trash'), historyDir: join(userData, 'history'), exportsDir: s.exportsDir })
+    const pending = { ...s.deps, trash, exports: { ...s.deps.exports, jobsOf: async () => [{ ...s.jobs[0], state: 'queued' as const }] } }
+    expect(await trashProjectData(pending, 'showA')).toEqual({ refused: 'export-pending', unfinished: 1 })
+    expect(existsSync(join(s.docs, 'showA.dshow'))).toBe(true)
+    expect(existsSync(s.files.mia)).toBe(true)
+    expect(existsSync(join(s.cacheDir, V1))).toBe(true)
   })
 })
 

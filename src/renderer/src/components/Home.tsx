@@ -6,6 +6,7 @@ import { openWizard } from './Wizard'
 import { DamagedProjects, importProjectSafely, openProjectSafely } from './ProjectRepair'
 import { CleanupBanner, DeadlineBadge, openCleanup } from './Cleanup'
 import { openArchive } from './Archive'
+import { TrashButton } from './Trash'
 import { localeTag, t } from '../i18n'
 
 const FORMATS = 'JPEG · HEIC · HIF · ARW · DNG · PNG · WebP · AVIF — MOV · MP4 · XAVC S/HS/S-I · AVCHD (MTS) · MKV · WebM'
@@ -89,7 +90,7 @@ export function Home() {
                     aria-label={`${t('deleteShow')}: ${p.name}`}
                     onClick={(e) => {
                       e.stopPropagation()
-                      // asks what else goes with it (caches, uploads, exports) and says that it is final
+                      // lists what goes into the trash with it (Trash.tsx restores it for 30 days)
                       openCleanup(p.id, 'delete')
                     }}
                   >
@@ -101,6 +102,7 @@ export function Home() {
           </section>
         )}
         <DamagedProjects />
+        <TrashButton />
       </div>
     </main>
   )

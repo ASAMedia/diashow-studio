@@ -286,7 +286,7 @@ test('clean-up after the project: reminder, removal with sizes, pixelation kept'
     await page.screenshot({ path: join(shots, 'dialog-chosen.png') })
     await page.getByTestId('cleanup-run').click()
     const confirm = page.getByTestId('cleanup-confirm')
-    await expect(confirm).toContainText(/nicht in den Papierkorb|not moved to the recycle bin/)
+    await expect(confirm).toContainText(/sofort endgültig gelöscht, ohne Papierkorb|deleted for good at once, without going to the trash/)
     await page.getByTestId('cleanup-confirm-run').click()
     const summary = page.getByTestId('cleanup-summary')
     await expect(summary).toBeVisible({ timeout: 60_000 })

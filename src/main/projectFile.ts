@@ -267,7 +267,8 @@ export async function importProjectFile(path: string, store: ProjectStore, opts:
     return e.music?.some((m) => songs.has(m)) ? { ...e, music: e.music.map((m) => songs.get(m) ?? m) } : e
   })
   let id = p.id
-  if (await exists(join(store.dir, `${id}${PROJECT_EXT}`))) id = randomUUID()
+  // a show of that id in the trash keeps it (it may be restored)
+  if ((await exists(join(store.dir, `${id}${PROJECT_EXT}`))) || (await store.inTrash(id).catch(() => true))) id = randomUUID()
   const project: Project = { ...p, id, entries, media, music, updatedAt: Date.now() }
   await store.save(project)
   if (hasChanges(report)) opts.onReport?.({ projectId: id, source: 'import', report })

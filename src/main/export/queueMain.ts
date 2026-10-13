@@ -33,6 +33,8 @@ export interface ExportQueueMain {
   /** The clean-up: a project's jobs, and taking a finished one out of the queue (queue.ts). */
   jobsOf(projectId: string): Promise<{ id: string; dir: string; state: ExportJobState; outPath: string }[]>
   forget(id: string): Promise<void>
+  /** A job folder back from the trash is listed again. */
+  adopt(id: string): Promise<void>
 }
 
 export function registerExportQueue(cfg: { dir: string; ffmpegDir: string; themeMusicDir?: string; encoders: () => Promise<EncoderInfo> }): ExportQueueMain {
@@ -247,6 +249,7 @@ export function registerExportQueue(cfg: { dir: string; ffmpegDir: string; theme
     },
     shutdown: stop,
     jobsOf: async (projectId) => (await ready).jobsOf(projectId),
-    forget: async (id) => (await ready).forget(id)
+    forget: async (id) => (await ready).forget(id),
+    adopt: async (id) => (await ready).adopt(id)
   }
 }

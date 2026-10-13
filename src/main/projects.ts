@@ -8,6 +8,7 @@
 // Every project read from disk is migrated and validated (projectSchema.ts): broken parts are dropped or
 // repaired and reported through `onReport`; when data was lost, the file as it was is kept as a backup
 // first. Files that cannot be read at all are listed by damaged() and can be rescued with repair().
+// A deleted show lies in the trash (trash.ts, .trash/ here): it is neither listed nor saved again.
 import { copyFile, mkdir, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import type { DamagedProject, ProjectReportEvent, RepairChoice, RepairPlan, RepairReport } from '@shared/diagnostics'
@@ -29,6 +30,8 @@ export interface ProjectStoreOptions {
   now?: () => number
   /** A project read from disk had to be repaired (dropped or fixed parts). */
   onReport?: (event: ProjectReportEvent) => void
+  /** A show of this id is in the trash (trash.ts): saving it is refused, so no window brings its file back. */
+  inTrash?: (id: string) => Promise<boolean>
 }
 
 export interface ProjectReferences {
@@ -43,16 +46,20 @@ export interface ProjectStore {
   list(): Promise<ProjectSummary[]>
   /** `onRead`: the file's text as read, and whether validation had to drop parts of it (for the undo history, history.ts). */
   load(id: string, onRead?: (text: string, repaired: boolean) => void): Promise<Project>
-  /** `onWritten`: the text just written, called before the next save of the project may start. */
+  /** `onWritten`: the text just written, called before the next save of the project may start. Refused while the show is in the trash. */
   save(project: Project, onWritten?: (text: string) => void): Promise<void>
   delete(id: string): Promise<void>
+  /** A show of this id is in the trash (an imported file then gets another id). */
+  inTrash(id: string): Promise<boolean>
+  /** Runs `task` in the project's queue: no save, restore or repair of it runs meanwhile (moving it into and out of the trash). */
+  exclusive<T>(id: string, task: () => Promise<T>): Promise<T>
   /** Everything the saved projects (but `except`) refer to (for the cache cleanup). */
   references(except?: string): Promise<ProjectReferences>
   /**
    * The clean-up: writes a project without backing up the version on disk (it holds what was just
    * removed), and rewrites its readable backups with `fn`; the backup's file name (its time) stays.
    */
-  overwrite(project: Project): Promise<void>
+  overwrite(project: Project, onWritten?: (text: string) => void): Promise<void>
   rewriteBackups(id: string, fn: (p: Project) => Project): Promise<{ rewritten: number; failed: number }>
   /** Folder of a project's backups (`.backups/<id>`). */
   backupFolder(id: string): string
@@ -255,6 +262,8 @@ export function createProjectStore(dir: string, opts: ProjectStoreOptions = {}):
     async save(project, onWritten) {
       const id = checkId(project.id)
       return serial(id, async () => {
+        // a late save of a deleted show (another window, a save still on its way) must not bring it back
+        if (await opts.inTrash?.(id)) throw new Error(`project ${id} is in the trash`)
         const last = lastBackup.get(id)
         let due = last !== undefined && now() - last >= interval
         if (last === undefined) {
@@ -275,10 +284,24 @@ export function createProjectStore(dir: string, opts: ProjectStoreOptions = {}):
       lastBackup.delete(id)
     },
 
-    async overwrite(project) {
+    inTrash: async (id) => !!(await opts.inTrash?.(checkId(id))),
+
+    exclusive(id, task) {
+      return serial(checkId(id), async () => {
+        try {
+          return await task()
+        } finally {
+          // the show left or came back: its next save starts the backup timing afresh
+          lastBackup.delete(id)
+        }
+      })
+    },
+
+    async overwrite(project, onWritten) {
       const id = checkId(project.id)
       return serial(id, async () => {
-        await writeAtomic(file(id), project)
+        const text = await writeAtomic(file(id), project)
+        onWritten?.(text)
         // the next save backs up this version at the earliest after the interval
         lastBackup.set(id, now())
       })

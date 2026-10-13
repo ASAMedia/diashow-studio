@@ -5,6 +5,7 @@ import type { CollagePlace, PhotoEntry } from '@shared/types'
 import type { TimelineSlide } from '@shared/timeline'
 import { useStore } from '../store'
 import { t } from '../i18n'
+import { followPointer } from '../pointerDrag'
 
 type Mode = 'move' | 'size' | 'turn'
 
@@ -28,9 +29,7 @@ export function CollageEditor({ slide, w, h }: { slide: TimelineSlide; w: number
     const p0 = { ...places[i], z: places[i].z < top ? top + 1 : places[i].z }
     setActive(id)
     if (p0.z !== places[i].z) save(id, p0)
-    const el = e.currentTarget as HTMLElement
-    el.setPointerCapture(e.pointerId)
-    const rect = el.closest('.collage-edit')!.getBoundingClientRect()
+    const rect = (e.currentTarget as HTMLElement).closest('.collage-edit')!.getBoundingClientRect()
     const cx = rect.left + (p0.x + p0.w / 2) * w
     const cy = rect.top + (p0.y + p0.h / 2) * h
     const sx = e.clientX
@@ -52,13 +51,7 @@ export function CollageEditor({ slide, w, h }: { slide: TimelineSlide; w: number
         save(id, { ...p0, rot: Math.abs(rot) < 2 ? 0 : rot })
       }
     }
-    const up = (): void => {
-      el.removeEventListener('pointermove', move)
-      el.removeEventListener('pointerup', up)
-      setActive(null)
-    }
-    el.addEventListener('pointermove', move)
-    el.addEventListener('pointerup', up)
+    followPointer(e, move, () => setActive(null))
   }
 
   return (

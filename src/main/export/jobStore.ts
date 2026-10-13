@@ -135,10 +135,10 @@ export async function deleteWorkFiles(job: Job, keepParts: boolean): Promise<voi
   await rm(partialOutputPath(job.file.request.outPath, job.file.id), { force: true, maxRetries: 5, retryDelay: 100 })
 }
 
-/** The jobs stored in `root` (which exists), as left by the last run. */
-export async function loadJobs(root: string): Promise<Job[]> {
+/** The jobs stored in `root` (which exists), as left by the last run; `only`: just these folders. */
+export async function loadJobs(root: string, only?: readonly string[]): Promise<Job[]> {
   const jobs: Job[] = []
-  for (const name of readdirSync(root)) {
+  for (const name of only ?? readdirSync(root)) {
     if (!ID_RE.test(name)) continue
     const dir = join(root, name)
     let file: JobFile

@@ -155,6 +155,8 @@ export interface DiagnosticsConfig {
   /** All saved projects, counted. */
   projectCounts: () => Promise<PackageSources['projects']>
   damaged: () => Promise<PackageSources['damaged']>
+  /** The trash, counted (trash.ts). */
+  trash?: () => Promise<NonNullable<PackageSources['trash']>>
   settings: () => Promise<unknown>
   systemInfo: () => Promise<SystemInfo>
   ffmpegVersion: () => Promise<string>
@@ -189,14 +191,15 @@ export function registerDiagnostics(cfg: DiagnosticsConfig): void {
   const sources = async (input: DiagnosticsInput): Promise<PackageSources> => {
     const safe = <T>(p: Promise<T>, fallback: T): Promise<T> => p.catch(() => fallback)
     const projectId = typeof input?.projectId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(input.projectId) ? input.projectId : null
-    const [system, settings, project, projects, damaged, ffmpeg, themeTracks] = await Promise.all([
+    const [system, settings, project, projects, damaged, ffmpeg, themeTracks, trash] = await Promise.all([
       cfg.systemInfo().catch((err: unknown) => ({ error: err instanceof Error ? err.message : String(err) })),
       safe(cfg.settings(), {}),
       projectId ? safe(cfg.loadProject(projectId), null) : Promise.resolve(null),
       safe(cfg.projectCounts(), []),
       safe(cfg.damaged(), []),
       safe(cfg.ffmpegVersion(), 'unknown'),
-      safe(cfg.themeMusic?.() ?? Promise.resolve([]), [])
+      safe(cfg.themeMusic?.() ?? Promise.resolve([]), []),
+      safe(cfg.trash?.() ?? Promise.resolve(undefined), undefined)
     ])
     const sizes = new Map<string, number>()
     if (project && project.media.length <= 5000) {
@@ -238,6 +241,7 @@ export function registerDiagnostics(cfg: DiagnosticsConfig): void {
       themeTracks,
       projects,
       damaged,
+      ...(trash ? { trash } : {}),
       logs
     }
   }

@@ -14,6 +14,7 @@ import { displayCount, isPresentationWindow, startPresentation, stopPresentation
 import { importProjectFile, packProject } from './projectFile'
 import { createProjectStore, PROJECT_EXT } from './projects'
 import { createHistoryStore, type HistorySaveStatus } from './history'
+import { createTrash } from './trash'
 import { cancelActiveExport, startExport, type ExportJob } from './export/encoder'
 import { registerExportQueue } from './export/queueMain'
 import { registerShare } from './share/shareMain'
@@ -69,7 +70,19 @@ export function registerIpc(): void {
   const cacheDir = join(dataDir || app.getPath('userData'), 'cache')
   // a project that had to be repaired when it was read: the editor shows what changed
   const onReport = (event: ProjectReportEvent): void => broadcast('project:report', event)
-  const projects = createProjectStore(join(dataDir || app.getPath('documents'), 'Diashow Studio'), { onReport })
+  const projectsDir = join(dataDir || app.getPath('documents'), 'Diashow Studio')
+  // a deleted show lies in the trash for 30 days (trash.ts): in .trash of the projects folder, its undo
+  // history and export jobs in <userData>/trash. DIASHOW_TRASH_CLOCK_DAYS puts its clock ahead (tests).
+  const trashAhead = (Number(process.env.DIASHOW_TRASH_CLOCK_DAYS) || 0) * 86_400_000
+  const trash = createTrash({
+    projectsDir,
+    dataDir: join(app.getPath('userData'), 'trash'),
+    historyDir: join(app.getPath('userData'), 'history'),
+    exportsDir: join(app.getPath('userData'), 'exports'),
+    now: () => Date.now() + trashAhead,
+    log: (m) => log().info('trash', m)
+  })
+  const projects = createProjectStore(projectsDir, { onReport, inTrash: (id) => trash.has(id) })
   // the undo history of each show, in userData (history.ts): never next to the .dshow
   const history = createHistoryStore({ dir: join(app.getPath('userData'), 'history'), log: (m) => log().info('history', m) })
   /** A show read for the editor: its stored undo history can be restored for exactly this text. */
@@ -197,8 +210,11 @@ export function registerIpc(): void {
   registerShare({ uploadsRoot: join(projects.dir, 'Uploads'), broadcast })
   // Ctrl+V: copied files, or a copied picture saved to <Documents>/Diashow Studio/Eingefügt/<project>
   registerPaste({ projectsDir: projects.dir, locale: () => process.env.DIASHOW_LOCALE || app.getLocale() })
-  // "Nach dem Projekt aufräumen" and deleting a project with its data (cleanup.ts, safeDelete.ts)
-  registerCleanup({ projects, cacheDir, uploadsRoot: join(projects.dir, 'Uploads'), pastedRoots: pastedRoots(projects.dir), exportsDir: join(app.getPath('userData'), 'exports'), media: service, exports: exportQueue, history })
+  // "Nach dem Projekt aufräumen", deleting a project into the trash and the trash (cleanup.ts, trash.ts, safeDelete.ts)
+  const { ready: trashReady } = registerCleanup(
+    { projects, cacheDir, uploadsRoot: join(projects.dir, 'Uploads'), pastedRoots: pastedRoots(projects.dir), exportsDir: join(app.getPath('userData'), 'exports'), media: service, exports: exportQueue, history, trash },
+    { broadcast, log: (m) => log().info('trash', m) }
+  )
   // "Diashow als ZIP archivieren" (archive/archive.ts): reads originals only, through the same share policy
   registerArchive({ projects, themeMusic: () => themeMusic, themeMusicDir, exports: exportQueue, allowPath, documentsDir: app.getPath('documents'), appVersion: appVersion() })
   registerSystemCheck({ ff: service.ffmpeg, cacheDir })
@@ -214,6 +230,11 @@ export function registerIpc(): void {
     themeMusic: () => themeMusic,
     projectCounts: async () => (await projects.list()).map((p) => ({ slides: p.slideCount })),
     damaged: async () => (await projects.damaged()).map((d) => ({ reason: d.reason, bytes: d.bytes, backups: d.backups })),
+    // shows in the trash: counted, never named
+    trash: async () => {
+      const t = await trash.list()
+      return { shows: t.entries.length, damaged: t.problems.length }
+    },
     settings: () => appSettings.get(),
     systemInfo: () => collectSystemInfo({ ff: service.ffmpeg, cacheDir }, 15_000),
     ffmpegVersion: async () => /ffmpeg version (\S+)/.exec((await service.ffmpeg.capture(['-version'])).toString('utf8'))?.[1] ?? 'unknown'
@@ -300,7 +321,8 @@ export function registerIpc(): void {
     return importShow(path)
   })
 
-  ipcMain.handle('project:list', () => projects.list())
+  // after a crash, a show half moved into the trash is back first
+  ipcMain.handle('project:list', () => trashReady.then(() => projects.list()))
   ipcMain.handle('project:load', (_e, id: string) => loadForEditor(id))
   // the editor's saves carry its undo history; it is written a moment after the project file
   ipcMain.handle('project:save', async (_e, project: Project, upload?: unknown) => {

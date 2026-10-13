@@ -16,6 +16,7 @@ import { analyzeBitmap } from '../vision/client'
 import { markPerson, notThisPerson, personLabel, takeRequestedStill } from '../personActions'
 import { useStore } from '../store'
 import { t } from '../i18n'
+import { followPointer } from '../pointerDrag'
 import { togglePrivacy } from './SlideTools'
 import { EditedPicture } from './EditedPicture'
 import { areaToSource, rectToEdit, shownAspect, sourceAspect } from '@shared/mediaEdit'
@@ -197,24 +198,21 @@ export function PrivacyEditor({ entryId, w, h }: { entryId: string; w: number; h
     const rect = areaRef.current!.getBoundingClientRect()
     const fx = (e.clientX - rect.left) / rect.width
     const fy = (e.clientY - rect.top) / rect.height
-    const el = e.currentTarget as HTMLElement
-    el.setPointerCapture(e.pointerId)
     const at = (pe: PointerEvent): Rect => {
       const x = Math.min(1, Math.max(0, (pe.clientX - rect.left) / rect.width))
       const y = Math.min(1, Math.max(0, (pe.clientY - rect.top) / rect.height))
       return { x: Math.min(fx, x), y: Math.min(fy, y), w: Math.abs(x - fx), h: Math.abs(y - fy) }
     }
-    const move = (pe: PointerEvent): void => setDraft(at(pe))
-    const up = (pe: PointerEvent): void => {
-      el.removeEventListener('pointermove', move)
-      el.removeEventListener('pointerup', up)
-      const r = at(pe)
-      setDraft(null)
-      // drawn on the edited picture, stored for the original (an area that covers the drawn one)
-      if (r.w > 0.02 && r.h > 0.02) save({ privacy: [...areas, roundOut(areaToSource(r, media!.edit, source))] })
-    }
-    el.addEventListener('pointermove', move)
-    el.addEventListener('pointerup', up)
+    followPointer(
+      e,
+      (pe) => setDraft(at(pe)),
+      (kept, pe) => {
+        const r = at(pe)
+        setDraft(null)
+        // drawn on the edited picture, stored for the original (an area that covers the drawn one)
+        if (kept && r.w > 0.02 && r.h > 0.02) save({ privacy: [...areas, roundOut(areaToSource(r, media!.edit, source))] })
+      }
+    )
   }
 
   // faces not pixelated yet (photos: not an area; videos: not followed or in an area)

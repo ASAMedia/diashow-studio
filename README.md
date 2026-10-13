@@ -13,6 +13,7 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
   - Every control can be reached with Tab and shows a focus ring. Esc closes dialogs and menus, and Tab stays inside an open dialog.
   - The filmstrip is one Tab stop: ←/→ select slides (Shift for a range), Alt+←/→ move a slide, and Shift+F10 opens its menu.
   - Trim handles and song order work with the arrow keys.
+  - Touch screens: text boxes, the free collage, framing, crop and trim handles and a card's time can be dragged with a finger.
   - Buttons, fields and dialogs have names for screen readers, text meets WCAG AA contrast in both themes, and UI animations stay off when Windows' "Animation effects" are off.
 - **11 themes.** The seven Photos themes are Ken Burns, Origami, Reflections, Sliding Panels, Vintage Prints, Classic and Magazine. Four more are our own:
   - Retro Film: a Super 8 look.
@@ -89,7 +90,10 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
 
     Face data leaves the project, its older versions and the cache. Everything that is pixelated stays pixelated, because marked people become fixed areas, but new photos are no longer recognised automatically. Your own photos, videos, music and exported videos are never touched.
   - **Deletion date:** in 1, 3, 6 or 12 months or on a date (also offered after an export). When it comes, the slideshow on the home screen gets a hint and a banner says "Deletion date reached: clean up?", with "Remind me in a month".
-  - Deleting a slideshow asks whether its cache, uploads and finished export jobs go too.
+  - **Trash:** deleting a slideshow moves it to the trash for 30 days, with its older versions, undo history, the pupils' uploads and finished export jobs; its cache is deleted (made again on restore).
+    - "Trash (n)" on the home screen restores a show as it was (never over another one), deletes it permanently or empties the trash; after 30 days the app deletes it for good.
+    - It lives in `Documents\Diashow Studio\.trash` (show, versions, uploads) and `%APPDATA%\Diashow Studio\trash` (undo history, export jobs), so every move is a rename on the same drive (`src/main/trash.ts`).
+    - A show in the trash keeps its face data and deletion date (the home screen then offers "Delete permanently"); Settings → Privacy shows the trash's size and empties it. Shows in the trash are not listed, saved, opened by kiosk mode or named in the diagnostics package. A show with an unfinished export can't be deleted until the export is done or removed.
 - **Automatic help:**
   - Offline face detection (MediaPipe BlazeFace, run on the whole picture and on tiles) keeps faces inside crops and gives Ken Burns a target.
   - "Change slides on the beat" puts every slide change on a beat of the music.
@@ -232,6 +236,8 @@ npm run release-check   # before tagging: what the CI and the release workflow w
 `DIASHOW_GPU=integrated` makes a laptop with two graphics chips behave like a PC with only integrated graphics (rendering, Quick Sync, the integrated Vulkan device, no NVENC or CUDA); `DIASHOW_GPU=discrete` renders on the high-performance GPU. `e2e/exportspeed.spec.ts` (with `DIASHOW_ORIGINALS_DIR`) prints which chip WebGL uses, the encoders, and speed and quality of an export.
 
 The handbook lives in `src/renderer/src/handbook/de.md` and `en.md` (a small Markdown subset, see `handbook/markdown.tsx`). Its screenshots in `src/renderer/public/handbook/<de|en>/` are made from the sample trip (`npm run samples`) by `npx electron-vite build && DIASHOW_HANDBOOK_SHOTS=1 npx playwright test e2e/handbook-shots.spec.ts`; without the samples they fall back to the generated test media. `DIASHOW_DEMO_VIDEO=1 npx playwright test e2e/demo-video.spec.ts` makes the website's demo video (`docs/media/demo.mp4`) with the app from the same trip.
+
+`e2e/dragdrop.spec.ts` drives every drag and drop through Chromium's own pipeline (CDP `Input.dispatchDragEvent`; `dragFiles`, `dragElement` and `dropFiles` in `e2e/harness.ts`): a release right after the element under the pointer changed, edges, out of the window and back, Esc. Drop targets accept `dragenter` as well as `dragover`, because Chromium decides a drop by the `dragenter` when the element under the pointer has just changed. Pointer drags (text boxes, collage, framing, crop, trim) go through `src/renderer/src/pointerDrag.ts`, which also ends them on a lost capture or a cancelled touch.
 
 `DIASHOW_UI_REVIEW=1 npx playwright test e2e/ui-review.spec.ts` takes screenshots of every screen and dialog (German and English, light and dark, small and large window) and checks contrast and accessible names; the results are in `test-results/ui-review/`.
 

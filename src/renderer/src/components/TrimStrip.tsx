@@ -5,6 +5,7 @@ import type { MediaItem, VideoEntry } from '@shared/types'
 import { playerRef, useStore } from '../store'
 import { timelineOf } from '../timeline'
 import { fmtSeconds, t } from '../i18n'
+import { followPointer } from '../pointerDrag'
 import { Play } from 'lucide-react'
 
 /**
@@ -53,19 +54,11 @@ export function TrimStrip({ entry, media }: { entry: VideoEntry; media: MediaIte
   }, [media.playback, media.path])
   const drag = (which: 'in' | 'out') => (e: React.PointerEvent) => {
     const bar = barRef.current!.getBoundingClientRect()
-    const el = e.currentTarget as HTMLElement
-    el.setPointerCapture(e.pointerId)
-    const move = (ev: PointerEvent): void => {
+    followPointer(e, (ev) => {
       const t = Math.round(Math.min(1, Math.max(0, (ev.clientX - bar.left) / bar.width)) * len * 10) / 10
       if (which === 'in') setEntry(entry.id, { trimIn: Math.min(t, tout - 0.5) } as Partial<VideoEntry>)
       else setEntry(entry.id, { trimOut: Math.max(t, tin + 0.5) } as Partial<VideoEntry>)
-    }
-    const up = (): void => {
-      el.removeEventListener('pointermove', move)
-      el.removeEventListener('pointerup', up)
-    }
-    el.addEventListener('pointermove', move)
-    el.addEventListener('pointerup', up)
+    })
   }
   const pct = (v: number): string => `${len ? (v / len) * 100 : 0}%`
   const setIn = (v: number): void => setEntry(entry.id, { trimIn: Math.max(0, Math.min(v, tout - 0.5)) } as Partial<VideoEntry>)

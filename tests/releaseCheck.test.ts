@@ -14,6 +14,7 @@ const root = join(__dirname, '..')
 const LOCAL_ONLY: Record<string, string> = {
   'codecs.spec.ts': 'checks what the graphics card decodes',
   'demo-video.spec.ts': 'makes the website video (DIASHOW_DEMO_VIDEO)',
+  'dragdrop.spec.ts': 'new, not yet in ci.yml',
   'exportspeed.spec.ts': 'measures hardware encoders with the original photos',
   'flicker.spec.ts': 'diagnostics on request',
   'handbook-shots.spec.ts': 'makes the handbook pictures (DIASHOW_HANDBOOK_SHOTS)',
@@ -23,6 +24,7 @@ const LOCAL_ONLY: Record<string, string> = {
   'share.spec.ts': 'opens a network port the runner may block',
   'stabilize.spec.ts': 'long FFmpeg vid.stab runs',
   'systemcheck.spec.ts': 'tests hardware encoders',
+  'trash.spec.ts': 'new, not yet in ci.yml',
   'ui-review.spec.ts': 'screenshots on request (DIASHOW_UI_REVIEW)'
 }
 

@@ -148,6 +148,7 @@ Für Schülerinnen und Schüler ohne Fotoerlaubnis kannst du Gesichter verpixeln
 
 - In Videos wird ein angeklicktes Gesicht durch den ganzen Clip verfolgt.
 - Vor dem Export zeigt **Gesichter prüfen …** (Menü **⋯** oder im Export-Dialog) alle Folien mit Gesichtern, die noch nicht verpixelt sind.
+- Die Gesichtsdaten bleiben bei der Diashow, bis du [aufräumst](#cleanup). Eine gelöschte Diashow nimmt sie mit in den Papierkorb, bis sie dort endgültig gelöscht wird (spätestens nach 30 Tagen).
 
 > Prüfe das Ergebnis immer selbst: Die Erkennung findet nicht jedes Gesicht, z. B. im Profil oder sehr klein.
 
@@ -188,11 +189,20 @@ Ist die Diashow fertig, entfernst du an einer Stelle, was die App zu ihr gespeic
 
 ![Nach dem Projekt aufräumen](cleanup.jpg)
 
-Deine eigenen Fotos, Videos und Musik und die exportierten Videos bleiben unberührt. Gelöscht wird endgültig, nicht in den Papierkorb.
+Deine eigenen Fotos, Videos und Musik und die exportierten Videos bleiben unberührt. Was das Aufräumen entfernt, ist sofort endgültig gelöscht, ohne Papierkorb.
 
 **Löschfrist:** Im selben Dialog (oder nach dem Export) legst du fest, wann aufgeräumt werden soll: in 1, 3, 6 oder 12 Monaten oder an einem Datum. Ist der Tag da, zeigt die Startseite einen Hinweis an der Diashow und **Löschfrist erreicht: aufräumen?**; **In einem Monat erinnern** verschiebt sie.
 
-> Beim **Löschen** einer Diashow fragt die App, ob ihr Zwischenspeicher, die hochgeladenen Fotos und die Export-Aufträge mitgehen sollen.
+### Diashows löschen und der Papierkorb
+
+**Löschen** (das Papierkorb-Symbol an der Diashow auf der Startseite) legt die Diashow für 30 Tage in den **Papierkorb**, mit ihren älteren Versionen, dem Rückgängig-Verlauf, den hochgeladenen Fotos und den fertigen Export-Aufträgen. Ihr Zwischenspeicher wird gleich gelöscht; er entsteht neu, wenn du sie wiederherstellst und öffnest. Solange ein Export der Diashow noch wartet oder läuft, lässt sie sich nicht löschen.
+
+- **Papierkorb (n)** unten auf der Startseite zeigt die gelöschten Diashows: wann sie gelöscht wurden, wann sie endgültig verschwinden, und wie groß sie sind.
+- **Wiederherstellen** holt eine Diashow zurück, wie sie war, auch nach einem Neustart: mit ihren älteren Versionen, den hochgeladenen Fotos und dem Rückgängig-Verlauf. Eine andere Diashow wird dabei nie überschrieben. [[Strg+Z]] im Editor hat damit nichts zu tun.
+- **Endgültig löschen** und **Papierkorb leeren…** löschen nach einer Rückfrage sofort. Nach 30 Tagen löscht die App eine Diashow im Papierkorb von selbst endgültig.
+- Die Löschfrist bleibt im Papierkorb erhalten. Ist sie erreicht, bietet die Startseite **Endgültig löschen…** an.
+
+> Auch im Papierkorb enthält eine Diashow noch ihre Gesichtsdaten und die Fotos der Klasse. **Einstellungen → Datenschutz** zeigt, wie viel im Papierkorb liegt, und leert ihn.
 
 Ein [ZIP-Archiv der Diashow](#projects) ist eine Kopie, die das Aufräumen nicht erreicht; lösche es selbst.
 

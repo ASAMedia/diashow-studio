@@ -328,6 +328,12 @@ describe('export queue', () => {
     await q.cancel(other.id)
     expect(q.list()[0].state).toBe('cancelled')
     expect(await q.next()).toBeNull()
+    // a finished job leaves the queue while its show is in the trash, and comes back with it (once)
+    await q.forget(other.id)
+    expect(q.list()).toEqual([])
+    await q.adopt(other.id)
+    await q.adopt(other.id)
+    expect(q.list()).toMatchObject([{ id: other.id, name: 'cancel-queued', state: 'cancelled' }])
     await q.close()
   })
 

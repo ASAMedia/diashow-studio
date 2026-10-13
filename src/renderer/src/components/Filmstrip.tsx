@@ -20,6 +20,7 @@ import { Menu, MenuItem, MenuSeparator } from './Menu'
 import { reducedMotion } from '../appearance'
 import { MediaThumb } from './EditedPicture'
 import { openPhotoEdit, rotateSelection } from '../photoEdit'
+import { followPointer } from '../pointerDrag'
 
 interface Menu {
   x: number
@@ -46,7 +47,6 @@ export function Filmstrip() {
   const filesTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   // drag events can arrive faster than React re-renders, so the handlers read refs
   const dragRef = useRef<number | null>(null)
-  const dropRef = useRef<{ merge?: number; insert?: number }>({})
   const innerRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const searchInput = useRef<HTMLInputElement>(null)
@@ -127,62 +127,57 @@ export function Filmstrip() {
     return { insert: Math.max(0, Math.min(n, Math.round(x / step))) }
   }
   const isFiles = (e: React.DragEvent): boolean => dragRef.current == null && e.dataTransfer.types.includes('Files')
+  const clearMarks = (): void => {
+    clearTimeout(filesTimer.current)
+    setFilesOver(false)
+    setDropAt(null)
+    setMergeAt(null)
+  }
+  // dragover, and dragenter alike: when the element under the pointer has just changed (an edge between
+  // two cards or pictures), Chromium fires no dragover in that step and decides on the drop by the
+  // dragenter, so it is accepted (with the same effect) and shows the same mark
   const onDragOver = (e: React.DragEvent): void => {
     const files = isFiles(e)
     if (dragRef.current == null && !files) return
     e.preventDefault()
+    e.dataTransfer.dropEffect = files ? 'copy' : 'move'
     if (files) {
-      e.dataTransfer.dropEffect = 'copy'
       setFilesOver(true)
       clearTimeout(filesTimer.current)
       // dragover repeats while the files hover; when it stops, they left (or were dropped)
-      filesTimer.current = setTimeout(() => {
-        setFilesOver(false)
-        setDropAt(null)
-        setMergeAt(null)
-      }, 250)
+      filesTimer.current = setTimeout(clearMarks, 250)
     }
     const target = dropTarget(e, files)
-    dropRef.current = target
     setMergeAt(target.merge ?? null)
     setDropAt(target.insert ?? null)
   }
-  // a slide dragged in the filmstrip is accepted on dragenter as well (files are, by the window): when
-  // the element under the pointer has just changed, Chromium decides on the drop by the dragenter
-  const onDragEnter = (e: React.DragEvent): void => {
-    if (dragRef.current != null) e.preventDefault()
-  }
-  // the dragleave of a picture inside a card bubbles up here: only leaving the filmstrip clears the
-  // mark, or the card's mark would flicker (and the card with it) at the edge between its pictures
+  // the dragleave of a picture inside a card bubbles up here: only leaving the filmstrip (or the
+  // window, or Esc: nowhere to go) clears the marks, or a card's mark would flicker at the edge
+  // between its pictures
   const onDragLeave = (e: React.DragEvent): void => {
-    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setMergeAt(null)
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) clearMarks()
   }
   const onDrop = (e: React.DragEvent): void => {
     e.preventDefault()
     const drag = dragRef.current
-    if (isFiles(e)) {
+    const files = isFiles(e)
+    // where it is dropped, not where the last dragover was: the drop can follow a dragenter at once
+    const { merge, insert } = dropTarget(e, files)
+    if (files) {
       // files from Explorer go in right here, as one undo step; the window's drop handler leaves them
       handledDrops.add(e.nativeEvent)
-      clearTimeout(filesTimer.current)
-      setFilesOver(false)
-      const { merge, insert } = dropTarget(e, true)
       const paths = [...e.dataTransfer.files].map((f) => window.api.pathForFile(f)).filter(Boolean)
       const at = merge != null ? merge + 1 : (insert ?? n)
       const into = merge != null ? tl.slides[merge].entries.map((x) => x.id) : undefined
       if (paths.length) void insertFiles(paths, { before: anchorAt(tl, project.entries, at), ...(into ? { into } : {}) })
-    } else {
-      const { merge, insert } = dropRef.current
-      if (drag != null && merge != null) {
-        const ids = [...tl.slides[merge].entries, ...tl.slides[drag].entries].map((x) => x.id)
-        useStore.getState().mergeEntries(ids)
-        select(ids)
-      } else if (drag != null && insert != null && insert !== drag && insert !== drag + 1) moveSlide(drag, insert)
-    }
+    } else if (drag != null && merge != null) {
+      const ids = [...tl.slides[merge].entries, ...tl.slides[drag].entries].map((x) => x.id)
+      useStore.getState().mergeEntries(ids)
+      select(ids)
+    } else if (drag != null && insert != null && insert !== drag && insert !== drag + 1) moveSlide(drag, insert)
     dragRef.current = null
-    dropRef.current = {}
     setDrag(null)
-    setDropAt(null)
-    setMergeAt(null)
+    clearMarks()
   }
   const selectedSlides = tl.slides.filter((sl) => sl.entries.some((e) => sel.has(e.id)))
 
@@ -424,7 +419,7 @@ export function Filmstrip() {
           if (e.target === e.currentTarget) manualUntil.current = performance.now() + 4000
         }}
       >
-        <div className="strip-inner" ref={innerRef} style={{ width }} onDragEnter={onDragEnter} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
+        <div className="strip-inner" ref={innerRef} style={{ width }} onDragEnter={onDragOver} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
           <div className="cards">
             {first > 0 && <div style={{ flex: '0 0 auto', width: first * step - gap }} />}
             {tl.slides.slice(first, last + 1).map((s) => (
@@ -458,8 +453,7 @@ export function Filmstrip() {
                 onDragEnd={() => {
                   dragRef.current = null
                   setDrag(null)
-                  setDropAt(null)
-                  setMergeAt(null)
+                  clearMarks()
                 }}
               />
             ))}
@@ -645,9 +639,11 @@ function SlideCard(props: {
       onDragStart={(e) => {
         e.dataTransfer.effectAllowed = 'move'
         e.dataTransfer.setData('text/plain', s.id)
+        // dragend comes to this card, also when it scrolled out of the filmstrip during the drag: then it
+        // is no longer in the page, React doesn't see the event, and the drag never ended for the filmstrip
+        e.currentTarget.addEventListener('dragend', props.onDragEnd, { once: true })
         props.onDragStart()
       }}
-      onDragEnd={props.onDragEnd}
       onClick={props.onClick}
       onContextMenu={props.onMenu}
       title={name}
@@ -746,22 +742,17 @@ function DurationHandle({ slide, onDuration }: { slide: TimelineSlide; onDuratio
       }}
       onPointerDown={(e) => {
         e.stopPropagation()
-        const el = e.currentTarget
-        el.setPointerCapture(e.pointerId)
         const x0 = e.clientX
         const d0 = slide.duration
-        const move = (ev: PointerEvent): void => {
-          const v = Math.round(Math.min(120, Math.max(0.5, d0 + (ev.clientX - x0) * 0.05)) * 10) / 10
-          setLive(v)
-          onDuration(v)
-        }
-        const up = (): void => {
-          el.removeEventListener('pointermove', move)
-          el.removeEventListener('pointerup', up)
-          setLive(null)
-        }
-        el.addEventListener('pointermove', move)
-        el.addEventListener('pointerup', up)
+        followPointer(
+          e,
+          (ev) => {
+            const v = Math.round(Math.min(120, Math.max(0.5, d0 + (ev.clientX - x0) * 0.05)) * 10) / 10
+            setLive(v)
+            onDuration(v)
+          },
+          () => setLive(null)
+        )
       }}
     >
       {live != null && <span className="dur-tip">{live.toLocaleString(undefined, { minimumFractionDigits: 1 })} s</span>}

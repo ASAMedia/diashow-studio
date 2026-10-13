@@ -30,6 +30,8 @@ export interface PackageSources {
   projects: { slides: number }[]
   /** Damaged / too-new project files in the projects folder. */
   damaged: { reason: string; bytes: number; backups: number }[]
+  /** Shows in the trash and unreadable entries there: counts only, never names. */
+  trash?: { shows: number; damaged: number }
   logs: { name: string; text: string }[]
 }
 
@@ -209,7 +211,8 @@ export function packageFiles(src: PackageSources): PackageFile[] {
       text: json({
         openProject: src.project ? projectSummary(src.project, src.sizes, src.themeTracks) : null,
         savedProjects: { count: src.projects.length, slides: src.projects.map((p) => p.slides) },
-        damagedProjectFiles: src.damaged
+        damagedProjectFiles: src.damaged,
+        ...(src.trash ? { trash: src.trash } : {})
       })
     }
   ]

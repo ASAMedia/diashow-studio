@@ -24,13 +24,6 @@ export interface CleanupChoice {
 
 export const NOTHING: CleanupChoice = { faces: false, uploads: 'none', caches: false, backups: false, exports: false }
 
-/** Deleting a whole project: the file and its older versions always go; these are offered besides. */
-export interface DeleteExtras {
-  caches: boolean
-  uploads: boolean
-  exports: boolean
-}
-
 export interface FaceDataStats {
   /** Photos and videos in which faces were found. */
   media: number

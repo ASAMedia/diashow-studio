@@ -1,7 +1,8 @@
 // "Nach dem Projekt aufräumen": everything the app keeps for one project (scanProject), what a choice
 // removes (planCleanup, pure) and carrying it out (runCleanup); deleting a whole project goes through
-// here too (deleteProjectData). Files are only deleted by safeDelete.ts, inside the app's own folders:
-// the teacher's photos, videos and music and the exported videos are never touched. Electron-free.
+// here too (trashProjectData: into the trash, trash.ts). Files are only deleted by safeDelete.ts, inside
+// the app's own folders: the teacher's photos, videos and music and the exported videos are never
+// touched. Electron-free.
 //
 // What a project keeps besides its .dshow file:
 // - face data in the project (faces, descriptors, video faces, the people list with names), in its
@@ -24,17 +25,19 @@ import {
   deletionDue,
   emptyRemoved,
   faceDataStats,
+  NOTHING,
   withoutFaceData,
   withoutMedia,
   type CleanupCategory,
   type CleanupChoice,
   type CleanupInventory,
-  type CleanupResult,
-  type DeleteExtras
+  type CleanupResult
 } from '@shared/cleanup'
+import type { TrashEntry, TrashMoveResult } from '@shared/trash'
 import { BACKUPS, type ProjectStore } from './projects'
 import { isInsideRoot, pruneEmptyDirs, removeInside, sizeOf } from './safeDelete'
 import { safeName } from './share/server'
+import { TrashRefusedError, type Trash } from './trash'
 
 export interface CleanupDeps {
   projects: ProjectStore
@@ -52,6 +55,8 @@ export interface CleanupDeps {
   exports: {
     jobsOf(projectId: string): Promise<{ id: string; dir: string; state: ExportJobState; outPath: string }[]>
     forget(id: string): Promise<void>
+    /** A job folder back from the trash is listed again (a show restored). */
+    adopt?(id: string): Promise<void>
   }
   /** The stored undo history (history.ts); it deletes inside its own folder. */
   history?: {
@@ -59,7 +64,11 @@ export interface CleanupDeps {
     clear(id: string): Promise<{ files: number; bytes: number; failed?: string[] }>
     /** Moves the history along when the show is saved outside the editor (the deletion reminder). */
     rebase?(id: string, before: string, after: string): Promise<unknown>
+    /** Writes what is waiting and forgets the show, leaving its file (it goes into the trash). */
+    release?(id: string): Promise<void>
   }
+  /** The trash (trash.ts): a deleted show goes there. */
+  trash?: Trash
   now?: () => number
 }
 
@@ -486,21 +495,65 @@ async function removeHistory(d: CleanupDeps, id: string, result: CleanupResult):
 }
 
 /**
- * Deletes a project: its file and older versions (as before), the face data of its media in the
- * cache, and what `extras` asks for besides (caches, uploads, finished exports), with the same care
- * as the clean-up. A project that can't be read loses its file and older versions only.
+ * Deletes a show (home screen): it goes into the trash (trash.ts) with its older versions, its undo
+ * history, the pupils' uploads and pasted pictures no other show uses, and its finished export jobs,
+ * so it can be restored as it was. Its cache folders no other show uses are deleted right away and the
+ * face data in the others is forgotten (both are made again when it is restored and opened). Refused
+ * while an export of it is still to run: that needs its files. A show that can't be read goes with
+ * its older versions and undo history.
  */
-export async function deleteProjectData(d: CleanupDeps, id: string, extras?: DeleteExtras): Promise<CleanupResult> {
-  const result: CleanupResult = { removed: emptyRemoved(), freed: 0, failed: [], busy: 0 }
+export async function trashProjectData(d: CleanupDeps, id: string): Promise<TrashMoveResult> {
+  const trash = d.trash
+  if (!trash) throw new Error('no trash')
   const scan = await scanProject(d, id).catch(() => null)
-  await d.projects.delete(id)
-  if (scan) {
-    result.removed.backups = { files: scan.backups.length, bytes: sum(scan.backups) }
-    const choice: CleanupChoice = { faces: false, uploads: extras?.uploads ? 'all' : 'none', caches: !!extras?.caches, backups: false, exports: !!extras?.exports }
-    const gone = await execute(d, planCleanup(scan, choice, cleanupRoots(d)), result)
+  const unfinished = scan ? scan.exports.filter((j) => !FINISHED.includes(j.state)).length : 0
+  if (unfinished) return { refused: 'export-pending', unfinished }
+  // its finished export jobs leave the queue while they lie in the trash
+  const jobs: string[] = []
+  for (const j of scan?.exports ?? []) {
+    try {
+      await d.exports.forget(j.id)
+      jobs.push(j.id)
+    } catch {
+      // resumed or removed meanwhile: it stays where it is
+    }
+  }
+  // what is waiting of the undo history is written first: the file goes with the show
+  await d.history?.release?.(id)
+  // the cache folders only it uses go once it is in the trash; the show stops pointing at them first
+  // (restored, it would show broken covers on the home screen until opened), its undo history moves along
+  const plan = scan ? planCleanup(scan, { ...NOTHING, caches: true }, cleanupRoots(d)) : null
+  const dropping = new Set((plan?.remove ?? []).flatMap((r) => (r.cacheId ? [r.cacheId] : [])))
+  if (scan && [...scan.project.media, ...scan.project.music].some((x) => dropping.has(x.id))) {
+    let before: string | undefined
+    let after: string | undefined
+    const current = await d.projects.peek(id, (text, repaired) => (before = repaired ? undefined : text))
+    await d.projects.overwrite(withoutCache(current, dropping, d.cacheDir), (text) => (after = text))
+    if (before !== undefined && after !== undefined) await d.history?.rebase?.(id, before, after).catch(() => {})
+  }
+  const p = scan?.project
+  const keep = new Set((scan?.keep ?? []).map(low))
+  const files = (scan?.uploads ?? []).filter((f) => f.use !== 'other' && !keep.has(low(f.path))).map((f) => f.path)
+  const name = p?.name ?? (await d.projects.damaged().catch(() => [])).find((x) => x.id === id)?.name ?? id
+  const faces = p ? faceDataStats(p) : null
+  let entry: TrashEntry
+  try {
+    // in the show's queue: a save still on its way is written first (with its history), a later one is refused
+    entry = await d.projects.exclusive(id, async () => {
+      await d.history?.release?.(id)
+      return trash.moveIn({ id, name, slideCount: p?.entries.length ?? 0, deleteAt: p?.deleteAt, faces: !!faces && faces.media + faces.people > 0, files, jobs })
+    })
+  } catch (err) {
+    // the show stays, and so do its export jobs
+    for (const job of jobs) await d.exports.adopt?.(job).catch(() => {})
+    if (err instanceof TrashRefusedError) return { refused: err.code }
+    throw err
+  }
+  const result: CleanupResult = { removed: emptyRemoved(), freed: 0, failed: [], busy: 0 }
+  if (scan && plan) {
+    if (files.length) await pruneEmptyDirs([...scan.uploaderDirs, ...scan.uploadDirs], [d.uploadsRoot, ...(d.pastedRoots ?? [])])
+    const gone = await execute(d, plan, result)
     await d.media.forgetFaces(scan.project.media.filter((m) => !gone.has(m.id)).map((m) => ({ id: m.id })))
   }
-  // its undo history goes with it, also when the file couldn't be read
-  if (d.history) await removeHistory(d, id, result)
-  return result
+  return { entry, cache: result.removed.caches, failed: result.failed }
 }

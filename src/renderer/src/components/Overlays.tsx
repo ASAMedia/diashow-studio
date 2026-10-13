@@ -6,6 +6,7 @@ import type { TimelineSlide } from '@shared/timeline'
 import { FONT_FAMILY } from '../engine/media'
 import { FONT_ROLE } from '../engine/freeText'
 import { useStore } from '../store'
+import { followPointer } from '../pointerDrag'
 
 // ---------------------------------------------------------------- free text
 
@@ -68,25 +69,17 @@ export function FreeTextLayer({ slide, w, h }: { slide: TimelineSlide; w: number
               if (e.button !== 0) return
               e.stopPropagation()
               focus(ft)
-              const el = e.currentTarget
-              el.setPointerCapture(e.pointerId)
               const sx = e.clientX
               const sy = e.clientY
               const x0 = ft.x
               const y0 = ft.y
               let frame = 0
-              const move = (pe: PointerEvent): void => {
+              followPointer(e, (pe) => {
                 const x = Math.min(1, Math.max(0, x0 + (pe.clientX - sx) / w))
                 const y = Math.min(1, Math.max(0, y0 + (pe.clientY - sy) / h))
                 cancelAnimationFrame(frame)
                 frame = requestAnimationFrame(() => useStore.getState().setFreeText(entryId, ft.id, { x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000 }))
-              }
-              const up = (): void => {
-                el.removeEventListener('pointermove', move)
-                el.removeEventListener('pointerup', up)
-              }
-              el.addEventListener('pointermove', move)
-              el.addEventListener('pointerup', up)
+              })
             }}
           >
             {ft.text}

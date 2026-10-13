@@ -79,28 +79,29 @@ export function App() {
   }, [])
 
   useEffect(() => {
-    let depth = 0
     const isFiles = (e: DragEvent): boolean => !!e.dataTransfer?.types.includes('Files')
+    // dragenter is accepted like dragover, with the same effect: right after the element under the
+    // pointer changed (an edge between two pictures), Chromium decides on a drop by the dragenter
+    // alone, and a refused one loses the drop
+    const over = (e: DragEvent): void => {
+      if (!isFiles(e)) return
+      e.preventDefault()
+      e.dataTransfer!.dropEffect = 'copy'
+    }
     const enter = (e: DragEvent): void => {
       if (!isFiles(e)) return
-      // accepted here too: right after the element under the pointer changed (an edge between two
-      // pictures), Chromium decides on a drop by this dragenter alone, and a refused one loses the drop
-      e.preventDefault()
-      depth++
+      over(e)
       setDragging(true)
     }
+    // a dragleave with nowhere to go: the files left the window, or the drag was cancelled (Esc). A
+    // count of enters and leaves missed the leave of an element removed under the files (a card that
+    // scrolled out of the filmstrip, a picture that appeared) and kept the overlay up.
     const leave = (e: DragEvent): void => {
-      if (!isFiles(e)) return
-      depth = Math.max(0, depth - 1)
-      if (depth === 0) setDragging(false)
-    }
-    const over = (e: DragEvent): void => {
-      if (isFiles(e)) e.preventDefault()
+      if (isFiles(e) && !e.relatedTarget) setDragging(false)
     }
     const drop = (e: DragEvent): void => {
       if (!isFiles(e)) return
       e.preventDefault()
-      depth = 0
       setDragging(false)
       // files dropped on the filmstrip went in where they were dropped (Filmstrip.tsx)
       if (handledDrops.has(e)) return

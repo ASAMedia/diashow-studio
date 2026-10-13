@@ -15,12 +15,13 @@ import { applyChain, applyPatch, diffProject, HISTORY_STEPS, HistoryRecorder, sa
 import { DEFAULT_SETTINGS, type Entry, type MediaItem, type Project } from '@shared/types'
 import { writeArchive } from '../src/main/archive/archive'
 import { entryDataOffset, fileInput, readCentralDirectory } from '../src/main/archive/zip64'
-import { deleteProjectData, inventoryOf, runCleanup, scanProject, type CleanupDeps } from '../src/main/cleanup'
+import { inventoryOf, runCleanup, scanProject, trashProjectData, type CleanupDeps } from '../src/main/cleanup'
 import { packageFiles, type PackageSources } from '../src/main/diagnostics/package'
 import { checkUpload, createHistoryStore, HISTORY_FORMAT, projectHash, type HistoryStore } from '../src/main/history'
 import { packProject } from '../src/main/projectFile'
 import { createProjectStore } from '../src/main/projects'
 import { validateProject } from '../src/main/projectSchema'
+import { createTrash } from '../src/main/trash'
 
 const tmp = mkdtempSync(join(tmpdir(), 'diashow-history-'))
 afterAll(() => rmSync(tmp, { recursive: true, force: true, maxRetries: 3 }))
@@ -686,12 +687,25 @@ describe('privacy', () => {
     expect(existsSync(f.file)).toBe(false)
   })
 
-  it('deleting a show deletes its history', async () => {
+  it('deleting a show takes its history into the trash, restoring brings it back, deleting it for good deletes it', async () => {
     const s = await showWithHistory('delete')
-    const r = await deleteProjectData(s.deps, 'delete')
-    expect(r.removed.history.files).toBe(1)
+    const trash = createTrash({ projectsDir: s.docs, dataDir: join(s.root, 'userData', 'trash'), historyDir: s.history.dir, exportsDir: join(s.root, 'userData', 'exports') })
+    const deps = { ...s.deps, trash }
+    expect('entry' in (await trashProjectData(deps, 'delete'))).toBe(true)
     expect(existsSync(s.file)).toBe(false)
     expect(existsSync(join(s.docs, 'delete.dshow'))).toBe(false)
+    // back: the same file, so the history still fits it
+    await trash.restore('delete')
+    let read = ''
+    const p = await s.projects.load('delete', (text) => (read = text))
+    s.history.opened('delete', read, p, false)
+    expect((await s.history.load('delete'))?.undo).toHaveLength(1)
+    // deleted again, and for good
+    expect('entry' in (await trashProjectData(deps, 'delete'))).toBe(true)
+    await trash.purge('delete')
+    expect(existsSync(s.file)).toBe(false)
+    expect(readdirSync(join(s.root, 'userData', 'trash'))).toEqual([])
+    expect(readdirSync(trash.dir)).toEqual([])
   })
 
   it('Pack project, the ZIP archive and the diagnostics package never contain it', async () => {
