@@ -83,6 +83,9 @@ export function App() {
     const isFiles = (e: DragEvent): boolean => !!e.dataTransfer?.types.includes('Files')
     const enter = (e: DragEvent): void => {
       if (!isFiles(e)) return
+      // accepted here too: right after the element under the pointer changed (an edge between two
+      // pictures), Chromium decides on a drop by this dragenter alone, and a refused one loses the drop
+      e.preventDefault()
       depth++
       setDragging(true)
     }

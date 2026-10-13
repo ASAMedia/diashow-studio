@@ -68,34 +68,36 @@ function clipboardText(): string | null {
   }
 }
 
-/** A real drop of files through Chromium's drag and drop (CDP), at a point of the window. */
-async function dropFiles(page: Page, files: string[], x: number, y: number, check?: () => Promise<void>): Promise<void> {
-  // every drag event the page gets, after its handlers (for the report when the drop never arrives)
+/**
+ * A real drop of files through Chromium's drag and drop (CDP), at a point of the window. `from`: the
+ * pointer hovers there first and moves to the point just before the drop, onto another element.
+ */
+async function dropFiles(page: Page, files: string[], x: number, y: number, check?: () => Promise<void>, from?: [number, number]): Promise<void> {
+  // the drag events the page gets, after its handlers: what to report when the drop never arrives
   await page.evaluate(() => {
     const w = window as any
     w.__dragLog = []
     w.__dropSeen = false
-    for (const type of ['dragenter', 'dragover', 'dragleave', 'drop']) {
-      if (w.__dragLogged?.has(type)) continue
-      ;(w.__dragLogged ??= new Set()).add(type)
+    for (const type of w.__dragLogged ? [] : ['dragenter', 'dragover', 'dragleave', 'drop']) {
       window.addEventListener(type, (e: Event) => {
         const d = e as DragEvent
-        const el = d.target as Element | null
         if (type === 'drop') w.__dropSeen = true
-        w.__dragLog.push(`${Math.round(performance.now())} ${type} on ${el?.className?.toString().slice(0, 40) || el?.nodeName} prevented=${d.defaultPrevented} effect=${d.dataTransfer?.dropEffect}`)
-        if (w.__dragLog.length > 40) w.__dragLog.splice(0, w.__dragLog.length - 40)
+        w.__dragLog.push(`${type} on ${(d.target as Element | null)?.className?.toString().slice(0, 30)} accepted=${d.defaultPrevented}`)
+        w.__dragLog.splice(0, w.__dragLog.length - 12)
       })
     }
+    w.__dragLogged = true
   })
   const cdp = await page.context().newCDPSession(page)
   const data = { items: [], files, dragOperationsMask: 1 }
-  await cdp.send('Input.dispatchDragEvent', { type: 'dragEnter', x, y, data })
-  await cdp.send('Input.dispatchDragEvent', { type: 'dragOver', x, y, data })
+  const [hx, hy] = from ?? [x, y]
+  await cdp.send('Input.dispatchDragEvent', { type: 'dragEnter', x: hx, y: hy, data })
+  await cdp.send('Input.dispatchDragEvent', { type: 'dragOver', x: hx, y: hy, data })
   // Windows repeats dragover while files hover; so does the test while it looks at the marks
   let hovering = true
   const hover = (async () => {
     while (hovering) {
-      await cdp.send('Input.dispatchDragEvent', { type: 'dragOver', x, y, data })
+      await cdp.send('Input.dispatchDragEvent', { type: 'dragOver', x: hx, y: hy, data })
       await new Promise((r) => setTimeout(r, 50))
     }
   })()
@@ -105,25 +107,19 @@ async function dropFiles(page: Page, files: string[], x: number, y: number, chec
     hovering = false
     await hover
   }
+  // the last move lands on another element and the drop follows at once: Chromium then decides on the
+  // drop by the dragenter of that element
+  if (from) await cdp.send('Input.dispatchDragEvent', { type: 'dragOver', x, y, data })
   await cdp.send('Input.dispatchDragEvent', { type: 'drop', x, y, data })
   // the session stays until the page has the drop
   const seen = await page.waitForFunction(() => (window as any).__dropSeen, null, { timeout: 15_000, polling: 100 }).then(
     () => true,
     () => false
   )
-  if (!seen) {
-    const report = await page.evaluate(
-      ([px, py]) => {
-        const el = document.elementFromPoint(px, py)
-        return { at: `${el?.nodeName}.${el?.className?.toString().slice(0, 60)}`, size: `${innerWidth}x${innerHeight}`, log: (window as any).__dragLog }
-      },
-      [x, y]
-    )
-    await page.screenshot({ path: join(shots, 'drop-lost.png') }).catch(() => {})
-    await cdp.detach()
-    throw new Error(`the drop at ${x},${y} never reached the page: ${JSON.stringify(report, null, 1)}`)
-  }
+  if (!seen) await page.screenshot({ path: join(shots, 'drop-lost.png') }).catch(() => {})
+  const log = seen ? [] : await page.evaluate(() => (window as any).__dragLog as string[])
   await cdp.detach()
+  if (!seen) throw new Error(`the drop at ${x},${y} never reached the page; the last drag events:\n${log.join('\n')}`)
 }
 
 test('filmstrip: zoom, search, chapters, insert by drop and Ctrl+V, undo', async () => {
@@ -380,7 +376,8 @@ test('filmstrip: zoom, search, chapters, insert by drop and Ctrl+V, undo', async
     const one = copyMedia(['iphone/IMG_0003.JPG'], join(dataDir, 'drop2'), true)
     const m0 = (await cardBox(page, 0))!
     const m1 = (await cardBox(page, 1))!
-    await dropFiles(page, one, (m0.right + m1.left) / 2, m0.top + 20)
+    // coming from a picture on the first card, released at once in the gap: the drop still arrives
+    await dropFiles(page, one, (m0.right + m1.left) / 2, m0.top + 20, undefined, [m0.left + m0.width * 0.25, m0.top + 20])
     await expect.poll(async () => (await entryIds(page)).length, { timeout: 20_000 }).toBe(ids0.length + 1)
     after = await slides(page)
     expect(after[0].ids).toEqual(before[0].ids)

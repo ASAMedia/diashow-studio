@@ -147,6 +147,16 @@ export function Filmstrip() {
     setMergeAt(target.merge ?? null)
     setDropAt(target.insert ?? null)
   }
+  // a slide dragged in the filmstrip is accepted on dragenter as well (files are, by the window): when
+  // the element under the pointer has just changed, Chromium decides on the drop by the dragenter
+  const onDragEnter = (e: React.DragEvent): void => {
+    if (dragRef.current != null) e.preventDefault()
+  }
+  // the dragleave of a picture inside a card bubbles up here: only leaving the filmstrip clears the
+  // mark, or the card's mark would flicker (and the card with it) at the edge between its pictures
+  const onDragLeave = (e: React.DragEvent): void => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setMergeAt(null)
+  }
   const onDrop = (e: React.DragEvent): void => {
     e.preventDefault()
     const drag = dragRef.current
@@ -414,7 +424,7 @@ export function Filmstrip() {
           if (e.target === e.currentTarget) manualUntil.current = performance.now() + 4000
         }}
       >
-        <div className="strip-inner" ref={innerRef} style={{ width }} onDragOver={onDragOver} onDragLeave={() => setMergeAt(null)} onDrop={onDrop}>
+        <div className="strip-inner" ref={innerRef} style={{ width }} onDragEnter={onDragEnter} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
           <div className="cards">
             {first > 0 && <div style={{ flex: '0 0 auto', width: first * step - gap }} />}
             {tl.slides.slice(first, last + 1).map((s) => (

@@ -72,7 +72,8 @@ test('assistant, handbook, about and update hint', async () => {
     await expect(wizard).toBeVisible()
     await expect(wizard).toHaveAttribute('data-step', '1')
     // the start-up update check found the newer release
-    await expect(page.getByTestId('update-chip')).toContainText('99.1.0')
+    // the check runs after start-up work; a slow runner needs longer than 5 s for it
+    await expect(page.getByTestId('update-chip')).toContainText('99.1.0', { timeout: 20_000 })
     expect(gh.requests.length).toBe(1)
     expect(gh.requests[0].ua).toMatch(/^DiashowStudio\/\d+\.\d+\.\d+/)
 

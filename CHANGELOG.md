@@ -15,6 +15,10 @@ All notable changes to Diashow Studio. Versions follow [Semantic Versioning](htt
 
 - Live Photos and Motion Photos as Loop and Bounce, like on the iPhone: the Slide tab chooses Off, Live, Loop or Bounce for one or several photos. A Loop repeats with a soft crossfade at its seam, a Bounce plays forward and backward; both play all the slide long, in the preview and in the export frame by frame, in every theme, with pixelated faces kept. The filmstrip shows the effect next to LIVE.
 
+**Fixes**
+
+- Photos dropped onto a filmstrip card right on the edge between two of its pictures could get lost, and the card's highlight flickered there.
+
 ## [1.5.0] - 2026-10-13
 
 **Downloads**
