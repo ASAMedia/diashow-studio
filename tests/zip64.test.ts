@@ -92,7 +92,13 @@ function checkIndependently(file: string, expected: Map<string, Buffer>, label: 
   if (hasTar) {
     const files = tarExtract(file, join(tmp, `${label}-tar`), [...expected.keys()])
     const safe = [...expected].filter(([k]) => tarSafeName(k))
-    expect(new Map([...files].sort()), `${label}: tar.exe`).toEqual(new Map(safe.map(([k, v]) => [k, v.length] as [string, number]).sort()))
+    const unsafe = [...expected].filter(([k]) => !tarSafeName(k))
+    for (const [k, v] of safe) expect(files.get(k), `${label}: tar.exe ${k}`).toBe(v.length)
+    // names outside the ANSI code page (CJK, emoji): tar.exe skips them on a German Windows (code page
+    // 1252) but writes them, possibly renamed, where the system code page is UTF-8 (the CI runner)
+    const extra = [...files].filter(([k]) => !safe.some(([s]) => s === k))
+    expect(extra.length, `${label}: tar.exe extra files`).toBeLessThanOrEqual(unsafe.length)
+    for (const [k, n] of extra) expect(unsafe.map(([, v]) => v.length), `${label}: tar.exe ${k}`).toContain(n)
   }
 }
 
