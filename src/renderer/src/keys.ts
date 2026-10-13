@@ -1,7 +1,8 @@
 // Which key presses belong to the focused element instead of the app's shortcuts (Space plays the
-// preview, arrows step, X leaves out, …): typing in a field, and Space/Enter on a button or link the
-// user reached with the keyboard. A button that was clicked with the mouse keeps the focus but not the
-// keys, so Space still plays the show after clicking a button.
+// preview, arrows step, X leaves out, Ctrl+V inserts copied photos, …): typing in a field (where Ctrl+V
+// pastes text), and Space/Enter on a button or link the user reached with the keyboard. A button that
+// was clicked with the mouse keeps the focus but not the keys, so Space still plays the show after
+// clicking a button.
 
 const TEXT = 'input, textarea, select, [contenteditable="true"], [contenteditable=""]'
 const ACTIVATE = 'button, a[href], summary, [role="button"], [role="tab"], [role="menuitem"], [role="switch"], [role="checkbox"]'

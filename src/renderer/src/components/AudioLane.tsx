@@ -5,7 +5,7 @@ import { buildAudioPlan, gainAt } from '@shared/audioPlan'
 import { musicBeatTimes, type Timeline } from '@shared/timeline'
 import { playerRef, useStore } from '../store'
 import { t } from '../i18n'
-import { timeToX, xToTime } from './stripScale'
+import { STEP, timeToX, xToTime } from './stripScale'
 
 /** Peaks of a track at about 10 values per second, cached per file for the session. */
 const waveCache = new Map<string, Promise<number[]>>()
@@ -39,7 +39,8 @@ function fitText(text: string, px: number): string {
   return text.length <= chars ? text : `${text.slice(0, Math.max(1, chars - 1)).trimEnd()}…`
 }
 
-export function AudioLane({ tl, width }: { tl: Timeline; width: number }) {
+/** `step`: the filmstrip's width of one slide at its zoom; the lane maps time to x exactly like the cards. */
+export function AudioLane({ tl, width, step = STEP }: { tl: Timeline; width: number; step?: number }) {
   const project = useStore((s) => s.project)!
   const plan = useMemo(() => buildAudioPlan(project, tl), [project, tl])
   const H = 40
@@ -57,22 +58,22 @@ export function AudioLane({ tl, width }: { tl: Timeline; width: number }) {
     for (let i = 0; i <= n; i++) {
       const time = (tl.duration * i) / n
       const g = music.reduce((sum, c) => sum + (time >= c.start && time <= c.start + c.duration ? gainAt(c.gain, time) : 0), 0)
-      pts.push(`${timeToX(tl, time).toFixed(1)},${(4 + (1 - Math.min(1, g / maxGain)) * (H - 12)).toFixed(1)}`)
+      pts.push(`${timeToX(tl, time, step).toFixed(1)},${(4 + (1 - Math.min(1, g / maxGain)) * (H - 12)).toFixed(1)}`)
     }
     return pts.join(' ')
-  }, [music, tl, width, maxGain])
+  }, [music, tl, width, maxGain, step])
   // waveform of every placed song, following the filmstrip's time-to-x mapping
   const wavePaths = useMemo(() => {
     const mid = (H - 6) / 2 + 2
     return music.map((c) => {
       const peaks = waves.get(c.src)
       if (!peaks) return ''
-      const x0 = timeToX(tl, c.start)
-      const x1 = timeToX(tl, c.start + c.duration)
+      const x0 = timeToX(tl, c.start, step)
+      const x1 = timeToX(tl, c.start + c.duration, step)
       const top: string[] = []
       const bottom: string[] = []
       for (let x = x0; x <= x1; x += 2) {
-        const time = c.offset + xToTime(tl, x) - c.start
+        const time = c.offset + xToTime(tl, x, step) - c.start
         const v = peaks[Math.min(peaks.length - 1, Math.max(0, Math.round(time * 10)))] ?? 0
         const a = v * (H - 14) * 0.5
         top.push(`${x.toFixed(1)},${(mid - a).toFixed(1)}`)
@@ -80,13 +81,13 @@ export function AudioLane({ tl, width }: { tl: Timeline; width: number }) {
       }
       return `M${top.join(' L')} L${bottom.join(' L')} Z`
     })
-  }, [music, waves, tl])
+  }, [music, waves, tl, step])
   const titles = new Map(tl.music.map((m) => [m.playback, tl.themeSong === m ? `${t('themeMusic')}: ${m.title}` : m.title]))
   // songs overlap in crossfades: a title ends where the next song begins
   const starts = music.map((c) => c.start).sort((a, b) => a - b)
   const nextStart = (start: number): number => {
     const next = starts.find((s) => s > start + 1e-3)
-    return next === undefined ? Infinity : timeToX(tl, next)
+    return next === undefined ? Infinity : timeToX(tl, next, step)
   }
   return (
     <svg
@@ -96,12 +97,12 @@ export function AudioLane({ tl, width }: { tl: Timeline; width: number }) {
       aria-hidden
       onClick={(e) => {
         const r = (e.currentTarget as SVGElement).getBoundingClientRect()
-        playerRef.current?.seek(xToTime(tl, e.clientX - r.left))
+        playerRef.current?.seek(xToTime(tl, e.clientX - r.left, step))
       }}
     >
       {music.map((c, i) => {
-        const x0 = timeToX(tl, c.start)
-        const x1 = timeToX(tl, c.start + c.duration)
+        const x0 = timeToX(tl, c.start, step)
+        const x1 = timeToX(tl, c.start + c.duration, step)
         return (
           <g key={c.id}>
             <rect className={`music ${i % 2 ? 'alt' : ''} ${tl.themeSong ? 'theme' : ''}`} x={x0} y={2} width={Math.max(1, x1 - x0)} height={H - 6} rx={4} />
@@ -113,12 +114,12 @@ export function AudioLane({ tl, width }: { tl: Timeline; width: number }) {
         )
       })}
       {beats.map((b, i) => (
-        <line key={i} className="beat" x1={timeToX(tl, b)} x2={timeToX(tl, b)} y1={2} y2={6} />
+        <line key={i} className="beat" x1={timeToX(tl, b, step)} x2={timeToX(tl, b, step)} y1={2} y2={6} />
       ))}
       {videos.map((c) => {
-        const x0 = timeToX(tl, c.start)
-        const x1 = timeToX(tl, c.start + c.duration)
-        return <rect key={c.id} className="clip" x={x0} y={H - 5} width={Math.max(1, x1 - x0)} height={4} rx={2} />
+        const x0 = timeToX(tl, c.start, step)
+        const x1 = timeToX(tl, c.start + c.duration, step)
+        return <rect key={c.id} className="clip" data-clip={c.id} x={x0} y={H - 5} width={Math.max(1, x1 - x0)} height={4} rx={2} />
       })}
       {points && <polyline className="gain" points={points} />}
     </svg>

@@ -34,7 +34,12 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
   - Every transition in a show has the same length; slides are kept long enough for it.
 - **Colour looks:** Natural, Vivid, Warm, Cool, Dramatic, Faded, Mono and Noir. A look changes only the photos and videos, never the theme's paper, backgrounds or text.
 - **Editing:**
-  - Undo and redo (Ctrl+Z / Ctrl+Y).
+  - Undo and redo (Ctrl+Z / Ctrl+Y), also after a restart: each show keeps its last 100 steps (at most 20 MB) in `%APPDATA%\Diashow Studio\history\<id>.json.gz`, never next to the `.dshow` and never in a pack, ZIP archive or diagnostics package.
+    - Only the differences between neighbouring states are stored (`src/shared/history.ts`): 50 edits of a 500-item show take about 80 KB.
+    - The history belongs to exactly one state of the file (SHA-256). If the show was changed elsewhere, restored from a backup or repaired, it is discarded, and every restored state is checked like a project file (`src/main/history.ts`).
+  - Filmstrip zoom: −/+, a slider or Ctrl+mouse wheel (around the mouse) set the cards from 6 to 144 px; "Show the whole slideshow" fits every slide. Small cards drop badges and text and keep a thin mark at each chapter. The audio lane and playhead share the cards' time-to-x mapping (`components/stripScale.ts`). The zoom is remembered.
+  - Search (Ctrl+F): file names, chapters and day titles, captions, text slides, text boxes, people and capture dates in German or English ("12.5.", "12. Mai", "May 12", "Dienstag", "Mai 2025"), plus "Video" and "Live". A result list, yellow marks in the filmstrip, "n of m", Enter / Shift+Enter or F3 / Shift+F3, and a "Chapters" menu.
+  - Insert at a place: drop files from Explorer between two cards (onto a card joins that slide in multi-photo themes when it fits), Ctrl+V for copied files or a screenshot (saved to `Documents\Diashow Studio\Eingefügt\<show>`), or "Insert…" in a slide's menu. One undo step; in multi-photo themes no other slide is regrouped (`src/renderer/src/insertAt.ts`).
   - Rotate, straighten and crop like in Photos: **Edit** in the Slide tab (or the slide's menu) turns a photo or video by 90°, straightens it up to ±45° (zoomed so no corners are empty) and crops it freely or to Original, 1:1, 4:3, 3:2, 16:9 or 9:16. Ctrl+R turns all selected photos left.
     - The edit belongs to the photo: every slide, layout, Ken Burns move, thumbnail, presentation and export uses it.
     - Pixelated faces stay on the same faces. The edit is a mapping of texture coordinates in the shader (`src/shared/mediaEdit.ts`), and faces and pixelated areas stay in the coordinates of the original.
@@ -66,8 +71,8 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
   - Faces are analysed in the background in Web Workers (photos first, then a frame every 0.5 s of each video), paused while the show plays, exports or presents.
   - **Clean up after the project** ("⋯" menu, the eraser on a slideshow on the home screen, or Settings → Privacy) lists with their sizes what the app keeps for a slideshow and deletes what you pick, for good:
     - face data;
-    - photos and videos pupils uploaded (all, or only those not in the show);
-    - the cache, older versions and finished export jobs.
+    - photos and videos pupils uploaded (all, or only those not in the show), and pictures pasted with Ctrl+V;
+    - the cache, older versions, the undo history and finished export jobs.
 
     Face data leaves the project, its older versions and the cache. Everything that is pixelated stays pixelated, because marked people become fixed areas, but new photos are no longer recognised automatically. Your own photos, videos, music and exported videos are never touched.
   - **Deletion date:** in 1, 3, 6 or 12 months or on a date (also offered after an export). When it comes, the slideshow on the home screen gets a hint and a banner says "Deletion date reached: clean up?", with "Remind me in a month".
@@ -85,7 +90,7 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
   - Each export is a snapshot of the show, so later edits don't change it.
   - A hidden window renders exports in 30-second parts. After a crash or a restart the export continues from the last finished part ("Continue" in the queue).
   - The PC doesn't go to sleep while an export runs.
-- **Large shows:** the filmstrip renders only what is visible, layout results are cached, and processing updates are batched.
+- **Large shows:** the filmstrip renders only what is visible (a 400-slide show at the smallest zoom keeps about 270 cards in the page), layout results are cached, and processing updates are batched.
 - **Speed:**
   - Exports run about 3x faster than before: the graphics card converts each frame to YUV, and the next frame renders while the last one is read back. A 220-second show exports in 55 s at 1080p with NVENC, at the same quality.
   - 4K: the same show took 429 s before and 175 s now. Besides the YUV frames, NVENC now uses its p4 preset: the same quality as p5, but 2.5× faster for H.264 at 4K, where the encoder had become the limit.

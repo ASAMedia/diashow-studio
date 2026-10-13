@@ -7,6 +7,7 @@ import type { ExportJobInfo } from '@shared/exportQueue'
 import { themeMeta } from '@shared/themes'
 import type { ThemeTrack } from '@shared/themeMusic'
 import { withProjectFields } from '@shared/mediaEdit'
+import { applyChain, HISTORY_STEPS, HistoryRecorder, type HistoryRestore, type HistoryUpload } from '@shared/history'
 import { t } from './i18n'
 import { notifyError } from './errors'
 import type { Player } from './engine/player'
@@ -56,7 +57,10 @@ interface State {
   update(fn: (p: Project) => void, key?: string): void
   undo(): void
   redo(): void
-  /** Opens a project that came from a file (packed project). */
+  /**
+   * Opens a project (loaded, or from a file: packed project, backup, repair). Its stored undo history
+   * comes back in the background when it belongs to exactly this state (src/main/history.ts).
+   */
   openProjectData(p: Project): Promise<void>
   /** Checks the open project's files again (e.g. after access to a network share was allowed). */
   reloadMedia(): Promise<void>
@@ -96,13 +100,56 @@ interface State {
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined
+/** The project the waiting save will write. */
+let pendingSave: Project | null = null
 /** Set while the clean-up rewrites the open project's file: the editor's own saves wait. */
 let savesHeld = false
 function scheduleSave(p: Project): void {
   clearTimeout(saveTimer)
+  pendingSave = null
   if (savesHeld) return
-  // a failed save (disk full, locked folder) must not go unnoticed
-  saveTimer = setTimeout(() => void window.api.saveProject(p).catch((e) => notifyError(e, 'save')), 600)
+  pendingSave = p
+  saveTimer = setTimeout(() => {
+    pendingSave = null
+    // a failed save (disk full, locked folder) must not go unnoticed
+    void saveNow(p).catch((e) => notifyError(e, 'save'))
+  }, 600)
+}
+
+/** Drops the waiting save; returns the project it would have written. */
+function takePendingSave(): Project | null {
+  clearTimeout(saveTimer)
+  const p = pendingSave
+  pendingSave = null
+  return p
+}
+
+/**
+ * Before another show takes over the editor: a save still waiting for the show before is made now,
+ * with that show's undo history; one for `id` itself is dropped (its file was just replaced by a
+ * backup, a repair or the clean-up, or is the one being opened).
+ */
+function settlePendingSave(id: string): void {
+  const p = takePendingSave()
+  if (p && p.id !== id) void saveNow(p).catch((e) => notifyError(e, 'save'))
+}
+
+/**
+ * Saves a project with the undo history the editor keeps for it (the main process writes it to the
+ * app's data folder a moment later; `flush`: before this resolves). The history goes along only
+ * while it is this show's and not still being loaded.
+ */
+async function saveNow(p: Project, flush = false): Promise<void> {
+  const mine = persisted.owner === p.id && !persisted.restoring
+  const past = history.past.slice()
+  const future = history.future.slice()
+  const upload = (): HistoryUpload | undefined => (mine ? recorder.upload(p, past, future, flush) : undefined)
+  const r = await window.api.saveProject(p, upload())
+  if (r?.resendHistory && mine) {
+    // the main process lost track of the steps (it cleared them meanwhile): once more with all of them
+    recorder.resend()
+    await window.api.saveProject(p, upload())
+  }
 }
 
 /**
@@ -110,24 +157,92 @@ function scheduleSave(p: Project): void {
  * the returned function is called (the main process rewrites the file meanwhile).
  */
 export async function holdSaves(): Promise<() => void> {
-  clearTimeout(saveTimer)
+  takePendingSave()
   const p = useStore.getState().project
-  if (p) await window.api.saveProject(p)
+  if (p) await saveNow(p, true)
   savesHeld = true
   return () => {
     savesHeld = false
   }
 }
 
+/** Saves the open project now, with its undo history, when it is `projectId` (before the clean-up or an archive lists it). */
+export async function saveOpenProject(projectId: string): Promise<void> {
+  const p = useStore.getState().project
+  if (p?.id !== projectId) return
+  takePendingSave()
+  await saveNow(p, true)
+}
+
 // Undo history. Snapshots are whole projects (cheap to keep: media items are shared data);
-// restoring keeps the current processing state of media and music.
+// restoring keeps the current processing state of media and music. It goes to disk with every save
+// as the differences between neighbouring states (@shared/history), and comes back when the show
+// opens again (restoreHistory).
 const history = { past: [] as Project[], future: [] as Project[], key: '' as string | undefined, at: 0 }
-const HISTORY_LIMIT = 100
+const HISTORY_LIMIT = HISTORY_STEPS
+const recorder = new HistoryRecorder()
+/**
+ * Whose history the editor keeps (`owner`), and whether the stored one is still being loaded: until
+ * then saves don't send it, so the one on disk stays. `gen` counts openings (a late answer is dropped).
+ */
+const persisted = { owner: null as string | null, restoring: false, gen: 0 }
 
 function resetHistory(): void {
   history.past = []
   history.future = []
   history.key = undefined
+}
+
+/** A fresh history for the show `owner` (null: none open); `restoring`: its stored history is asked for. */
+function startHistory(owner: string | null, restoring = false): void {
+  resetHistory()
+  persisted.owner = owner
+  persisted.restoring = restoring
+  persisted.gen++
+}
+
+/**
+ * Loads the stored history of a show just opened (as `p`, before anything changed it) and puts it
+ * below the steps made since. Every state in it was validated by the main process.
+ */
+async function restoreHistory(p: Project): Promise<void> {
+  const gen = persisted.gen
+  let stored: HistoryRestore | null = null
+  try {
+    stored = await window.api.loadHistory(p.id)
+  } catch {
+    // no history then; the main process logged why
+  }
+  if (gen !== persisted.gen) return
+  persisted.restoring = false
+  if (stored && (stored.undo.length || stored.redo.length)) {
+    try {
+      const undo = applyChain(p, stored.undo).reverse()
+      const untouched = !history.past.length && !history.future.length
+      history.past = [...undo, ...history.past].slice(-HISTORY_LIMIT)
+      // an edit since the show opened has made the redo steps obsolete
+      if (untouched) history.future = applyChain(p, stored.redo).reverse()
+      useStore.setState({ canUndo: history.past.length > 0, canRedo: history.future.length > 0 })
+    } catch {
+      // a step that doesn't fit: the steps made since opening stay
+    }
+  }
+  // the next save sends the whole history again (anchored to that save)
+  const cur = useStore.getState().project
+  if (cur?.id === p.id) scheduleSave(cur)
+}
+
+/** Forgets the open show's undo history (clean-up, Settings → Privacy); the stored one is deleted by the caller. */
+export function forgetUndoHistory(): void {
+  const owner = persisted.owner
+  startHistory(owner)
+  useStore.setState({ canUndo: false, canRedo: false })
+}
+
+/** Media of `next` that `cur` doesn't have: an undo or redo brought them back. */
+const cameBack = (next: Project, cur: Project): boolean => {
+  const ids = new Set(cur.media.map((m) => m.id))
+  return next.media.some((m) => !ids.has(m.id))
 }
 
 function withCurrentMedia(snapshot: Project, current: Project): Project {
@@ -192,9 +307,10 @@ export const useStore = create<State>((set, get) => ({
       music: [],
       settings: structuredClone(DEFAULT_SETTINGS)
     }
-    resetHistory()
+    settlePendingSave(project.id)
+    startHistory(project.id)
     set({ project, view: 'editor', selection: [], playhead: 0, tab: 'themes', canUndo: false, canRedo: false })
-    await window.api.saveProject(project).catch((e) => notifyError(e, 'save'))
+    await saveNow(project).catch((e) => notifyError(e, 'save'))
     if (paths.length) await get().importMedia(paths)
     return get().project!
   },
@@ -215,8 +331,11 @@ export const useStore = create<State>((set, get) => ({
   },
 
   async openProjectData(p) {
-    resetHistory()
+    settlePendingSave(p.id)
+    startHistory(p.id, true)
     set({ project: p, view: 'editor', selection: [], playhead: 0, tab: 'themes', canUndo: false, canRedo: false })
+    // the stored undo history in the background: opening doesn't wait for it
+    void restoreHistory(p)
     const [media, music] = await Promise.all([window.api.restoreMedia(p.media), window.api.restoreMusic(p.music)])
     const cur = get().project
     if (!cur || cur.id !== p.id) return
@@ -229,8 +348,10 @@ export const useStore = create<State>((set, get) => ({
 
   closeProject() {
     const p = get().project
-    if (p) void window.api.saveProject(p).catch((e) => notifyError(e, 'save'))
-    resetHistory()
+    takePendingSave()
+    // with its undo history, written at once (the upload is taken before the history is reset)
+    if (p) void saveNow(p, true).catch((e) => notifyError(e, 'save'))
+    startHistory(null)
     set({ project: null, view: 'home', selection: [], fullscreen: false, canUndo: false, canRedo: false, privacyEdit: null, photoEdit: null, textSel: null })
     void get().loadProjects()
   },
@@ -265,6 +386,8 @@ export const useStore = create<State>((set, get) => ({
     const next = withCurrentMedia(prev, cur)
     set({ project: next, canUndo: history.past.length > 0, canRedo: true })
     scheduleSave(next)
+    // a photo that comes back (also from a history of an earlier session) gets its cached copies checked
+    if (cameBack(next, cur)) void get().reloadMedia()
   },
 
   redo() {
@@ -276,6 +399,7 @@ export const useStore = create<State>((set, get) => ({
     const next = withCurrentMedia(fwd, cur)
     set({ project: next, canUndo: true, canRedo: history.future.length > 0 })
     scheduleSave(next)
+    if (cameBack(next, cur)) void get().reloadMedia()
   },
 
   setSettings(patch) {

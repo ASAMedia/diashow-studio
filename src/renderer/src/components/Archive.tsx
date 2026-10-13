@@ -8,7 +8,7 @@ import { create } from 'zustand'
 import { AlertTriangle, Film, Loader2, Plus } from 'lucide-react'
 import { archiveSize, type ArchiveInventory, type ArchiveProgress, type ArchiveResult, type ArchiveTarget, type ArchiveVideo } from '@shared/archive'
 import { errorMessage } from '@shared/friendlyError'
-import { useStore } from '../store'
+import { saveOpenProject } from '../store'
 import { localeTag, t, type StringKey } from '../i18n'
 import { ErrorText } from '../errors'
 import { Modal } from './Modal'
@@ -36,10 +36,9 @@ const fmtDate = (ms: number): string => new Date(ms).toLocaleDateString(localeTa
 /** At most a few names, then "…". */
 const someNames = (names: string[], n = 5): string => (names.length > n ? `${names.slice(0, n).join(', ')} …` : names.join(', '))
 
-/** Saves the open show now (the archive is made from the saved file) and loads what would go in. */
+/** Saves the open show now (the archive is made from the saved file; never with its undo history) and loads what would go in. */
 async function loadInventory(projectId: string): Promise<ArchiveInventory> {
-  const p = useStore.getState().project
-  if (p?.id === projectId) await window.api.saveProject(p)
+  await saveOpenProject(projectId)
   return window.api.archiveInventory(projectId)
 }
 

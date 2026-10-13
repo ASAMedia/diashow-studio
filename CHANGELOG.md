@@ -2,6 +2,28 @@
 
 All notable changes to Diashow Studio. Versions follow [Semantic Versioning](https://semver.org). The release workflow publishes the section of a version as its release notes.
 
+## [1.4.0] - 2026-10-13
+
+**Downloads**
+
+- `Diashow.Studio-Setup-1.4.0.exe`: installer (no admin rights needed); it updates an installed version and keeps your slideshows and settings.
+- `Diashow.Studio-1.4.0-portable.exe`: runs without installing, e.g. from a USB stick.
+- The installer is not code-signed. If Windows SmartScreen says "Windows protected your PC", choose "More info" and then "Run anyway".
+- `THIRD_PARTY_NOTICES.txt` lists the licences of everything bundled, including all songs. The `ffmpeg-*` archives contain the source code of the bundled FFmpeg build and of every library compiled into it (GPL), listed in `ffmpeg-deps-sources-*.txt`.
+
+**New**
+
+- Undo after a restart: Ctrl+Z and Ctrl+Y go on where you left off, with the last 100 steps of each slideshow. The history is kept in the app's own folder, never next to the project file, and never goes into a pack, ZIP archive or diagnostics package. If the slideshow was changed on another PC, restored from an older version or repaired, the old history is dropped instead of undoing the wrong thing. The clean-up lists it with its size, and Settings → Privacy deletes it for one or all slideshows.
+- Filmstrip zoom: −/+, a slider or Ctrl+mouse wheel make the cards smaller or larger, and "Show the whole slideshow" fits every slide into the window. Small cards show a thin mark at each chapter; the music lane and the playhead stay aligned.
+- Search in the filmstrip (Ctrl+F): by file name, chapter or day, caption, text, person, "Video" or "Live", and by capture date in German or English ("12.5.", "12. Mai", "Dienstag", "May 2026"). Matches get a yellow mark; Enter or F3 jumps to the next one. A "Chapters" menu jumps straight to a chapter.
+- Insert photos and videos exactly where you want them:
+  - drop them from Explorer between two slides (or onto a slide to add them to it in Magazine, Origami and the other themes with several photos per slide);
+  - Ctrl+V pastes copied files, or a screenshot, which is saved under `Documents\Diashow Studio\Eingefügt` and removed by the clean-up like uploads;
+  - "Insert…" in a slide's menu.
+
+  It is one undo step, and in themes with several photos per slide the other slides keep their layouts.
+- New demo video on the website, with the reworked transitions.
+
 ## [1.3.0] - 2026-10-13
 
 **Downloads**

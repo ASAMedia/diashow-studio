@@ -11,7 +11,9 @@
 //   versions, stabilised clips, extracted sound, frame strips;
 // - older versions in .backups/<id>/ (also damaged files a repair kept);
 // - export jobs in <userData>/exports/<job>/: a snapshot of the project (with its face data), the
-//   mixed sound and the rendered parts.
+//   mixed sound and the rendered parts;
+// - the undo history in <userData>/history/<id>.json.gz (history.ts): earlier states of the show. It
+//   goes when chosen, with face data or uploads, and whenever the clean-up rewrote the show.
 import type { Dirent } from 'node:fs'
 import { lstat, readdir } from 'node:fs/promises'
 import { join, relative, resolve, sep } from 'node:path'
@@ -39,6 +41,11 @@ export interface CleanupDeps {
   cacheDir: string
   /** <Documents>/Diashow Studio/Uploads */
   uploadsRoot: string
+  /**
+   * <Documents>/Diashow Studio/Eingefügt and /Pasted (pasteMain.ts): pictures pasted with Ctrl+V, a
+   * folder per project. They count as uploads of the project.
+   */
+  pastedRoots?: string[]
   /** <userData>/exports */
   exportsDir: string
   media: { forgetFaces(items: { id: string; faceFocus?: { x: number; y: number } }[]): Promise<void>; releaseCache(ids: string[]): string[] }
@@ -46,11 +53,18 @@ export interface CleanupDeps {
     jobsOf(projectId: string): Promise<{ id: string; dir: string; state: ExportJobState; outPath: string }[]>
     forget(id: string): Promise<void>
   }
+  /** The stored undo history (history.ts); it deletes inside its own folder. */
+  history?: {
+    size(id: string): Promise<{ files: number; bytes: number }>
+    clear(id: string): Promise<{ files: number; bytes: number; failed?: string[] }>
+    /** Moves the history along when the show is saved outside the editor (the deletion reminder). */
+    rebase?(id: string, before: string, after: string): Promise<unknown>
+  }
   now?: () => number
 }
 
-/** The app's own folders: the only places the clean-up deletes in. */
-export function cleanupRoots(d: Pick<CleanupDeps, 'cacheDir' | 'uploadsRoot' | 'exportsDir' | 'projects'>): Record<Exclude<CleanupCategory, 'faces'>, string> {
+/** The app's own folders: the only places the clean-up deletes in (the history store deletes in its own). */
+export function cleanupRoots(d: Pick<CleanupDeps, 'cacheDir' | 'uploadsRoot' | 'exportsDir' | 'projects'>): Record<Exclude<CleanupCategory, 'faces' | 'history'>, string> {
   return { uploads: d.uploadsRoot, caches: d.cacheDir, backups: join(d.projects.dir, BACKUPS), exports: d.exportsDir }
 }
 
@@ -60,10 +74,12 @@ const FINISHED: readonly ExportJobState[] = ['done', 'cancelled', 'error']
 export interface UploadFile {
   path: string
   bytes: number
-  /** Folder of the pupil who sent it. */
+  /** Folder of the pupil who sent it; '' for a pasted picture. */
   uploader: string
   /** In the show, not (left out, removed, never added), or used by another project (stays). */
   use: 'show' | 'leftOut' | 'other'
+  /** A pasted picture: the folder of pasted pictures it lies in (uploads lie in uploadsRoot). */
+  root?: string
 }
 
 export interface SizedPath {
@@ -93,6 +109,8 @@ export interface CleanupScan {
   caches: CacheFolder[]
   backups: SizedPath[]
   exports: JobFolder[]
+  /** The stored undo history. */
+  history: { files: number; bytes: number }
   /** Never deleted: originals any project uses (uploads only another project's), exported videos. */
   keep: string[]
 }
@@ -111,6 +129,25 @@ export function uploadDirsOf(project: Project, uploadsRoot: string): string[] {
   }
   return [...dirs.values()]
 }
+
+/** Folders of pictures pasted into a project (Eingefügt/<project name>, and the ones its media come from), with their root. */
+export function pastedDirsOf(project: Project, roots: readonly string[]): { dir: string; root: string }[] {
+  const dirs = new Map<string, { dir: string; root: string }>()
+  for (const root of roots) {
+    const add = (dir: string): void => void dirs.set(low(dir), { dir: resolve(dir), root })
+    add(join(root, safeName(project.name, 60) || 'Diashow'))
+    for (const m of project.media) {
+      if (typeof m.path !== 'string' || !isInsideRoot(m.path, root)) continue
+      const first = relative(resolve(root), resolve(m.path)).split(sep)[0]
+      if (first && first !== '..') add(join(root, first))
+    }
+  }
+  return [...dirs.values()]
+}
+
+/** In one of the app's folders of received files (uploads, pasted pictures), not the user's own. */
+const received = (d: Pick<CleanupDeps, 'uploadsRoot' | 'pastedRoots'>, p: string): boolean =>
+  isInsideRoot(p, d.uploadsRoot) || (d.pastedRoots ?? []).some((r) => isInsideRoot(p, r))
 
 async function list(dir: string): Promise<Dirent[]> {
   try {
@@ -183,6 +220,17 @@ export async function scanProject(d: CleanupDeps, id: string): Promise<CleanupSc
       }
     }
   }
+  // pictures pasted with Ctrl+V: the PNG files the app wrote straight into the project's folder
+  for (const { dir, root } of pastedDirsOf(project, d.pastedRoots ?? [])) {
+    if (!(await isDir(dir))) continue
+    uploadDirs.push(dir)
+    for (const e of await list(dir)) {
+      if (!e.isFile() || !/\.png$/i.test(e.name)) continue
+      const path = join(dir, e.name)
+      const key = low(path)
+      uploads.push({ path, bytes: (await sizeOf(path)).bytes, uploader: '', root, use: otherPaths.has(key) ? 'other' : inShow.has(key) ? 'show' : 'leftOut' })
+    }
+  }
 
   // caches: a folder per media / music id
   const caches: CacheFolder[] = []
@@ -213,10 +261,11 @@ export async function scanProject(d: CleanupDeps, id: string): Promise<CleanupSc
   const own = project.media.flatMap((m) => [m.path, m.live?.source]).concat(project.music.map((t) => t.path))
   const keep = [
     ...others.paths,
-    ...own.filter((p): p is string => typeof p === 'string' && !isInsideRoot(p, d.uploadsRoot)),
+    ...own.filter((p): p is string => typeof p === 'string' && !received(d, p)),
     ...jobs.map((j) => j.outPath)
   ]
-  return { project, uploadDirs, uploaderDirs, uploads, caches, backups, exports, keep }
+  const history = d.history ? await d.history.size(id).catch(() => ({ files: 0, bytes: 0 })) : { files: 0, bytes: 0 }
+  return { project, uploadDirs, uploaderDirs, uploads, caches, backups, exports, history, keep }
 }
 
 const sum = (list: { bytes: number }[]): number => list.reduce((n, x) => n + x.bytes, 0)
@@ -241,19 +290,22 @@ export function inventoryOf(scan: CleanupScan): CleanupInventory {
     uploads: {
       files: mine.length,
       bytes: sum(mine),
-      uploaders: new Set(mine.map((f) => f.uploader.toLowerCase())).size,
+      uploaders: new Set(mine.filter((f) => f.uploader).map((f) => f.uploader.toLowerCase())).size,
+      // pictures pasted with Ctrl+V (only listed when there are some)
+      ...(mine.some((f) => !!f.root) ? { pasted: mine.filter((f) => !!f.root).length } : {}),
       inShow: { files: show.length, bytes: sum(show), slides },
       leftOut: { files: left.length, bytes: sum(left) },
       shared: scan.uploads.length - mine.length
     },
     caches: { folders: caches.length, bytes: sum(caches), shared: scan.caches.length - caches.length },
     backups: { files: scan.backups.length, bytes: sum(scan.backups) },
+    history: { ...scan.history },
     exports: { jobs: finished.length, bytes: sum(finished), unfinished: scan.exports.length - finished.length }
   }
 }
 
 export interface PlannedRemoval {
-  category: Exclude<CleanupCategory, 'faces'>
+  category: Exclude<CleanupCategory, 'faces' | 'history'>
   path: string
   /** The app folder it must lie in (an upload's cache copy counts as the upload, but lives in the cache). */
   root: string
@@ -284,14 +336,15 @@ export function planCleanup(scan: CleanupScan, wanted: CleanupChoice, roots: Ret
   const choice: CleanupChoice = pending ? { ...wanted, uploads: 'none', caches: false } : wanted
   const remove: PlannedRemoval[] = []
   const keep = new Set(scan.keep.map(low))
-  const add = (r: Omit<PlannedRemoval, 'root'>): void => {
-    const root = r.cacheId ? roots.caches : roots[r.category]
+  // `pasted`: the folder of pasted pictures the file lies in, found by scanProject (not the renderer)
+  const add = (r: Omit<PlannedRemoval, 'root'>, pasted?: string): void => {
+    const root = r.cacheId ? roots.caches : (pasted ?? roots[r.category])
     if (!isInsideRoot(r.path, root) || keep.has(low(r.path))) return
     if (!remove.some((x) => low(x.path) === low(r.path))) remove.push({ ...r, root })
   }
 
   const files = choice.uploads === 'all' ? scan.uploads.filter((f) => f.use !== 'other') : choice.uploads === 'leftOut' ? scan.uploads.filter((f) => f.use === 'leftOut') : []
-  for (const f of files) add({ category: 'uploads', path: f.path, bytes: f.bytes })
+  for (const f of files) add({ category: 'uploads', path: f.path, bytes: f.bytes }, f.root)
   const dropPaths = new Set(remove.map((r) => low(r.path)))
   const dropMedia = scan.project.media.filter((m) => dropPaths.has(low(m.path)) || (!!m.live && dropPaths.has(low(m.live.source)))).map((m) => m.id)
 
@@ -375,7 +428,7 @@ async function execute(d: CleanupDeps, plan: CleanupPlan, result: CleanupResult)
     result.removed[category].bytes += done.bytes
     result.failed.push(...done.failed, ...done.refused)
   }
-  if (plan.pruneDirs.length) await pruneEmptyDirs(plan.pruneDirs, [roots.uploads])
+  if (plan.pruneDirs.length) await pruneEmptyDirs(plan.pruneDirs, [roots.uploads, ...(d.pastedRoots ?? [])])
   result.freed = CLEANUP_CATEGORIES.reduce((n, c) => n + result.removed[c].bytes, 0)
   return free
 }
@@ -419,7 +472,17 @@ export async function runCleanup(d: CleanupDeps, id: string, choice: CleanupChoi
     result.project = { ...withoutCache(left, gone, d.cacheDir), updatedAt: now }
     await d.projects.overwrite(result.project)
   }
+  // the undo history holds earlier states of the show: it goes when chosen and whenever the show was rewritten
+  if (d.history && (choice.history || result.project)) await removeHistory(d, id, result)
   return result
+}
+
+/** Deletes a show's stored undo history, counted into `result`. */
+async function removeHistory(d: CleanupDeps, id: string, result: CleanupResult): Promise<void> {
+  const h = await d.history!.clear(id)
+  result.removed.history = { files: h.files, bytes: h.bytes }
+  result.failed.push(...(h.failed ?? []))
+  result.freed = CLEANUP_CATEGORIES.reduce((n, c) => n + result.removed[c].bytes, 0)
 }
 
 /**
@@ -437,5 +500,7 @@ export async function deleteProjectData(d: CleanupDeps, id: string, extras?: Del
     const gone = await execute(d, planCleanup(scan, choice, cleanupRoots(d)), result)
     await d.media.forgetFaces(scan.project.media.filter((m) => !gone.has(m.id)).map((m) => ({ id: m.id })))
   }
+  // its undo history goes with it, also when the file couldn't be read
+  if (d.history) await removeHistory(d, id, result)
   return result
 }

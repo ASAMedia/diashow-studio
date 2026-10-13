@@ -35,9 +35,24 @@ The editor has three areas: the **preview** in the middle, the tabs **Themes**, 
 - **Text:** **Add text** creates a text slide. The **Slide** tab adds text boxes on top of a photo.
 - **Chapters:** the **⋯** menu has **Day titles from capture date** and **Chapters from folder names**, as well as **Sort by capture date** and **Add end credits**.
 - **Videos:** trim them, change their speed (slow motion, time lapse) and **Reduce shake** in the **Slide** tab.
-- **Undo:** [[Ctrl+Z]], redo with [[Ctrl+Y]].
+- **Undo:** [[Ctrl+Z]], redo with [[Ctrl+Y]]. This works after a restart too: each slideshow keeps its last 100 steps.
 
 > Tip: [[Space]] plays the preview, [[←]] and [[→]] step from slide to slide.
+
+### Filmstrip: zoom, search and chapters
+
+- **Zoom:** − and + or the slider at the right above the filmstrip make the slides smaller or larger, and so does [[Ctrl]]+mouse wheel over the filmstrip (the spot under the mouse stays put). **Show the whole slideshow** fits every slide into the width. Small cards show only pictures; a thin blue line marks each chapter. The audio lane below fits at every size.
+- **Search:** [[Ctrl+F]] or the magnifier. It looks in file names, chapters and day titles, captions, text slides, text boxes, names from the people list and the capture date: “5/12”, “May 12”, “Tuesday”, “May 2025”, also in German (“12.5.”, “12. Mai”, “Dienstag”). “Video” and “Live” find videos and Live Photos. With several words, each must match.
+- The matches are listed above the search field and marked yellow in the filmstrip. [[↑]] / [[↓]] and [[Enter]] jump to a match: the slide is selected and shown in the preview. [[Enter]] / [[Shift+Enter]] or [[F3]] / [[Shift+F3]] go to the next / previous match, [[Esc]] closes the search.
+- **Chapters:** the **Chapters** menu lists the title, chapters and text slides with their time; a click jumps there.
+
+### Inserting photos at a place
+
+- **Drag from Explorer:** drop photos, videos or folders between two cards of the filmstrip; a blue line shows where they go. They are read as with any import (Live Photos and RAW+JPEG as one photo) and ordered by capture time. Dropped on the middle of a card, they join that slide when the theme shows several photos per slide and there is room. Dropped elsewhere in the window, they go behind the selection as before.
+- **Copy and paste:** files copied in Explorer ([[Ctrl+C]]) go in behind the selected slide with [[Ctrl+V]], or at the end when nothing is selected. A copied picture without a file, such as a screenshot taken with [[Win+Shift+S]], is saved as a PNG in `Documents\Diashow Studio\Pasted\<slideshow>` and inserted. **Clean up after the project** can delete these pictures again.
+- **Insert…** in a slide's menu picks files and puts them behind that slide.
+
+The inserted slides are selected afterwards; [[Ctrl+Z]] takes back the whole insert in one step. In themes with several photos per slide (Magazine, Origami, …) every other slide stays as it is: the new photos form slides of their own.
 
 ### Editing photos
 
@@ -144,9 +159,10 @@ Faces of pupils without photo consent can be pixelated. Face detection runs offl
 When the slideshow is finished, you remove what the app keeps for it in one place: **⋯ → Clean up after the project…**, the eraser on the slideshow on the home screen, or **Settings → Privacy**. The dialog lists each part with its size:
 
 - **Face data:** detected faces, face features and the people list with the names, also in older versions and in the cache. Whatever is pixelated stays pixelated, in the preview and in every later export. New photos are no longer recognised automatically afterwards, though.
-- **Uploaded photos and videos** of the class (`Documents\Diashow Studio\Uploads`): all of them, or only those not in the show. Slides with deleted photos leave the show; export first.
+- **Uploaded photos and videos** of the class (`Documents\Diashow Studio\Uploads`) and pictures pasted with [[Ctrl+V]] (`Documents\Diashow Studio\Pasted`): all of them, or only those not in the show. Slides with deleted photos leave the show; export first.
 - **Cache** (thumbnails, video copies, sound): made again when needed.
 - **Older versions** and **export jobs** (snapshots in the queue).
+- **Undo history:** earlier states of the slideshow, so [[Ctrl+Z]] works after a restart too. Deleting face data or uploaded photos always deletes it too, because the earlier states still contain them. **Settings → Privacy** also clears it for one slideshow or all of them.
 
 ![Cleaning up after a project](cleanup.jpg)
 
@@ -222,6 +238,10 @@ When something doesn't work, a **diagnostics package** helps whoever helps you: 
 | [[Ctrl]]+click, [[Shift]]+click | Select several slides |
 | [[Ctrl+A]] | Select all slides |
 | [[Ctrl+R]] | Rotate the selected photos to the left |
+| [[Ctrl+F]] | Search slides (name, chapter, date, person) |
+| [[F3]] / [[Shift+F3]] | Next / previous search match |
+| [[Ctrl+V]] | Insert copied photos, videos or a screenshot after the selected slide |
+| [[Ctrl]]+mouse wheel | Zoom the filmstrip in / out |
 | [[Alt+Enter]] | Play fullscreen |
 | [[Esc]] | Leave fullscreen, presentation or a dialog |
 | [[F1]] | This handbook |
@@ -237,6 +257,7 @@ Everything in Diashow Studio also works without a mouse:
 - [[Tab]] and [[Shift+Tab]] move from control to control; the active one has a blue ring. [[Space]] or [[Enter]] presses a button.
 - In the bar on the right, [[↑]] and [[↓]] switch between the tabs **Themes**, **Music**, **Duration** and **Slide**.
 - The filmstrip is a single [[Tab]] stop: there [[←]] and [[→]] go from slide to slide and select it ([[Shift]] selects a range), [[Alt+←]] / [[Alt+→]] move the slide, [[Shift+F10]] opens its menu.
+- [[Ctrl+F]] opens the search in the filmstrip; [[↑]] / [[↓]] pick a match and [[Enter]] jumps to it. [[Ctrl+V]] inserts copied photos after the selected slide.
 - Menus work with the arrow keys and [[Enter]]; [[Esc]] closes them.
 - [[Esc]] closes every dialog; the focus then goes back to where you were.
 - On a song's number, [[↑]] and [[↓]] move the song in the list. The handles for trimming videos and songs move with [[←]] and [[→]], with [[Shift]] in bigger steps.

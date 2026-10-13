@@ -19,6 +19,7 @@ import type { ExportJobInfo, ExportTask, NewExportJob, SegmentInput } from './ex
 import type { ThemeTrack } from './themeMusic'
 import type { ShareCommand, ShareFilesEvent, ShareStatus } from './share'
 import type { CleanupChoice, CleanupInventory, CleanupResult, DeleteExtras } from './cleanup'
+import type { HistoryRestore, HistoryUpload } from './history'
 import type { ArchiveChoice, ArchiveInventory, ArchiveProgress, ArchiveResult, ArchiveTarget, ArchiveVideo } from './archive'
 import type { BenchMedia, EncoderTest, SystemInfo } from './systemCheck'
 import type { AboutInfo, UpdateStatus } from './about'
@@ -49,13 +50,28 @@ export interface DiashowApi {
   pickMusic(): Promise<string[]>
   /** Absolute path of a File from a drag & drop event. */
   pathForFile(file: File): string
+  /**
+   * Ctrl+V in the editor: the files copied in Explorer, or a copied picture without a file (a
+   * screenshot) saved as a PNG in Documents\Diashow Studio\Eingefügt\<project> first; [] otherwise.
+   */
+  clipboardMedia(projectName: string): Promise<string[]>
 
   // Projects, stored as JSON in Documents\Diashow Studio
   listProjects(): Promise<ProjectSummary[]>
   loadProject(id: string): Promise<Project>
-  saveProject(project: Project): Promise<void>
-  /** Deletes a project with its older versions and the face data of its media; `extras`: its caches, uploads, finished exports too. */
+  /**
+   * Saves a project; the editor sends its undo history along (src/shared/history.ts). `resendHistory`:
+   * the main process misses patches the upload referred to, the next save must send all of them.
+   */
+  saveProject(project: Project, history?: HistoryUpload): Promise<{ resendHistory?: boolean } | void>
+  /** Deletes a project with its older versions, undo history and the face data of its media; `extras`: its caches, uploads, finished exports too. */
   deleteProject(id: string, extras?: DeleteExtras): Promise<CleanupResult>
+
+  // Undo history kept per show in the app's data folder (src/main/history.ts)
+  /** The stored history of the show loaded last with loadProject, checked and validated; null when there is none that fits. */
+  loadHistory(projectId: string): Promise<HistoryRestore | null>
+  /** Deletes the stored history of a show, or (null) of every show. */
+  clearHistory(projectId: string | null): Promise<{ files: number; bytes: number }>
 
   // "Nach dem Projekt aufräumen" (src/shared/cleanup.ts)
   /** What the app keeps for a project (face data, uploads, caches, older versions, export jobs), with sizes. */

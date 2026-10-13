@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useLayoutEffect, type CSSProperties } from 'react'
 import { Clock, Film, FolderPlus, ImagePlus, Plus, Type, Volume2, VolumeX, Trash2, Split, Merge, Move, EyeOff, Crop as CropIcon, RotateCcw, SlidersHorizontal } from 'lucide-react'
 import { isChanged } from '@shared/mediaEdit'
 import type { Timeline, TimelineSlide } from '@shared/timeline'
@@ -6,11 +6,15 @@ import { prioritize } from '../priority'
 import type { VideoEntry } from '@shared/types'
 import { themeMeta } from '@shared/themes'
 import { playerRef, useStore } from '../store'
-import { useTimeline } from '../timeline'
+import { timelineOf, useTimeline } from '../timeline'
 import { fmtTime, t } from '../i18n'
 import { friendly } from '../errors'
+import { modalOpen } from '../keys'
+import { handledDrops, insertFiles, placeAt, stripReveal } from '../insert'
+import { anchorAt, canJoin } from '../insertAt'
 import { AudioLane } from './AudioLane'
-import { CARD, GAP, STEP, timeToX } from './stripScale'
+import { addWidth, anchoredScroll, clampCard, fitCard, loadZoom, numberEvery, saveZoom, STRIP_PAD, stripScale, stripWidth, timeToX, zoomStep, type StripDetail } from './stripScale'
+import { ChaptersMenu, SearchBox, useStripSearch, ZoomControls } from './StripTools'
 import { Menu, MenuItem, MenuSeparator } from './Menu'
 import { reducedMotion } from '../appearance'
 import { MediaThumb } from './EditedPicture'
@@ -23,6 +27,9 @@ interface Menu {
   add?: boolean
 }
 
+/** Cards narrower than this take no "drop onto the card" (combine): the middle would be too small to hit. */
+const MIN_MERGE_CARD = 40
+
 export function Filmstrip() {
   const project = useStore((s) => s.project)!
   const selection = useStore((s) => s.selection)
@@ -33,15 +40,24 @@ export function Filmstrip() {
   const [drag, setDrag] = useState<number | null>(null)
   const [dropAt, setDropAt] = useState<number | null>(null)
   const [mergeAt, setMergeAt] = useState<number | null>(null)
+  // files from Explorer over the filmstrip (the window's "drop here" overlay steps aside)
+  const [filesOver, setFilesOver] = useState(false)
+  const filesTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   // drag events can arrive faster than React re-renders, so the handlers read refs
   const dragRef = useRef<number | null>(null)
   const dropRef = useRef<{ merge?: number; insert?: number }>({})
   const innerRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const searchInput = useRef<HTMLInputElement>(null)
   // autoscroll pauses for a moment after the user scrolls the filmstrip by hand
   const manualUntil = useRef(0)
   const sel = new Set(selection)
-  const width = Math.max(tl.slides.length * STEP + CARD, 200)
+  // zoom: the card width, remembered per user; every size below follows from it
+  const [card, setCard] = useState(loadZoom)
+  const scale = stripScale(card)
+  const { step, gap } = scale
+  const n = tl.slides.length
+  const width = Math.max(stripWidth(n, scale), 200)
 
   const moveSlide = (from: number, to: number): void => {
     const src = tl.slides[from]
@@ -80,33 +96,80 @@ export function Filmstrip() {
     useStore.getState().set({ tab: 'slide' })
   }
   const excluded = project.entries.filter((x) => x.excluded).length
+  const maxPer = themeMeta(project.settings.theme).maxPerSlide
 
-  // Dropping on the middle of another slide combines both; near the edges it reorders.
-  const onDragOver = (e: React.DragEvent): void => {
-    const drag = dragRef.current
-    if (drag == null) return
-    e.preventDefault()
+  /** Files dragged from Explorer: can they join slide `target` (same rule as dragging a slide onto another)? */
+  const filesFit = (target: TimelineSlide | undefined, items: DataTransferItemList): boolean => {
+    if (!target) return false
+    const list = [...items].filter((it) => it.kind === 'file')
+    // folders and unknown types (HEIC, RAW) are only known after the import: they go between slides
+    if (!list.length || !list.every((it) => /^(image|video)\//.test(it.type))) return false
+    return canJoin(target, list.map((it) => ({ kind: it.type.startsWith('video/') ? 'video' : 'photo' })), project.settings)
+  }
+
+  // Dropping on the middle of another slide combines both; near the edges it reorders (or inserts files).
+  const dropTarget = (e: React.DragEvent, files: boolean): { merge?: number; insert?: number } => {
     const rect = innerRef.current!.getBoundingClientRect()
     const x = e.clientX - rect.left
-    const i = Math.floor(x / STEP)
-    const within = (x - i * STEP) / CARD
+    const i = Math.floor(x / step)
+    const within = (x - i * step) / scale.card
     const target = tl.slides[i]
-    const source = tl.slides[drag]
-    const canMerge =
-      maxPer > 1 && target && source && i !== drag && target.kind !== 'title' && target.kind !== 'text' && source.kind !== 'text' &&
-      target.entries.length + source.entries.length <= maxPer
-    if (canMerge && within > 0.25 && within < 0.75) {
-      dropRef.current = { merge: i }
-      setMergeAt(i)
-      setDropAt(null)
-    } else {
-      const insert = Math.max(0, Math.min(tl.slides.length, Math.round(x / STEP)))
-      dropRef.current = { insert }
-      setMergeAt(null)
-      setDropAt(insert)
-    }
+    const source = dragRef.current != null ? tl.slides[dragRef.current] : undefined
+    const canMerge = files
+      ? filesFit(target, e.dataTransfer.items)
+      : maxPer > 1 && !!target && !!source && i !== dragRef.current && target.kind !== 'title' && target.kind !== 'text' && source.kind !== 'text' &&
+        target.entries.length + source.entries.length <= maxPer
+    if (canMerge && scale.card >= MIN_MERGE_CARD && within > 0.25 && within < 0.75) return { merge: i }
+    return { insert: Math.max(0, Math.min(n, Math.round(x / step))) }
   }
-  const maxPer = themeMeta(project.settings.theme).maxPerSlide
+  const isFiles = (e: React.DragEvent): boolean => dragRef.current == null && e.dataTransfer.types.includes('Files')
+  const onDragOver = (e: React.DragEvent): void => {
+    const files = isFiles(e)
+    if (dragRef.current == null && !files) return
+    e.preventDefault()
+    if (files) {
+      e.dataTransfer.dropEffect = 'copy'
+      setFilesOver(true)
+      clearTimeout(filesTimer.current)
+      // dragover repeats while the files hover; when it stops, they left (or were dropped)
+      filesTimer.current = setTimeout(() => {
+        setFilesOver(false)
+        setDropAt(null)
+        setMergeAt(null)
+      }, 250)
+    }
+    const target = dropTarget(e, files)
+    dropRef.current = target
+    setMergeAt(target.merge ?? null)
+    setDropAt(target.insert ?? null)
+  }
+  const onDrop = (e: React.DragEvent): void => {
+    e.preventDefault()
+    const drag = dragRef.current
+    if (isFiles(e)) {
+      // files from Explorer go in right here, as one undo step; the window's drop handler leaves them
+      handledDrops.add(e.nativeEvent)
+      clearTimeout(filesTimer.current)
+      setFilesOver(false)
+      const { merge, insert } = dropTarget(e, true)
+      const paths = [...e.dataTransfer.files].map((f) => window.api.pathForFile(f)).filter(Boolean)
+      const at = merge != null ? merge + 1 : (insert ?? n)
+      const into = merge != null ? tl.slides[merge].entries.map((x) => x.id) : undefined
+      if (paths.length) void insertFiles(paths, { before: anchorAt(tl, project.entries, at), ...(into ? { into } : {}) })
+    } else {
+      const { merge, insert } = dropRef.current
+      if (drag != null && merge != null) {
+        const ids = [...tl.slides[merge].entries, ...tl.slides[drag].entries].map((x) => x.id)
+        useStore.getState().mergeEntries(ids)
+        select(ids)
+      } else if (drag != null && insert != null && insert !== drag && insert !== drag + 1) moveSlide(drag, insert)
+    }
+    dragRef.current = null
+    dropRef.current = {}
+    setDrag(null)
+    setDropAt(null)
+    setMergeAt(null)
+  }
   const selectedSlides = tl.slides.filter((sl) => sl.entries.some((e) => sel.has(e.id)))
 
   // Only the cards in view (plus a margin) are rendered; big shows have hundreds of slides.
@@ -132,12 +195,140 @@ export function Filmstrip() {
       cancelAnimationFrame(frame)
     }
   }, [])
-  const n = tl.slides.length
-  const first = Math.max(0, Math.floor((view.left - 16) / STEP) - 8)
-  const last = Math.min(n - 1, Math.ceil((view.left + view.width) / STEP) + 8)
+  const margin = Math.max(8, Math.ceil(200 / step))
+  const first = Math.max(0, Math.floor((view.left - STRIP_PAD) / step) - margin)
+  const last = Math.min(n - 1, Math.ceil((view.left + view.width) / step) + margin)
   // the cards in view are processed first during an import
   const visibleIds = tl.slides.slice(first, last + 1).flatMap((s) => s.media.map((m) => m.id)).join(',')
   useEffect(() => prioritize('filmstrip', visibleIds ? visibleIds.split(',') : []), [visibleIds])
+
+  // ---- zoom: keeps a point in place, the mouse (Ctrl+wheel) or else the selected slide / the playhead
+  const pendingZoom = useRef<{ scroll: number } | null>(null)
+  const zoomTo = (next: number, clientX?: number): void => {
+    const el = scrollRef.current
+    const c = clampCard(next)
+    if (!el || c === card) return
+    const to = stripScale(c)
+    let anchorX: number
+    let from = el.scrollLeft
+    if (clientX != null) anchorX = clientX - el.getBoundingClientRect().left
+    else {
+      const selIdx = tl.slides.findIndex((sl) => sl.entries.some((e) => sel.has(e.id)))
+      const playX = timeToX(tl, useStore.getState().playhead, step)
+      const x = selIdx >= 0 && Math.abs(selIdx * step - playX) > step ? selIdx * step + scale.card / 2 : playX
+      const onScreen = x + STRIP_PAD - el.scrollLeft
+      // in view: it stays where it is; else it comes to the middle
+      anchorX = onScreen >= 0 && onScreen <= el.clientWidth ? onScreen : el.clientWidth / 2
+      from = x + STRIP_PAD - anchorX
+    }
+    pendingZoom.current = { scroll: anchoredScroll(from, anchorX, step, to.step) }
+    // the playhead's autoscroll leaves the new view alone for a moment
+    manualUntil.current = Math.max(manualUntil.current, performance.now() + 1500)
+    setCard(c)
+    saveZoom(c)
+  }
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    const z = pendingZoom.current
+    if (!el || !z) return
+    pendingZoom.current = null
+    el.scrollLeft = z.scroll
+    // the rendered range follows before the next paint
+    setView({ left: el.scrollLeft, width: el.clientWidth })
+  }, [step])
+  const fitAll = (): void => {
+    const el = scrollRef.current
+    if (el) zoomTo(fitCard(n, el.clientWidth - 2 * STRIP_PAD))
+  }
+  // Ctrl+wheel (and a touchpad pinch) zooms around the mouse; a passive React handler can't stop the page zoom
+  const zoomRef = useRef({ zoomTo, card })
+  zoomRef.current = { zoomTo, card }
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const wheel = (e: WheelEvent): void => {
+      if (!e.ctrlKey) return
+      e.preventDefault()
+      manualUntil.current = performance.now() + 4000
+      const { zoomTo: zoom, card: c } = zoomRef.current
+      zoom(zoomStep(c, Math.exp(-Math.max(-300, Math.min(300, e.deltaY)) * 0.0025)), e.clientX)
+    }
+    el.addEventListener('wheel', wheel, { passive: false })
+    return () => el.removeEventListener('wheel', wheel)
+  }, [])
+
+  // ---- showing a slide: scroll it into view (centred when it was outside)
+  const revealIndex = (index: number): void => {
+    const el = scrollRef.current
+    if (!el) return
+    const x = index * step + STRIP_PAD
+    if (x < el.scrollLeft + 8 || x + scale.card > el.scrollLeft + el.clientWidth - 8) {
+      el.scrollLeft = Math.max(0, x + scale.card / 2 - el.clientWidth / 2)
+      setView({ left: el.scrollLeft, width: el.clientWidth })
+    }
+    manualUntil.current = Math.max(manualUntil.current, performance.now() + 1500)
+  }
+  // inserted slides (insert.ts): shown once the filmstrip has drawn them
+  const revealRef = useRef<string | null>(null)
+  const revealNow = useRef(revealIndex)
+  revealNow.current = revealIndex
+  useEffect(() => {
+    stripReveal.current = (entryId) => {
+      revealRef.current = entryId
+      requestAnimationFrame(() => {
+        const id = revealRef.current
+        const p = useStore.getState().project
+        if (!id || !p) return
+        revealRef.current = null
+        const s = timelineOf(p).slides.find((x) => x.entries.some((e) => e.id === id))
+        if (s) revealNow.current(s.index)
+      })
+    }
+    return () => {
+      stripReveal.current = null
+    }
+  }, [])
+
+  // ---- search and chapters: a match is selected, scrolled to and shown in the preview
+  const jumpTo = (index: number): void => {
+    const s = tl.slides[index]
+    if (!s) return
+    if (s.kind === 'title') {
+      select([])
+      useStore.getState().set({ tab: 'themes' })
+    } else {
+      select(s.entries.map((e) => e.id))
+      useStore.getState().set({ tab: 'slide' })
+      anchor.current = index
+    }
+    revealIndex(index)
+    playerRef.current?.seek(s.start + Math.min(s.transIn + 0.05, s.duration / 2))
+  }
+  const search = useStripSearch(tl, project, jumpTo)
+  // Ctrl+F opens the search (also from another field), F3 / Shift+F3 go to the next / previous match
+  const searchRef = useRef(search)
+  searchRef.current = search
+  useEffect(() => {
+    const key = (e: KeyboardEvent): void => {
+      const st = useStore.getState()
+      if (st.view !== 'editor' || st.fullscreen || st.exportOpen || st.presenting || st.dialog || modalOpen()) return
+      const s = searchRef.current
+      if (e.ctrlKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        s.setOpen(true)
+        requestAnimationFrame(() => {
+          searchInput.current?.focus()
+          searchInput.current?.select()
+        })
+      } else if (e.key === 'F3' && s.open && s.hits.length) {
+        e.preventDefault()
+        if (e.shiftKey) s.prev()
+        else s.next()
+      }
+    }
+    window.addEventListener('keydown', key)
+    return () => window.removeEventListener('keydown', key)
+  }, [])
 
   // The filmstrip is one stop in the tab order: the selected card (or the first). Focus a card by index,
   // scrolling it into the rendered part first.
@@ -145,12 +336,12 @@ export function Filmstrip() {
   const focusCard = (index: number, tries = 6): void => {
     const el = scrollRef.current
     if (el) {
-      const x = index * STEP
-      if (x < el.scrollLeft || x + CARD > el.scrollLeft + el.clientWidth - 32) el.scrollLeft = Math.max(0, x - el.clientWidth / 2)
+      const x = index * step
+      if (x < el.scrollLeft || x + scale.card > el.scrollLeft + el.clientWidth - 32) el.scrollLeft = Math.max(0, x - el.clientWidth / 2)
     }
     // right away when the card is rendered (quick key presses go to the new card), else after a frame
-    const card = document.querySelector<HTMLElement>(`.card[data-index="${index}"]`)
-    if (card) card.focus()
+    const cardEl = document.querySelector<HTMLElement>(`.card[data-index="${index}"]`)
+    if (cardEl) cardEl.focus()
     else if (tries > 0) requestAnimationFrame(() => focusCard(index, tries - 1))
   }
 
@@ -185,17 +376,27 @@ export function Filmstrip() {
     }
   }
 
+  const every = numberEvery(scale)
+  const current = search.current >= 0 ? search.hits[search.current]?.index : undefined
+  const vars = { '--card-w': `${scale.card}px`, '--card-h': `${scale.height}px`, '--gap': `${gap}px` } as CSSProperties
   return (
-    <section className="strip" aria-label={t('filmstrip')}>
+    <section className={`strip zoom-${scale.detail} ${filesOver ? 'files-over' : ''}`} aria-label={t('filmstrip')} style={vars}>
       {excluded > 0 && (
         <button className="excluded-chip" title={t('cullTitle')} onClick={() => useStore.getState().set({ view: 'cull' })}>
           <EyeOff size={12} aria-hidden /> {t('excludedCount').replace('{n}', String(excluded))}
         </button>
       )}
+      <div className="strip-bar" role="group" aria-label={t('stripTools')}>
+        <SearchBox search={search} tl={tl} inputRef={searchInput} />
+        <ChaptersMenu tl={tl} onJump={jumpTo} />
+        <span className="grow" />
+        <ZoomControls card={scale.card} onZoom={(c) => zoomTo(c)} onFit={fitAll} />
+      </div>
       <div
         className="strip-scroll"
         ref={scrollRef}
         onWheel={(e) => {
+          if (e.ctrlKey) return
           manualUntil.current = performance.now() + 4000
           if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) e.currentTarget.scrollLeft += e.deltaY
         }}
@@ -204,30 +405,19 @@ export function Filmstrip() {
           if (e.target === e.currentTarget) manualUntil.current = performance.now() + 4000
         }}
       >
-        <div className="strip-inner" ref={innerRef} style={{ width }} onDragOver={onDragOver} onDragLeave={() => setMergeAt(null)} onDrop={(e) => {
-          e.preventDefault()
-          const drag = dragRef.current
-          const { merge, insert } = dropRef.current
-          if (drag != null && merge != null) {
-            const ids = [...tl.slides[merge].entries, ...tl.slides[drag].entries].map((x) => x.id)
-            useStore.getState().mergeEntries(ids)
-            select(ids)
-          } else if (drag != null && insert != null && insert !== drag && insert !== drag + 1) moveSlide(drag, insert)
-          dragRef.current = null
-          dropRef.current = {}
-          setDrag(null)
-          setDropAt(null)
-          setMergeAt(null)
-        }}>
+        <div className="strip-inner" ref={innerRef} style={{ width }} onDragOver={onDragOver} onDragLeave={() => setMergeAt(null)} onDrop={onDrop}>
           <div className="cards">
-            {first > 0 && <div style={{ flex: '0 0 auto', width: first * STEP - GAP }} />}
+            {first > 0 && <div style={{ flex: '0 0 auto', width: first * step - gap }} />}
             {tl.slides.slice(first, last + 1).map((s) => (
               <SlideCard
                 key={s.id}
                 slide={s}
+                detail={scale.detail}
+                showNum={every === 1 || s.index === 0 || (s.index + 1) % every === 0}
                 tabbable={s.index === tabIndexAt}
                 selected={s.entries.some((e) => sel.has(e.id))}
                 captionSelected={!!s.captionEntryId && sel.has(s.captionEntryId)}
+                match={search.matched.has(s.index) ? (s.index === current ? 'current' : 'match') : null}
                 onCaption={() => {
                   select([s.captionEntryId!])
                   useStore.getState().set({ tab: 'slide' })
@@ -254,9 +444,10 @@ export function Filmstrip() {
                 }}
               />
             ))}
-            {last < n - 1 && <div style={{ flex: '0 0 auto', width: (n - 1 - last) * STEP - GAP }} />}
+            {last < n - 1 && <div style={{ flex: '0 0 auto', width: (n - 1 - last) * step - gap }} />}
             <button
               className="card add"
+              style={{ width: addWidth(scale) }}
               title={t('addToShow')}
               aria-label={t('addToShow')}
               aria-haspopup="menu"
@@ -269,9 +460,9 @@ export function Filmstrip() {
               <Plus size={20} />
             </button>
           </div>
-          {dropAt != null && <div className="drop-indicator" style={{ left: dropAt * STEP - GAP / 2 - 1 }} />}
-          <AudioLane tl={tl} width={width} />
-          <Playhead tl={tl} scrollRef={scrollRef} manualUntil={manualUntil} />
+          {dropAt != null && <div className="drop-indicator" style={{ left: dropAt * step - gap / 2 - 1 }} />}
+          <AudioLane tl={tl} width={width} step={step} />
+          <Playhead tl={tl} step={step} scrollRef={scrollRef} manualUntil={manualUntil} />
         </div>
       </div>
       {menu && (menu.add || (menu.slide && menu.slide.kind !== 'title')) && (
@@ -291,10 +482,21 @@ export function Filmstrip() {
           )}
           {menu.slide && menu.slide.kind !== 'title' && (
             <>
+              <MenuItem
+                icon={<ImagePlus size={15} />}
+                onSelect={async () => {
+                  // behind this slide, wherever it is by the time the dialog closes
+                  const place = placeAt(menu.slide!.index + 1)
+                  const paths = await window.api.pickMedia()
+                  if (paths.length) await insertFiles(paths, place)
+                }}
+              >
+                {t('insertHere')}
+              </MenuItem>
               <MenuItem icon={<Type size={15} />} onSelect={() => useStore.getState().addText()}>
                 {t('addText')}
               </MenuItem>
-              {selectedSlides.length > 1 && maxPer > 1 && selectedSlides.reduce((n, x) => n + x.entries.length, 0) <= maxPer && (
+              {selectedSlides.length > 1 && maxPer > 1 && selectedSlides.reduce((k, x) => k + x.entries.length, 0) <= maxPer && (
                 <MenuItem icon={<Merge size={15} />} onSelect={() => useStore.getState().mergeEntries(selectedSlides.flatMap((x) => x.entries.map((e) => e.id)))}>
                   {t('merge')}
                 </MenuItem>
@@ -354,10 +556,16 @@ export function Filmstrip() {
 
 function SlideCard(props: {
   slide: TimelineSlide
+  /** How much the card shows at the filmstrip's zoom. */
+  detail: StripDetail
+  /** Small cards number only every few slides. */
+  showNum: boolean
   /** The card the Tab key reaches (one per filmstrip). */
   tabbable: boolean
   selected: boolean
   captionSelected: boolean
+  /** A search match ('current': the one shown last). */
+  match: 'match' | 'current' | null
   onCaption: () => void
   dragging: boolean
   mergeTarget: boolean
@@ -371,14 +579,29 @@ function SlideCard(props: {
 }) {
   const s = props.slide
   const m0 = s.media[0]
+  const full = props.detail === 'full'
   const busy = s.media.find((m) => m.status === 'pending' || m.status === 'processing')
   const failed = s.media.find((m) => m.status === 'error')
   const ve = s.kind === 'video' ? (s.entries[0] as VideoEntry) : null
   const gridVideos = s.kind === 'photos' ? s.entries.filter((e) => e.type === 'video').length : 0
   const name = s.kind === 'text' || s.kind === 'title' ? s.title?.text : s.media.map((m) => m.name).join(', ')
+  // small cards show fewer pictures: one, or two side by side
+  const tiles = full ? s.media : s.media.slice(0, props.detail === 'compact' ? 2 : 1)
+  const chapter = s.kind === 'text' || s.kind === 'title' || !!s.captionEntryId
+  const classes = [
+    'card',
+    props.selected && 'selected',
+    props.captionSelected && 'cap-selected',
+    props.dragging && 'dragging',
+    props.mergeTarget && 'merge-target',
+    chapter && 'chapter',
+    props.match && 'match',
+    props.match === 'current' && 'match-current',
+    !props.showNum && 'no-num'
+  ]
   return (
     <div
-      className={`card ${props.selected ? 'selected' : ''} ${props.captionSelected ? 'cap-selected' : ''} ${props.dragging ? 'dragging' : ''} ${props.mergeTarget ? 'merge-target' : ''}`}
+      className={classes.filter(Boolean).join(' ')}
       role="button"
       tabIndex={props.tabbable ? 0 : -1}
       aria-pressed={props.selected}
@@ -402,38 +625,40 @@ function SlideCard(props: {
         <div className="text-card">T</div>
       ) : (
         <div className="tiles">
-          {s.media.map((m, i) => (m.thumb ? <MediaThumb key={i} m={m} draggable={false} loading="lazy" decoding="async" /> : <div key={i} className="empty" />))}
+          {tiles.map((m, i) => (m.thumb ? <MediaThumb key={i} m={m} draggable={false} loading="lazy" decoding="async" /> : <div key={i} className="empty" />))}
         </div>
       )}
-      <div className="badges" aria-hidden>
-        <span>
-          {s.kind === 'video' && (
-            <span className="badge">
-              <Film size={10} /> {fmtTime(s.duration)}
-            </span>
-          )}
-          {gridVideos > 0 && (
-            <span className="badge">
-              <Film size={10} /> {gridVideos}
-            </span>
-          )}
-          {m0?.live && <span className="badge">LIVE</span>}
-        </span>
-        <span>
-          {s.media.some((m) => isChanged(m.edit)) && (
-            <span className="badge edited-mark" title={t('peEditedMark')}>
-              <SlidersHorizontal size={10} />
-            </span>
-          )}
-          {s.customDuration && (
-            <span className="badge">
-              <Clock size={10} />
-            </span>
-          )}
-          {ve && m0?.hasAudio && <span className="badge">{ve.muted ? <VolumeX size={10} /> : <Volume2 size={10} />}</span>}
-        </span>
-      </div>
-      {s.captionEntryId && (
+      {full && (
+        <div className="badges" aria-hidden>
+          <span>
+            {s.kind === 'video' && (
+              <span className="badge">
+                <Film size={10} /> {fmtTime(s.duration)}
+              </span>
+            )}
+            {gridVideos > 0 && (
+              <span className="badge">
+                <Film size={10} /> {gridVideos}
+              </span>
+            )}
+            {m0?.live && <span className="badge">LIVE</span>}
+          </span>
+          <span>
+            {s.media.some((m) => isChanged(m.edit)) && (
+              <span className="badge edited-mark" title={t('peEditedMark')}>
+                <SlidersHorizontal size={10} />
+              </span>
+            )}
+            {s.customDuration && (
+              <span className="badge">
+                <Clock size={10} />
+              </span>
+            )}
+            {ve && m0?.hasAudio && <span className="badge">{ve.muted ? <VolumeX size={10} /> : <Volume2 size={10} />}</span>}
+          </span>
+        </div>
+      )}
+      {full && s.captionEntryId && (
         <button
           className="cap-badge"
           tabIndex={-1}
@@ -447,11 +672,11 @@ function SlideCard(props: {
           T
         </button>
       )}
-      {(s.kind === 'photos' || s.kind === 'text' || s.kind === 'video') && <DurationHandle slide={s} onDuration={props.onDuration} />}
+      {full && (s.kind === 'photos' || s.kind === 'text' || s.kind === 'video') && <DurationHandle slide={s} onDuration={props.onDuration} />}
       {busy && <div className="progress" style={{ width: `${Math.round((busy.progress ?? 0.05) * 100)}%` }} />}
       {failed && (
         <div className="err" title={friendly(failed.error ?? '', 'import').text} aria-hidden>
-          {failed.error === 'missing' ? t('missing') : failed.format}
+          {full && (failed.error === 'missing' ? t('missing') : failed.format)}
         </div>
       )}
       <span className="num" aria-hidden>
@@ -502,15 +727,15 @@ function DurationHandle({ slide, onDuration }: { slide: TimelineSlide; onDuratio
   )
 }
 
-function Playhead({ tl, scrollRef, manualUntil }: { tl: Timeline; scrollRef: React.RefObject<HTMLDivElement | null>; manualUntil: React.RefObject<number> }) {
+function Playhead({ tl, step, scrollRef, manualUntil }: { tl: Timeline; step: number; scrollRef: React.RefObject<HTMLDivElement | null>; manualUntil: React.RefObject<number> }) {
   const playhead = useStore((s) => s.playhead)
   const playing = useStore((s) => s.playing)
-  const x = timeToX(tl, playhead)
+  const x = timeToX(tl, playhead, step)
   // keep the playhead inside the visible part of the filmstrip
   useEffect(() => {
     const el = scrollRef.current
     if (!el || performance.now() < manualUntil.current) return
-    const px = x + 16
+    const px = x + STRIP_PAD
     if (px < el.scrollLeft + 40 || px > el.scrollLeft + el.clientWidth - 80) {
       el.scrollTo({ left: Math.max(0, px - el.clientWidth * 0.25), behavior: playing && !reducedMotion() ? 'smooth' : 'auto' })
     }

@@ -1,13 +1,13 @@
 // "Nach dem Projekt aufräumen": the dialog that lists what the app keeps for a show (face data, the
-// pupils' uploads, caches, older versions, export jobs) with sizes and removes what the user picks, for
+// pupils' uploads, caches, older versions, undo history, export jobs) with sizes and removes what the user picks, for
 // good (src/main/cleanup.ts); the same dialog deletes a whole show from the home screen. Also the
 // deletion reminder: the date picker, the hint on the project card and the banner on the home screen.
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { create } from 'zustand'
 import { AlertTriangle, CalendarClock, Loader2, X } from 'lucide-react'
-import { addMonths, CLEANUP_CATEGORIES, DELETE_MONTHS, deletionDue, NOTHING, startOfDay, type CleanupCategory, type CleanupChoice, type CleanupInventory, type CleanupResult } from '@shared/cleanup'
+import { addMonths, CLEANUP_CATEGORIES, DELETE_MONTHS, deletionDue, historyGoes, NOTHING, startOfDay, type CleanupCategory, type CleanupChoice, type CleanupInventory, type CleanupResult } from '@shared/cleanup'
 import type { ProjectSummary } from '@shared/types'
-import { holdSaves, useStore } from '../store'
+import { forgetUndoHistory, holdSaves, saveOpenProject, useStore } from '../store'
 import { holdFaceAnalysis } from '../faces'
 import { forgetFaceCrops } from '../faceCrops'
 import { localeTag, t, type StringKey } from '../i18n'
@@ -51,10 +51,9 @@ const isoDay = (ms: number): string => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-/** Saves the open project now and loads what the app keeps for a show. */
+/** Saves the open project now (with its undo history) and loads what the app keeps for a show. */
 async function loadInventory(projectId: string): Promise<CleanupInventory> {
-  const p = useStore.getState().project
-  if (p?.id === projectId) await window.api.saveProject(p)
+  await saveOpenProject(projectId)
   return window.api.cleanupInventory(projectId)
 }
 
@@ -72,6 +71,8 @@ export async function runCleanup(projectId: string, choice: CleanupChoice): Prom
     resume = await holdSaves()
     const result = await window.api.cleanupRun(projectId, choice)
     if (choice.faces) forgetFaceCrops()
+    // the stored undo history is gone: the editor's goes too (a rewritten show starts afresh below anyway)
+    if (open && historyGoes(choice)) forgetUndoHistory()
     resume?.()
     resume = null
     const s = useStore.getState()
@@ -236,7 +237,48 @@ export function CleanupSetting() {
         </div>
       )}
       <p className="hint">{t('cleanupSettingHint')}</p>
+      <HistorySetting projectId={id} />
     </Section>
+  )
+}
+
+/** The note on the stored undo history, and clearing it for the chosen show (the open one by default) or all shows. */
+function HistorySetting({ projectId }: { projectId: string }) {
+  const [state, setState] = useState<'idle' | 'busy' | 'done'>('idle')
+  const [error, setError] = useState<unknown>(null)
+  useEffect(() => setState('idle'), [projectId])
+  const clear = async (all: boolean): Promise<void> => {
+    setState('busy')
+    setError(null)
+    try {
+      // the open show forgets its steps first, so no save brings them back
+      const open = useStore.getState().project?.id
+      if (open && (all || open === projectId)) forgetUndoHistory()
+      await window.api.clearHistory(all ? null : projectId)
+      setState('done')
+    } catch (e) {
+      setError(e)
+      setState('idle')
+    }
+  }
+  return (
+    <div className="history-setting" data-testid="history-setting">
+      <p className="hint">{t('historySettingHint')}</p>
+      <div className="row wrap">
+        <button className="btn small" disabled={!projectId || state === 'busy'} data-testid="history-clear" onClick={() => void clear(false)}>
+          {t('historyClear')}
+        </button>
+        <button className="btn small" disabled={state === 'busy'} data-testid="history-clear-all" onClick={() => void clear(true)}>
+          {t('historyClearAll')}
+        </button>
+        {state === 'done' && (
+          <span className="hint" role="status">
+            {t('historyCleared')}
+          </span>
+        )}
+      </div>
+      {!!error && <ErrorText err={error} context="save" />}
+    </div>
   )
 }
 
@@ -262,7 +304,20 @@ const TITLES: Record<CleanupCategory, StringKey> = {
   uploads: 'cleanupUploads',
   caches: 'cleanupCaches',
   backups: 'backupsTitle',
+  history: 'cleanupHistory',
   exports: 'cleanupExports'
+}
+
+/** Who sent the uploads, and how many of them are pictures pasted with Ctrl+V. */
+function UploadsInfo({ inv }: { inv: CleanupInventory }) {
+  const pasted = inv.uploads.pasted ?? 0
+  const sent = inv.uploads.files - pasted
+  return (
+    <>
+      {sent > 0 && <p className="hint">{fill('cleanupUploadsInfo', { files: sent, people: inv.uploads.uploaders })}</p>}
+      {pasted > 0 && <p className="hint">{fill('cleanupPasted', { n: pasted })}</p>}
+    </>
+  )
 }
 
 /** What a category frees with this choice, as the dialog sums it up. */
@@ -271,6 +326,7 @@ function chosenBytes(inv: CleanupInventory, c: CleanupChoice): number {
     (c.uploads === 'all' ? inv.uploads.bytes : c.uploads === 'leftOut' ? inv.uploads.leftOut.bytes : 0) +
     (c.caches ? inv.caches.bytes : 0) +
     (c.backups ? inv.backups.bytes : 0) +
+    (historyGoes(c) ? inv.history.bytes : 0) +
     (c.exports ? inv.exports.bytes : 0)
   )
 }
@@ -311,7 +367,7 @@ export function CleanupDialog({ projectId, onClose }: { projectId: string; onClo
         if (!alive) return
         setInv(i)
         // everything that can go is ticked, except the pupils' photos: those the user decides on
-        setChoice({ faces: i.faces.media + i.faces.people > 0, uploads: 'none', caches: i.caches.folders > 0 && !i.exports.unfinished, backups: i.backups.files > 0, exports: i.exports.jobs > 0 })
+        setChoice({ faces: i.faces.media + i.faces.people > 0, uploads: 'none', caches: i.caches.folders > 0 && !i.exports.unfinished, backups: i.backups.files > 0, exports: i.exports.jobs > 0, history: i.history.files > 0 })
       },
       (e) => alive && setError(e)
     )
@@ -320,7 +376,9 @@ export function CleanupDialog({ projectId, onClose }: { projectId: string; onClo
     }
   }, [projectId])
 
-  const anything = !!inv && (choice.faces || choice.uploads !== 'none' || choice.caches || choice.backups || choice.exports)
+  const anything = !!inv && (choice.faces || choice.uploads !== 'none' || choice.caches || choice.backups || choice.exports || (!!choice.history && inv.history.files > 0))
+  // the undo history holds the face data and uploads too: it goes with them
+  const historyForced = choice.faces || choice.uploads !== 'none'
   const blocked = !!inv?.exports.unfinished
   const set = (patch: Partial<CleanupChoice>): void => setChoice((c) => ({ ...c, ...patch }))
   const run = async (): Promise<void> => {
@@ -384,7 +442,7 @@ export function CleanupDialog({ projectId, onClose }: { projectId: string; onClo
                 <p className="hint">{t('cleanupUploadsNone')}</p>
               ) : (
                 <>
-                  <p className="hint">{fill('cleanupUploadsInfo', { files: inv.uploads.files, people: inv.uploads.uploaders })}</p>
+                  <UploadsInfo inv={inv} />
                   {choice.uploads !== 'none' && inv.uploads.inShow.files > 0 && (
                     <div className="cleanup-radios" role="radiogroup" aria-label={t('cleanupUploads')}>
                       <label className="check">
@@ -421,6 +479,17 @@ export function CleanupDialog({ projectId, onClose }: { projectId: string; onClo
                 {fill('cleanupVersions', { n: inv.backups.files })} · {t('cleanupBackupsHint')}
               </p>
               {choice.faces && !choice.backups && inv.backups.files > 0 && <p className="hint">{t('cleanupBackupsScrub')}</p>}
+            </Category>
+            <Category
+              id="history"
+              title={t('cleanupHistory')}
+              size={fmtBytes(inv.history.bytes)}
+              checked={inv.history.files > 0 && historyGoes(choice)}
+              disabled={busy || !inv.history.files || historyForced}
+              onChange={(v) => set({ history: v })}
+            >
+              <p className="hint">{inv.history.files ? t('cleanupHistoryHint') : t('cleanupHistoryNone')}</p>
+              {inv.history.files > 0 && historyForced && <p className="hint">{t('cleanupHistoryWith')}</p>}
             </Category>
             <Category id="exports" title={t('cleanupExports')} size={fmtBytes(inv.exports.bytes)} checked={choice.exports} disabled={busy || !inv.exports.jobs} onChange={(v) => set({ exports: v })}>
               <p className="hint">
@@ -469,6 +538,7 @@ export function CleanupDialog({ projectId, onClose }: { projectId: string; onClo
             )}
             {choice.caches && <li>{t('cleanupCaches')}</li>}
             {choice.backups && <li>{t('backupsTitle')}</li>}
+            {historyGoes(choice) && inv.history.files > 0 && <li>{t('cleanupHistory')}</li>}
             {choice.exports && <li>{t('cleanupExports')}</li>}
           </ul>
           <p>
@@ -507,7 +577,7 @@ export function DeleteDialog({ projectId, onClose }: { projectId: string; onClos
   }, [projectId])
 
   const size = useMemo(
-    () => (inv ? inv.backups.bytes + (extras.caches ? inv.caches.bytes : 0) + (extras.uploads ? inv.uploads.bytes : 0) + (extras.exports ? inv.exports.bytes : 0) : 0),
+    () => (inv ? inv.backups.bytes + inv.history.bytes + (extras.caches ? inv.caches.bytes : 0) + (extras.uploads ? inv.uploads.bytes : 0) + (extras.exports ? inv.exports.bytes : 0) : 0),
     [inv, extras]
   )
   const remove = async (): Promise<void> => {
@@ -552,7 +622,7 @@ export function DeleteDialog({ projectId, onClose }: { projectId: string; onClos
               <p className="hint">{t('cleanupCachesHint')}</p>
             </Category>
             <Category id="uploads" title={t('cleanupUploads')} size={fmtBytes(inv.uploads.bytes)} checked={extras.uploads} disabled={busy || !inv.uploads.files || blocked} onChange={(v) => setExtras({ ...extras, uploads: v })}>
-              <p className="hint">{inv.uploads.files ? fill('cleanupUploadsInfo', { files: inv.uploads.files, people: inv.uploads.uploaders }) : t('cleanupUploadsNone')}</p>
+              {inv.uploads.files ? <UploadsInfo inv={inv} /> : <p className="hint">{t('cleanupUploadsNone')}</p>}
             </Category>
             <Category id="exports" title={t('cleanupExports')} size={fmtBytes(inv.exports.bytes)} checked={extras.exports} disabled={busy || !inv.exports.jobs} onChange={(v) => setExtras({ ...extras, exports: v })}>
               <p className="hint">{t('cleanupExportsHint')}</p>

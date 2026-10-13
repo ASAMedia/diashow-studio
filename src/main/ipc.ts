@@ -12,16 +12,18 @@ import { createMediaService, type MediaService } from './media/service'
 import { displayCount, isPresentationWindow, startPresentation, stopPresentation } from './presentation'
 import { importProjectFile, packProject } from './projectFile'
 import { createProjectStore, PROJECT_EXT } from './projects'
+import { createHistoryStore, type HistorySaveStatus } from './history'
 import { cancelActiveExport, startExport, type ExportJob } from './export/encoder'
 import { registerExportQueue } from './export/queueMain'
 import { registerShare } from './share/shareMain'
+import { pastedRoots, registerPaste } from './pasteMain'
 import { registerCleanup } from './cleanupMain'
 import { registerArchive } from './archive/archiveMain'
 import { registerSystemCheck } from './systemCheck'
 import { appVersion, registerAbout } from './about'
 import { registerReportProblem } from './reportProblem'
 import type { ProjectReportEvent } from '@shared/diagnostics'
-import { registerDiagnostics } from './diagnostics'
+import { log, registerDiagnostics } from './diagnostics'
 import { checkDirectExport, checkLocalFile } from './ipcGuards'
 import { registerProjectRepair } from './projectRepair'
 import { collectSystemInfo, gpuDevices } from './systemCheck'
@@ -67,6 +69,28 @@ export function registerIpc(): void {
   // a project that had to be repaired when it was read: the editor shows what changed
   const onReport = (event: ProjectReportEvent): void => broadcast('project:report', event)
   const projects = createProjectStore(join(dataDir || app.getPath('documents'), 'Diashow Studio'), { onReport })
+  // the undo history of each show, in userData (history.ts): never next to the .dshow
+  const history = createHistoryStore({ dir: join(app.getPath('userData'), 'history'), log: (m) => log().info('history', m) })
+  /** A show read for the editor: its stored undo history can be restored for exactly this text. */
+  const loadForEditor = (id: string): Promise<Project> => {
+    let read: { text: string; repaired: boolean } | undefined
+    return projects.load(id, (text, repaired) => (read = { text, repaired })).then((p) => {
+      if (read) history.opened(id, read.text, p, read.repaired)
+      return p
+    })
+  }
+  /** Imports a .dshow file; an imported show starts with an empty undo history (its own file opens as usual). */
+  const importShow = async (path: string): Promise<Project> => {
+    let own = false
+    const loadOwn = (id: string): Promise<Project> => {
+      own = true
+      return loadForEditor(id)
+    }
+    // an archived show brings its theme song; it plays when this app's song is another one
+    const p = await importProjectFile(path, projects, { onReport, themeTracks: await themeMusic, loadOwn })
+    if (!own) await history.clear(p.id)
+    return p
+  }
   // Network shares: trusted hosts come from the app settings; until they are read, none are
   const trustedHosts = new Set<string>()
   const allowPath = (p: string): boolean => {
@@ -166,8 +190,10 @@ export function registerIpc(): void {
   ipcMain.handle('media:stabilize', (_e, id: string) => service.stabilizeVideo(String(id)))
   // Sharing over the local network: uploads go to <Documents>/Diashow Studio/Uploads/<project>/<name>
   registerShare({ uploadsRoot: join(projects.dir, 'Uploads'), broadcast })
+  // Ctrl+V: copied files, or a copied picture saved to <Documents>/Diashow Studio/Eingefügt/<project>
+  registerPaste({ projectsDir: projects.dir, locale: () => process.env.DIASHOW_LOCALE || app.getLocale() })
   // "Nach dem Projekt aufräumen" and deleting a project with its data (cleanup.ts, safeDelete.ts)
-  registerCleanup({ projects, cacheDir, uploadsRoot: join(projects.dir, 'Uploads'), exportsDir: join(app.getPath('userData'), 'exports'), media: service, exports: exportQueue })
+  registerCleanup({ projects, cacheDir, uploadsRoot: join(projects.dir, 'Uploads'), pastedRoots: pastedRoots(projects.dir), exportsDir: join(app.getPath('userData'), 'exports'), media: service, exports: exportQueue, history })
   // "Diashow als ZIP archivieren" (archive/archive.ts): reads originals only, through the same share policy
   registerArchive({ projects, themeMusic: () => themeMusic, themeMusicDir, exports: exportQueue, allowPath, documentsDir: app.getPath('documents'), appVersion: appVersion() })
   registerSystemCheck({ ff: service.ffmpeg, cacheDir })
@@ -176,7 +202,8 @@ export function registerIpc(): void {
   // "Problem melden": the bug form on GitHub with version, Windows and graphics card filled in
   registerReportProblem()
   // Damaged project files ("Projekt reparieren"), the error log and the diagnostics package
-  registerProjectRepair({ projects, onReport })
+  // a repaired show starts with an empty undo history
+  registerProjectRepair({ projects, onReport, onReplaced: (id) => history.clear(id).then(() => {}) })
   registerDiagnostics({
     loadProject: (id) => projects.peek(id),
     themeMusic: () => themeMusic,
@@ -259,21 +286,34 @@ export function registerIpc(): void {
     if (r.canceled || !r.filePaths.length) return null
     // a pack the user opened from a share: its files sit next to it on that share
     await trustPaths([r.filePaths[0]])
-    // an archived show brings its theme song; it plays when this app's song is another one
-    return importProjectFile(r.filePaths[0], projects, { onReport, themeTracks: await themeMusic })
+    return importShow(r.filePaths[0])
   })
 
   ipcMain.handle('project:import-file', async (_e, path: string) => {
     if (typeof path !== 'string' || !path) throw new Error('no project file')
     await trustPaths([path])
-    return importProjectFile(path, projects, { onReport, themeTracks: await themeMusic })
+    return importShow(path)
   })
 
   ipcMain.handle('project:list', () => projects.list())
-  ipcMain.handle('project:load', (_e, id: string) => projects.load(id))
-  ipcMain.handle('project:save', (_e, project: Project) => projects.save(project))
+  ipcMain.handle('project:load', (_e, id: string) => loadForEditor(id))
+  // the editor's saves carry its undo history; it is written a moment after the project file
+  ipcMain.handle('project:save', async (_e, project: Project, upload?: unknown) => {
+    const r: { status: HistorySaveStatus } = { status: 'ignored' }
+    await projects.save(project, (text) => (r.status = history.saved(project.id, text, upload)))
+    if (r.status === 'ok' && (upload as { flush?: unknown }).flush === true) await history.flush(project.id)
+    return r.status === 'resend' ? { resendHistory: true } : undefined
+  })
   ipcMain.handle('project:backups', (_e, id: string) => projects.listBackups(id))
-  ipcMain.handle('project:restore-backup', (_e, file: string) => projects.restoreBackup(file))
+  // a restored version starts with an empty undo history
+  ipcMain.handle('project:restore-backup', async (_e, file: string) => {
+    const p = await projects.restoreBackup(file)
+    await history.clear(p.id)
+    return p
+  })
+  ipcMain.handle('history:load', (_e, id: unknown) => history.load(String(id)))
+  // Settings → Privacy: the history of one show (id) or of all (null)
+  ipcMain.handle('history:clear', (_e, id: unknown) => (id === null ? history.clearAll() : history.clear(String(id))))
 
   ipcMain.handle('export:encoders', () => service.ffmpeg.encoders())
 
@@ -375,7 +415,8 @@ export function registerIpc(): void {
     const job = exportJob
     exportJob = null
     for (const ctrl of preparing) ctrl.abort()
-    const cleanup = Promise.allSettled([job ? job.cancel() : cancelActiveExport(), exportQueue.shutdown(), media?.dispose(), endExiftool()])
+    // the undo history waiting to be written goes to disk too
+    const cleanup = Promise.allSettled([job ? job.cancel() : cancelActiveExport(), exportQueue.shutdown(), media?.dispose(), endExiftool(), history.flush()])
     // Never let a stuck child process block quitting
     const timeout = new Promise((resolve) => setTimeout(resolve, 4000))
     void Promise.race([cleanup, timeout]).finally(() => app.quit())

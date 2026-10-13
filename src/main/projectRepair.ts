@@ -14,6 +14,8 @@ import { PROJECT_EXT, type ProjectStore } from './projects'
 export interface ProjectRepairConfig {
   projects: ProjectStore
   onReport: (event: ProjectReportEvent) => void
+  /** A show was replaced by what a repair rescued (its undo history no longer fits). */
+  onReplaced?: (id: string) => Promise<void>
 }
 
 /** A path ref that points into the projects folder becomes an id ref (so its backups count). */
@@ -43,9 +45,12 @@ export async function inspectRepair(ref: ProjectRef, store: ProjectStore): Promi
 
 export async function applyRepair(ref: ProjectRef, choice: RepairChoice, cfg: ProjectRepairConfig): Promise<Project> {
   const r = normalize(ref, cfg.projects)
-  if ('id' in r) return cfg.projects.repair(r.id, choice)
-  if (choice?.kind !== 'salvage') throw new Error('a file outside the projects folder has no backups')
-  return importProjectFile(r.path, cfg.projects, { salvage: true, onReport: cfg.onReport })
+  let project: Project
+  if ('id' in r) project = await cfg.projects.repair(r.id, choice)
+  else if (choice?.kind !== 'salvage') throw new Error('a file outside the projects folder has no backups')
+  else project = await importProjectFile(r.path, cfg.projects, { salvage: true, onReport: cfg.onReport })
+  await cfg.onReplaced?.(project.id)
+  return project
 }
 
 export function registerProjectRepair(cfg: ProjectRepairConfig): void {

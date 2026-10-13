@@ -5,8 +5,9 @@
 import type { MediaItem, Project, Rect, VideoEntry } from './types'
 import { faceArea, faceCentre, photoPersonFaces, videoPersonTracks } from './people'
 
-export type CleanupCategory = 'faces' | 'uploads' | 'caches' | 'backups' | 'exports'
-export const CLEANUP_CATEGORIES: readonly CleanupCategory[] = ['faces', 'uploads', 'caches', 'backups', 'exports']
+/** 'history': the stored undo history (src/main/history.ts); it also goes with face data and uploads. */
+export type CleanupCategory = 'faces' | 'uploads' | 'caches' | 'backups' | 'history' | 'exports'
+export const CLEANUP_CATEGORIES: readonly CleanupCategory[] = ['faces', 'uploads', 'caches', 'backups', 'history', 'exports']
 
 /** Uploads: none, all of this show's, or only those that are not in the show (left out, removed). */
 export type UploadChoice = 'none' | 'all' | 'leftOut'
@@ -17,6 +18,8 @@ export interface CleanupChoice {
   caches: boolean
   backups: boolean
   exports: boolean
+  /** The undo history (removed anyway with face data, uploads or whenever the show is rewritten). */
+  history?: boolean
 }
 
 export const NOTHING: CleanupChoice = { faces: false, uploads: 'none', caches: false, backups: false, exports: false }
@@ -55,6 +58,8 @@ export interface CleanupInventory {
     bytes: number
     /** Pupils who sent something (folders by name). */
     uploaders: number
+    /** Of `files`, pictures pasted with Ctrl+V (Documents\Diashow Studio\Eingefügt\<project>); older versions leave it out. */
+    pasted?: number
     /** Uploads used by slides of the show, and slides that would lose their picture. */
     inShow: { files: number; bytes: number; slides: number }
     /** Uploads not in the show: left out, removed from it, or never added. */
@@ -70,6 +75,8 @@ export interface CleanupInventory {
     shared: number
   }
   backups: { files: number; bytes: number }
+  /** The stored undo history (earlier states of the show, with face data, names and captions). */
+  history: { files: number; bytes: number }
   exports: {
     /** Finished, cancelled or failed exports still listed in the queue (snapshot and parts). */
     jobs: number
@@ -98,8 +105,12 @@ export const emptyRemoved = (): CleanupResult['removed'] => ({
   uploads: { files: 0, bytes: 0 },
   caches: { files: 0, bytes: 0 },
   backups: { files: 0, bytes: 0 },
+  history: { files: 0, bytes: 0 },
   exports: { files: 0, bytes: 0 }
 })
+
+/** The undo history goes when chosen, and always with face data or uploads (it holds them too). */
+export const historyGoes = (c: CleanupChoice): boolean => !!c.history || c.faces || c.uploads !== 'none'
 
 // ---------------------------------------------------------------- face data
 

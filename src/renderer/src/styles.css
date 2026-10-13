@@ -295,12 +295,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline-offs
 .preview-thumb { width: 100%; aspect-ratio: 16 / 9; object-fit: contain; background: #000; border-radius: 6px; margin-bottom: 10px; display: block; }
 
 /* filmstrip */
-.strip { border-top: 1px solid var(--line-soft); background: var(--bg); padding: 10px 0 8px; position: relative; min-width: 0; }
+.strip { border-top: 1px solid var(--line-soft); background: var(--bg); padding: 4px 0 8px; position: relative; min-width: 0; }
 .strip-scroll { overflow-x: auto; overflow-y: hidden; padding: 4px 16px 0; }
 .strip-inner { position: relative; display: inline-block; min-width: 100%; }
-.cards { display: flex; gap: 6px; align-items: flex-end; height: 86px; }
+.cards { display: flex; gap: var(--gap, 6px); align-items: flex-end; height: calc(var(--card-h, 64px) + 22px); }
 .card {
-  position: relative; flex: 0 0 auto; width: 96px; height: 64px; border-radius: 6px; overflow: visible;
+  position: relative; flex: 0 0 auto; width: var(--card-w, 96px); height: var(--card-h, 64px); border-radius: 6px; overflow: visible;
   background: var(--panel); outline: 2px solid transparent; outline-offset: 1px; cursor: pointer;
 }
 .card.selected { outline-color: var(--accent); }
@@ -330,7 +330,52 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline-offs
 .lane .clip { fill: var(--video); }
 .lane .gain { fill: none; stroke: var(--accent); stroke-width: 1.5; }
 .playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--playhead); pointer-events: none; border-radius: 1px; }
-.drop-indicator { position: absolute; top: 8px; height: 64px; width: 3px; background: var(--accent); border-radius: 2px; }
+.drop-indicator { position: absolute; top: 8px; height: var(--card-h, 64px); width: 3px; background: var(--accent); border-radius: 2px; pointer-events: none; }
+
+/* filmstrip tools: search, chapters, zoom (StripTools.tsx) */
+.strip-bar { display: flex; align-items: center; gap: 4px; height: 30px; padding: 0 12px 2px 16px; position: relative; z-index: 4; }
+.strip-bar .grow { flex: 1 1 auto; min-width: 8px; }
+.strip-search { position: relative; display: flex; align-items: center; gap: 1px; height: 26px; padding: 0 2px 0 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--input-bg); min-width: 0; }
+.strip-search:focus-within { border-color: var(--accent); }
+.strip-search .lead { color: var(--text-3); flex: none; }
+.strip-search input[type='text'] { border: 0; background: transparent; width: 230px; padding: 2px 6px; min-width: 60px; flex: 0 1 230px; }
+.strip-search input[type='text']:focus-visible { outline: none; }
+.strip-search .count { font-size: 11.5px; color: var(--text-2); white-space: nowrap; font-variant-numeric: tabular-nums; padding: 0 4px; }
+.strip-search .btn.small.icon { width: 22px; height: 22px; }
+.search-hits { position: absolute; left: -1px; bottom: calc(100% + 6px); width: 400px; max-width: calc(100vw - 32px); max-height: 300px; overflow-y: auto; margin: 0; padding: 4px; list-style: none; background: var(--menu); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow-md); z-index: 50; }
+.search-hits li { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 5px; cursor: pointer; font-size: 12.5px; min-width: 0; }
+.search-hits li:hover { background: var(--btn-hover); }
+.search-hits li.active { background: var(--primary); color: var(--on-primary); }
+.search-hits li.active .where { color: inherit; }
+.search-hits li.more { cursor: default; color: var(--text-2); }
+.search-hits li.more:hover { background: none; }
+.search-hits .hit-thumb { width: 40px; height: 27px; object-fit: cover; border-radius: 3px; flex: none; background: var(--thumb-empty); }
+.search-hits .hit-thumb.text { display: grid; place-items: center; background: #0f0f10; color: #fff; font-weight: 700; font-size: 12px; }
+.search-hits .what { flex: 1; }
+.search-hits .where { color: var(--text-2); font-size: 11.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.strip-zoom { display: flex; align-items: center; gap: 2px; }
+.strip-zoom input[type='range'] { width: 110px; margin: 0 2px; }
+.menu button > span:has(> .chapter-item) { flex: 1; min-width: 0; }
+.chapter-item { display: flex; align-items: baseline; gap: 16px; min-width: 0; }
+.chapter-item .ellipsis { flex: 1; max-width: 320px; }
+.chapter-item .time { color: var(--text-3); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.menu button:hover .chapter-item .time, .menu button:focus-visible .chapter-item .time { color: inherit; }
+/* search matches: a bar above the card (the selection keeps its outline) */
+.card.match::after { content: ''; position: absolute; left: 0; right: 0; top: -5px; height: 3px; border-radius: 2px; background: var(--warn); pointer-events: none; }
+.card.match-current::after { top: -6px; height: 4px; }
+/* small cards: no badges or text, numbers every few slides, a thin mark at each chapter */
+.card.no-num .num { display: none; }
+.strip:not(.zoom-full) .card .num { font-size: 10px; left: 0; }
+.strip:not(.zoom-full) .card.chapter::before { content: ''; position: absolute; left: 0; top: -9px; bottom: 0; width: 2px; border-radius: 1px; background: var(--accent); z-index: 1; pointer-events: none; }
+.zoom-compact .card, .zoom-compact .card .tiles, .zoom-compact .card .text-card, .zoom-compact .card .err { border-radius: 4px; }
+.zoom-compact .card .text-card { font-size: 12px; }
+.zoom-tiny .card, .zoom-tiny .card .tiles, .zoom-tiny .card .text-card, .zoom-tiny .card .err { border-radius: 2px; }
+.zoom-tiny .card { outline-offset: 0; }
+.zoom-tiny .card .tiles { gap: 0; }
+.zoom-tiny .card .text-card { font-size: 0; }
+/* files from Explorer over the filmstrip go in at the marker: the window's "drop here" steps aside */
+.strip.files-over .strip-scroll { background: var(--accent-soft); }
+.app:has(.strip.files-over) .window-drop { display: none; }
 
 /* menus */
 .menu { position: fixed; z-index: 50; background: var(--menu); border: 1px solid var(--line); border-radius: 8px; padding: 4px; min-width: 220px; max-width: min(360px, calc(100vw - 16px)); box-shadow: var(--shadow-md); }

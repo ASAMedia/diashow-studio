@@ -5,6 +5,6 @@
     "resolveJsonModule": true, "isolatedModules": true, "types": ["node"], "composite": true,
     "paths": { "@shared/*": ["./src/shared/*"] }
   },
-  "exclude": ["tests/grouping.test.ts", "tests/cleanupPixelation.test.ts", "tests/editFraming.test.ts"],
+  "exclude": ["tests/grouping.test.ts", "tests/cleanupPixelation.test.ts", "tests/editFraming.test.ts", "tests/filmstrip.test.ts"],
   "include": ["electron.vite.config.ts", "src/main/**/*", "src/preload/**/*", "src/shared/**/*", "tests/**/*", "vitest.config.ts", "playwright.config.ts"]
 }

@@ -14,7 +14,7 @@ function checkId(id: unknown): string {
 export function checkChoice(raw: unknown): CleanupChoice {
   const o = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
   const uploads: UploadChoice = o.uploads === 'all' || o.uploads === 'leftOut' ? o.uploads : 'none'
-  return { faces: o.faces === true, uploads, caches: o.caches === true, backups: o.backups === true, exports: o.exports === true }
+  return { faces: o.faces === true, uploads, caches: o.caches === true, backups: o.backups === true, exports: o.exports === true, ...(o.history === true ? { history: true } : {}) }
 }
 
 function checkExtras(raw: unknown): DeleteExtras {
@@ -44,10 +44,14 @@ export function registerCleanup(d: CleanupDeps): void {
     const pid = checkId(id)
     if (at !== null && !validDeleteAt(at)) throw new Error('invalid date')
     return serial(pid, async () => {
-      const project = await d.projects.peek(pid)
+      let read: { text: string; repaired: boolean } | undefined
+      let written: string | undefined
+      const project = await d.projects.peek(pid, (text, repaired) => (read = { text, repaired }))
       if (at === null) delete project.deleteAt
       else project.deleteAt = startOfDay(at as number)
-      await d.projects.save(project)
+      await d.projects.save(project, (text) => (written = text))
+      // the show's undo history stays usable (it would not fit the rewritten file any more)
+      if (read && !read.repaired && written !== undefined) await d.history?.rebase?.(pid, read.text, written).catch(() => {})
     })
   })
   ipcMain.handle('project:delete', (_e, id: unknown, extras: unknown) => {

@@ -35,9 +35,24 @@ Der Editor hat drei Bereiche: die **Vorschau** in der Mitte, rechts die Reiter *
 - **Texte:** **Text hinzufügen** erzeugt eine Textfolie. Im Reiter **Folie** fügst du Textfelder auf ein Foto ein.
 - **Kapitel:** im Menü **⋯** gibt es **Tagestitel aus Aufnahmedatum** und **Kapitel aus Ordnernamen**, außerdem **Nach Aufnahmedatum sortieren** und **Abspann hinzufügen**.
 - **Videos:** im Reiter **Folie** kürzen, Tempo ändern (Zeitlupe/Zeitraffer) und **Verwacklung beruhigen**.
-- **Rückgängig:** [[Strg+Z]], wiederholen mit [[Strg+Y]].
+- **Rückgängig:** [[Strg+Z]], wiederholen mit [[Strg+Y]]. Das geht auch nach einem Neustart: Jede Diashow behält ihre letzten 100 Schritte.
 
 > Tipp: Mit [[Leertaste]] spielst du die Vorschau ab, mit [[←]] und [[→]] springst du von Folie zu Folie.
+
+### Filmstreifen: Zoom, Suche und Kapitel
+
+- **Zoom:** Mit − und + oder dem Regler rechts über dem Filmstreifen werden die Folien kleiner oder größer, ebenso mit [[Strg]]+Mausrad über dem Filmstreifen (dann bleibt die Stelle unter der Maus stehen). **Ganze Diashow zeigen** passt alle Folien in die Breite. Kleine Karten zeigen nur noch Bilder; eine dünne blaue Linie markiert jedes Kapitel. Die Tonspur darunter passt bei jeder Größe.
+- **Suche:** [[Strg+F]] oder die Lupe. Gesucht wird in Dateinamen, Kapiteln und Tagestiteln, Bildtexten, Textfolien, Textfeldern, Namen aus der Personenliste und im Aufnahmedatum: „12.5.“, „12. Mai“, „Dienstag“, „Mai 2025“, auch englisch („May 12“, „Tuesday“). „Video“ und „Live“ finden Videos und Live Photos. Bei mehreren Wörtern muss jedes passen.
+- Die Treffer stehen in einer Liste über dem Suchfeld und sind im Filmstreifen gelb markiert. [[↑]] / [[↓]] und [[Enter]] springen zu einem Treffer: Die Folie wird ausgewählt und in der Vorschau gezeigt. [[Enter]] / [[Umschalt+Enter]] oder [[F3]] / [[Umschalt+F3]] gehen zum nächsten / vorigen Treffer, [[Esc]] schließt die Suche.
+- **Kapitel:** Das Menü **Kapitel** listet Titel, Kapitel und Textfolien mit ihrer Zeit; ein Klick springt hin.
+
+### Fotos an einer Stelle einfügen
+
+- **Aus dem Explorer ziehen:** Fotos, Videos oder Ordner zwischen zwei Karten des Filmstreifens ziehen; eine blaue Linie zeigt, wo sie landen. Sie werden wie beim Hinzufügen eingelesen (Live Photos und RAW+JPEG als ein Foto) und nach Aufnahmezeit geordnet. Auf die Mitte einer Karte gezogen, kommen sie mit auf diese Folie, wenn das Thema mehrere Fotos pro Folie zeigt und Platz ist. Woanders im Fenster abgelegt, landen sie wie bisher hinter der Auswahl.
+- **Kopieren und einfügen:** Im Explorer kopierte Dateien ([[Strg+C]]) fügt [[Strg+V]] hinter der ausgewählten Folie ein, ohne Auswahl am Ende. Ein kopiertes Bild ohne Datei, etwa ein Bildschirmfoto mit [[Win+Umschalt+S]], speichert die App als PNG in `Dokumente\Diashow Studio\Eingefügt\<Diashow>` und fügt es ein. **Nach dem Projekt aufräumen** kann diese Bilder wieder löschen.
+- **Einfügen…** im Menü einer Folie wählt Dateien aus und setzt sie hinter diese Folie.
+
+Die eingefügten Folien sind danach ausgewählt; [[Strg+Z]] nimmt das ganze Einfügen in einem Schritt zurück. In Themen mit mehreren Fotos pro Folie (Magazin, Origami, …) bleiben alle anderen Folien, wie sie sind: Die neuen Fotos bilden eigene Folien.
 
 ### Fotos bearbeiten
 
@@ -144,9 +159,10 @@ Für Schülerinnen und Schüler ohne Fotoerlaubnis kannst du Gesichter verpixeln
 Ist die Diashow fertig, entfernst du an einer Stelle, was die App zu ihr gespeichert hat: **⋯ → Nach dem Projekt aufräumen…**, der Radiergummi an der Diashow auf der Startseite oder **Einstellungen → Datenschutz**. Der Dialog zeigt jeden Teil mit seiner Größe:
 
 - **Gesichtsdaten:** erkannte Gesichter, Gesichtsmerkmale und die Personenliste mit den Namen, auch in älteren Versionen und im Zwischenspeicher. Was verpixelt ist, bleibt verpixelt, in der Vorschau und in jedem späteren Export. Neue Fotos werden danach aber nicht mehr automatisch erkannt.
-- **Hochgeladene Fotos und Videos** der Klasse (`Dokumente\Diashow Studio\Uploads`): alle oder nur die, die nicht in der Show sind. Folien mit gelöschten Fotos verschwinden aus der Show; exportiere vorher.
+- **Hochgeladene Fotos und Videos** der Klasse (`Dokumente\Diashow Studio\Uploads`) und mit [[Strg+V]] eingefügte Bilder (`Dokumente\Diashow Studio\Eingefügt`): alle oder nur die, die nicht in der Show sind. Folien mit gelöschten Fotos verschwinden aus der Show; exportiere vorher.
 - **Zwischenspeicher** (Vorschaubilder, Videokopien, Ton): entsteht bei Bedarf neu.
 - **Ältere Versionen** und **Export-Aufträge** (Momentaufnahmen in der Warteschlange).
+- **Rückgängig-Verlauf:** frühere Stände der Diashow, damit [[Strg+Z]] auch nach einem Neustart geht. Löschst du Gesichtsdaten oder hochgeladene Fotos, wird er immer mitgelöscht, weil die früheren Stände sie noch enthalten. In **Einstellungen → Datenschutz** löschst du ihn auch für eine oder alle Diashows.
 
 ![Nach dem Projekt aufräumen](cleanup.jpg)
 
@@ -222,6 +238,10 @@ Klappt etwas nicht, hilft ein **Diagnosepaket** der Person, die dir hilft: **Ein
 | [[Strg]]+Klick, [[Umschalt]]+Klick | Mehrere Folien auswählen |
 | [[Strg+A]] | Alle Folien auswählen |
 | [[Strg+R]] | Ausgewählte Fotos nach links drehen |
+| [[Strg+F]] | Folien suchen (Name, Kapitel, Datum, Person) |
+| [[F3]] / [[Umschalt+F3]] | Nächster / voriger Treffer der Suche |
+| [[Strg+V]] | Kopierte Fotos, Videos oder ein Bildschirmfoto hinter der ausgewählten Folie einfügen |
+| [[Strg]]+Mausrad | Filmstreifen vergrößern / verkleinern |
 | [[Alt+Enter]] | Vollbild abspielen |
 | [[Esc]] | Vollbild, Präsentation oder Dialog beenden |
 | [[F1]] | Dieses Handbuch |
@@ -237,6 +257,7 @@ Alles in Diashow Studio geht auch ohne Maus:
 - [[Tab]] und [[Umschalt+Tab]] springen von Bedienelement zu Bedienelement; das aktive ist blau umrandet. [[Leertaste]] oder [[Enter]] drücken einen Knopf.
 - In der rechten Leiste wechseln [[↑]] und [[↓]] zwischen den Reitern **Themen**, **Musik**, **Dauer** und **Folie**.
 - Der Filmstreifen ist ein einziger Halt für [[Tab]]: Dort gehen [[←]] und [[→]] von Folie zu Folie und wählen sie aus ([[Umschalt]] wählt einen Bereich), [[Alt+←]] / [[Alt+→]] verschieben die Folie, [[Umschalt+F10]] öffnet ihr Menü.
+- [[Strg+F]] öffnet die Suche im Filmstreifen; [[↑]] / [[↓]] wählen einen Treffer, [[Enter]] springt hin. [[Strg+V]] fügt kopierte Fotos hinter der ausgewählten Folie ein.
 - Menüs bedienst du mit den Pfeiltasten und [[Enter]]; [[Esc]] schließt sie.
 - [[Esc]] schließt jeden Dialog; danach steht der Fokus wieder dort, wo du vorher warst.
 - Bei Songs verschieben [[↑]] und [[↓]] auf der Nummer den Song in der Liste. Die Griffe zum Kürzen von Videos und Songs bewegen sich mit [[←]] und [[→]], mit [[Umschalt]] in größeren Schritten.

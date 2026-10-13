@@ -115,9 +115,23 @@
   <li><strong>Text:</strong> <strong>Add text</strong> creates a text slide. The <strong>Slide</strong> tab adds text boxes on top of a photo.</li>
   <li><strong>Chapters:</strong> the <strong>⋯</strong> menu has <strong>Day titles from capture date</strong> and <strong>Chapters from folder names</strong>, as well as <strong>Sort by capture date</strong> and <strong>Add end credits</strong>.</li>
   <li><strong>Videos:</strong> trim them, change their speed (slow motion, time lapse) and <strong>Reduce shake</strong> in the <strong>Slide</strong> tab.</li>
-  <li><strong>Undo:</strong> <kbd>Ctrl+Z</kbd>, redo with <kbd>Ctrl+Y</kbd>.</li>
+  <li><strong>Undo:</strong> <kbd>Ctrl+Z</kbd>, redo with <kbd>Ctrl+Y</kbd>. This works after a restart too: each slideshow keeps its last 100 steps.</li>
 </ul>
 <p class="tip">Tip: <kbd>Space</kbd> plays the preview, <kbd>←</kbd> and <kbd>→</kbd> step from slide to slide.</p>
+<h3>Filmstrip: zoom, search and chapters</h3>
+<ul>
+  <li><strong>Zoom:</strong> − and + or the slider at the right above the filmstrip make the slides smaller or larger, and so does <kbd>Ctrl</kbd>+mouse wheel over the filmstrip (the spot under the mouse stays put). <strong>Show the whole slideshow</strong> fits every slide into the width. Small cards show only pictures; a thin blue line marks each chapter. The audio lane below fits at every size.</li>
+  <li><strong>Search:</strong> <kbd>Ctrl+F</kbd> or the magnifier. It looks in file names, chapters and day titles, captions, text slides, text boxes, names from the people list and the capture date: “5/12”, “May 12”, “Tuesday”, “May 2025”, also in German (“12.5.”, “12. Mai”, “Dienstag”). “Video” and “Live” find videos and Live Photos. With several words, each must match.</li>
+  <li>The matches are listed above the search field and marked yellow in the filmstrip. <kbd>↑</kbd> / <kbd>↓</kbd> and <kbd>Enter</kbd> jump to a match: the slide is selected and shown in the preview. <kbd>Enter</kbd> / <kbd>Shift+Enter</kbd> or <kbd>F3</kbd> / <kbd>Shift+F3</kbd> go to the next / previous match, <kbd>Esc</kbd> closes the search.</li>
+  <li><strong>Chapters:</strong> the <strong>Chapters</strong> menu lists the title, chapters and text slides with their time; a click jumps there.</li>
+</ul>
+<h3>Inserting photos at a place</h3>
+<ul>
+  <li><strong>Drag from Explorer:</strong> drop photos, videos or folders between two cards of the filmstrip; a blue line shows where they go. They are read as with any import (Live Photos and RAW+JPEG as one photo) and ordered by capture time. Dropped on the middle of a card, they join that slide when the theme shows several photos per slide and there is room. Dropped elsewhere in the window, they go behind the selection as before.</li>
+  <li><strong>Copy and paste:</strong> files copied in Explorer (<kbd>Ctrl+C</kbd>) go in behind the selected slide with <kbd>Ctrl+V</kbd>, or at the end when nothing is selected. A copied picture without a file, such as a screenshot taken with <kbd>Win+Shift+S</kbd>, is saved as a PNG in <code>Documents\Diashow Studio\Pasted\&lt;slideshow&gt;</code> and inserted. <strong>Clean up after the project</strong> can delete these pictures again.</li>
+  <li><strong>Insert…</strong> in a slide&#39;s menu picks files and puts them behind that slide.</li>
+</ul>
+<p>The inserted slides are selected afterwards; <kbd>Ctrl+Z</kbd> takes back the whole insert in one step. In themes with several photos per slide (Magazine, Origami, …) every other slide stays as it is: the new photos form slides of their own.</p>
 <h3>Editing photos</h3>
 <p>Crooked or sideways phone photos are fixed as in Photos on the Mac: select the photo and click <strong>Edit</strong> under <strong>Picture</strong> in the <strong>Slide</strong> tab (or <strong>Edit</strong> in the slide&#39;s menu). The preview then shows the <strong>Crop</strong> tool:</p>
 <ul>
@@ -245,9 +259,10 @@
 <p>When the slideshow is finished, you remove what the app keeps for it in one place: <strong>⋯ → Clean up after the project…</strong>, the eraser on the slideshow on the home screen, or <strong>Settings → Privacy</strong>. The dialog lists each part with its size:</p>
 <ul>
   <li><strong>Face data:</strong> detected faces, face features and the people list with the names, also in older versions and in the cache. Whatever is pixelated stays pixelated, in the preview and in every later export. New photos are no longer recognised automatically afterwards, though.</li>
-  <li><strong>Uploaded photos and videos</strong> of the class (<code>Documents\Diashow Studio\Uploads</code>): all of them, or only those not in the show. Slides with deleted photos leave the show; export first.</li>
+  <li><strong>Uploaded photos and videos</strong> of the class (<code>Documents\Diashow Studio\Uploads</code>) and pictures pasted with <kbd>Ctrl+V</kbd> (<code>Documents\Diashow Studio\Pasted</code>): all of them, or only those not in the show. Slides with deleted photos leave the show; export first.</li>
   <li><strong>Cache</strong> (thumbnails, video copies, sound): made again when needed.</li>
   <li><strong>Older versions</strong> and <strong>export jobs</strong> (snapshots in the queue).</li>
+  <li><strong>Undo history:</strong> earlier states of the slideshow, so <kbd>Ctrl+Z</kbd> works after a restart too. Deleting face data or uploaded photos always deletes it too, because the earlier states still contain them. <strong>Settings → Privacy</strong> also clears it for one slideshow or all of them.</li>
 </ul>
 <figure>
   <img src="../img/en/cleanup.jpg" width="1100" height="688" alt="Cleaning up after a project" loading="lazy" decoding="async">
@@ -329,6 +344,10 @@
 <tr><td><kbd>Ctrl</kbd>+click, <kbd>Shift</kbd>+click</td><td>Select several slides</td></tr>
 <tr><td><kbd>Ctrl+A</kbd></td><td>Select all slides</td></tr>
 <tr><td><kbd>Ctrl+R</kbd></td><td>Rotate the selected photos to the left</td></tr>
+<tr><td><kbd>Ctrl+F</kbd></td><td>Search slides (name, chapter, date, person)</td></tr>
+<tr><td><kbd>F3</kbd> / <kbd>Shift+F3</kbd></td><td>Next / previous search match</td></tr>
+<tr><td><kbd>Ctrl+V</kbd></td><td>Insert copied photos, videos or a screenshot after the selected slide</td></tr>
+<tr><td><kbd>Ctrl</kbd>+mouse wheel</td><td>Zoom the filmstrip in / out</td></tr>
 <tr><td><kbd>Alt+Enter</kbd></td><td>Play fullscreen</td></tr>
 <tr><td><kbd>Esc</kbd></td><td>Leave fullscreen, presentation or a dialog</td></tr>
 <tr><td><kbd>F1</kbd></td><td>This handbook</td></tr>
@@ -346,6 +365,7 @@
   <li><kbd>Tab</kbd> and <kbd>Shift+Tab</kbd> move from control to control; the active one has a blue ring. <kbd>Space</kbd> or <kbd>Enter</kbd> presses a button.</li>
   <li>In the bar on the right, <kbd>↑</kbd> and <kbd>↓</kbd> switch between the tabs <strong>Themes</strong>, <strong>Music</strong>, <strong>Duration</strong> and <strong>Slide</strong>.</li>
   <li>The filmstrip is a single <kbd>Tab</kbd> stop: there <kbd>←</kbd> and <kbd>→</kbd> go from slide to slide and select it (<kbd>Shift</kbd> selects a range), <kbd>Alt+←</kbd> / <kbd>Alt+→</kbd> move the slide, <kbd>Shift+F10</kbd> opens its menu.</li>
+  <li><kbd>Ctrl+F</kbd> opens the search in the filmstrip; <kbd>↑</kbd> / <kbd>↓</kbd> pick a match and <kbd>Enter</kbd> jumps to it. <kbd>Ctrl+V</kbd> inserts copied photos after the selected slide.</li>
   <li>Menus work with the arrow keys and <kbd>Enter</kbd>; <kbd>Esc</kbd> closes them.</li>
   <li><kbd>Esc</kbd> closes every dialog; the focus then goes back to where you were.</li>
   <li>On a song&#39;s number, <kbd>↑</kbd> and <kbd>↓</kbd> move the song in the list. The handles for trimming videos and songs move with <kbd>←</kbd> and <kbd>→</kbd>, with <kbd>Shift</kbd> in bigger steps.</li>

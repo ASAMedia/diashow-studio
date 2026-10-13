@@ -221,6 +221,8 @@ export interface ImportOptions {
   salvage?: boolean
   /** The bundled songs: an archived show plays its own copy of its theme song when this app's differs (archive/themeSong.ts). */
   themeTracks?: readonly ThemeTrack[]
+  /** Opens a show's own file in the projects folder (no import); default store.load. */
+  loadOwn?: (id: string) => Promise<Project>
 }
 
 export async function importProjectFile(path: string, store: ProjectStore, opts: ImportOptions = {}): Promise<Project> {
@@ -228,7 +230,7 @@ export async function importProjectFile(path: string, store: ProjectStore, opts:
   if (extname(file).toLowerCase() !== PROJECT_EXT) throw new Error('not a Diashow Studio project file (.dshow)')
   // Opening a project's own file in the projects folder: nothing to import
   const own = basename(file, extname(file))
-  if (!opts.salvage && /^[A-Za-z0-9_-]{1,128}$/.test(own) && samePath(file, join(store.dir, `${own}${PROJECT_EXT}`))) return store.load(own)
+  if (!opts.salvage && /^[A-Za-z0-9_-]{1,128}$/.test(own) && samePath(file, join(store.dir, `${own}${PROJECT_EXT}`))) return opts.loadOwn ? opts.loadOwn(own) : store.load(own)
   // migrated and validated: an older format is converted, a newer one refused, broken parts dropped
   const read = readProjectText(await readFile(file, 'utf8'), { salvage: opts.salvage })
   const report = read.report

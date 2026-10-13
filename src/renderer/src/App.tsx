@@ -28,6 +28,7 @@ import { watchStabilize } from './stabilize'
 import { timelineOf } from './timeline'
 import { keyForFocus, modalOpen } from './keys'
 import { closePhotoEdit, rotateSelection } from './photoEdit'
+import { handledDrops, pasteMedia } from './insert'
 import { NetworkBanner } from './components/NetworkBanner'
 
 /** Routes dropped files: audio goes to the playlist, everything else into the show. */
@@ -98,6 +99,8 @@ export function App() {
       e.preventDefault()
       depth = 0
       setDragging(false)
+      // files dropped on the filmstrip went in where they were dropped (Filmstrip.tsx)
+      if (handledDrops.has(e)) return
       const paths = [...(e.dataTransfer?.files ?? [])].map((f) => window.api.pathForFile(f)).filter(Boolean)
       if (paths.length) void handleDroppedPaths(paths)
     }
@@ -134,6 +137,13 @@ export function App() {
       if (s.view !== 'editor' || s.fullscreen || s.exportOpen || s.presenting || s.dialog || modalOpen()) return
       if (rotateKey) {
         rotateSelection(-1)
+        return
+      }
+      // Ctrl+V: photos, videos or a screenshot copied elsewhere go in behind the selected slide (insert.ts);
+      // in a text field it pastes text (keyForFocus above)
+      if (e.ctrlKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'v') {
+        e.preventDefault()
+        void pasteMedia()
         return
       }
       if (e.key === 'Escape' && s.photoEdit) {

@@ -41,8 +41,10 @@ export interface ProjectReferences {
 export interface ProjectStore {
   readonly dir: string
   list(): Promise<ProjectSummary[]>
-  load(id: string): Promise<Project>
-  save(project: Project): Promise<void>
+  /** `onRead`: the file's text as read, and whether validation had to drop parts of it (for the undo history, history.ts). */
+  load(id: string, onRead?: (text: string, repaired: boolean) => void): Promise<Project>
+  /** `onWritten`: the text just written, called before the next save of the project may start. */
+  save(project: Project, onWritten?: (text: string) => void): Promise<void>
   delete(id: string): Promise<void>
   /** Everything the saved projects (but `except`) refer to (for the cache cleanup). */
   references(except?: string): Promise<ProjectReferences>
@@ -58,8 +60,8 @@ export interface ProjectStore {
   listBackups(id: string): Promise<BackupInfo[]>
   /** Makes a backup the current version (backing up the current one first) and returns it. */
   restoreBackup(file: string): Promise<Project>
-  /** A project as load() returns it, without reporting, backing up or anything else (diagnostics). */
-  peek(id: string): Promise<Project>
+  /** A project as load() returns it (`onRead` too), without reporting, backing up or anything else (diagnostics, the deletion reminder). */
+  peek(id: string, onRead?: (text: string, repaired: boolean) => void): Promise<Project>
   /** Project files that cannot be opened: unreadable or broken ('damaged'), or from a newer app ('too-new'). */
   damaged(): Promise<DamagedProject[]>
   /** What can be rescued from a damaged project file, and its backups. */
@@ -119,9 +121,10 @@ async function readProject(path: string): Promise<Project | null> {
   }
 }
 
-/** A project file read, migrated and validated; throws ProjectFormatError. */
-async function readChecked(path: string, opts: { fallbackId?: string; salvage?: boolean } = {}): Promise<{ project: Project; report: RepairReport }> {
-  return readProjectText(await readFile(path, 'utf8'), opts)
+/** A project file read, migrated and validated, with its text; throws ProjectFormatError. */
+async function readChecked(path: string, opts: { fallbackId?: string; salvage?: boolean } = {}): Promise<{ project: Project; report: RepairReport; text: string }> {
+  const text = await readFile(path, 'utf8')
+  return { ...readProjectText(text, opts), text }
 }
 
 /** The project name in the text of a damaged file, if it is still there. */
@@ -156,10 +159,12 @@ export function createProjectStore(dir: string, opts: ProjectStoreOptions = {}):
     return next
   }
 
-  async function writeAtomic(target: string, project: Project): Promise<void> {
+  /** Writes a project file through a temp file; returns the text written. */
+  async function writeAtomic(target: string, project: Project): Promise<string> {
     await mkdir(dirname(target), { recursive: true })
     const tmp = `${target}.${process.pid}.${now()}.tmp`
-    await writeFile(tmp, JSON.stringify(project, null, 1), 'utf8')
+    const text = JSON.stringify(project, null, 1)
+    await writeFile(tmp, text, 'utf8')
     try {
       // the project list may be reading the file right now, or a virus scanner may hold it
       await replaceFile(tmp, target)
@@ -167,6 +172,7 @@ export function createProjectStore(dir: string, opts: ProjectStoreOptions = {}):
       await rm(tmp, { force: true })
       throw err
     }
+    return text
   }
 
   async function backupNames(id: string): Promise<string[]> {
@@ -233,9 +239,11 @@ export function createProjectStore(dir: string, opts: ProjectStoreOptions = {}):
       return summaries.filter((s): s is ProjectSummary => s !== null).sort((a, b) => b.updatedAt - a.updatedAt)
     },
 
-    async load(id) {
-      const { project: p, report } = await readChecked(file(id), { fallbackId: id })
-      if (p.id !== id) p.id = id
+    async load(id, onRead) {
+      const { project: p, report, text } = await readChecked(file(id), { fallbackId: id })
+      const renamed = p.id !== id
+      if (renamed) p.id = id
+      onRead?.(text, renamed || lostData(report))
       if (hasChanges(report)) {
         // the editor saves the repaired project right away: keep the file as it was
         if (lostData(report)) await serial(id, () => backupCurrent(id)).catch(() => {})
@@ -244,7 +252,7 @@ export function createProjectStore(dir: string, opts: ProjectStoreOptions = {}):
       return p
     },
 
-    async save(project) {
+    async save(project, onWritten) {
       const id = checkId(project.id)
       return serial(id, async () => {
         const last = lastBackup.get(id)
@@ -256,7 +264,8 @@ export function createProjectStore(dir: string, opts: ProjectStoreOptions = {}):
         }
         // A failed backup must never cost the save itself
         if (due) await backupCurrent(id).catch(() => {})
-        await writeAtomic(file(id), project)
+        const text = await writeAtomic(file(id), project)
+        onWritten?.(text)
       })
     },
 
@@ -351,8 +360,10 @@ export function createProjectStore(dir: string, opts: ProjectStoreOptions = {}):
       })
     },
 
-    async peek(id) {
-      return (await readChecked(file(id), { fallbackId: id })).project
+    async peek(id, onRead) {
+      const { project, report, text } = await readChecked(file(id), { fallbackId: id })
+      onRead?.(text, project.id !== id || lostData(report))
+      return project
     },
 
     async damaged() {

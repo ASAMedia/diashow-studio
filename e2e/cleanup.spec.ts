@@ -293,7 +293,10 @@ test('clean-up after the project: reminder, removal with sizes, pixelation kept'
     await expect(summary).toContainText(/Freigegebener Speicher|Space freed/)
     await page.screenshot({ path: join(shots, 'summary.png') })
     const freed = Number(await summary.getAttribute('data-freed'))
-    expect(freed).toBe(inv.uploads.bytes + inv.caches.bytes + inv.backups.bytes + inv.exports.bytes)
+    // the undo history (it holds the face data too) goes with the face data
+    expect(inv.history.files).toBe(1)
+    expect(freed).toBe(inv.uploads.bytes + inv.caches.bytes + inv.backups.bytes + inv.exports.bytes + inv.history.bytes)
+    expect(existsSync(join(dataDir, 'userData', 'history', `${id}.json.gz`))).toBe(false)
     await dlg.locator('.actions .btn.primary').click()
     // the reminder is done
     await expect(page.getByTestId('cleanup-banner')).toHaveCount(0)

@@ -115,9 +115,23 @@
   <li><strong>Texte:</strong> <strong>Text hinzufügen</strong> erzeugt eine Textfolie. Im Reiter <strong>Folie</strong> fügst du Textfelder auf ein Foto ein.</li>
   <li><strong>Kapitel:</strong> im Menü <strong>⋯</strong> gibt es <strong>Tagestitel aus Aufnahmedatum</strong> und <strong>Kapitel aus Ordnernamen</strong>, außerdem <strong>Nach Aufnahmedatum sortieren</strong> und <strong>Abspann hinzufügen</strong>.</li>
   <li><strong>Videos:</strong> im Reiter <strong>Folie</strong> kürzen, Tempo ändern (Zeitlupe/Zeitraffer) und <strong>Verwacklung beruhigen</strong>.</li>
-  <li><strong>Rückgängig:</strong> <kbd>Strg+Z</kbd>, wiederholen mit <kbd>Strg+Y</kbd>.</li>
+  <li><strong>Rückgängig:</strong> <kbd>Strg+Z</kbd>, wiederholen mit <kbd>Strg+Y</kbd>. Das geht auch nach einem Neustart: Jede Diashow behält ihre letzten 100 Schritte.</li>
 </ul>
 <p class="tip">Tipp: Mit <kbd>Leertaste</kbd> spielst du die Vorschau ab, mit <kbd>←</kbd> und <kbd>→</kbd> springst du von Folie zu Folie.</p>
+<h3>Filmstreifen: Zoom, Suche und Kapitel</h3>
+<ul>
+  <li><strong>Zoom:</strong> Mit − und + oder dem Regler rechts über dem Filmstreifen werden die Folien kleiner oder größer, ebenso mit <kbd>Strg</kbd>+Mausrad über dem Filmstreifen (dann bleibt die Stelle unter der Maus stehen). <strong>Ganze Diashow zeigen</strong> passt alle Folien in die Breite. Kleine Karten zeigen nur noch Bilder; eine dünne blaue Linie markiert jedes Kapitel. Die Tonspur darunter passt bei jeder Größe.</li>
+  <li><strong>Suche:</strong> <kbd>Strg+F</kbd> oder die Lupe. Gesucht wird in Dateinamen, Kapiteln und Tagestiteln, Bildtexten, Textfolien, Textfeldern, Namen aus der Personenliste und im Aufnahmedatum: „12.5.“, „12. Mai“, „Dienstag“, „Mai 2025“, auch englisch („May 12“, „Tuesday“). „Video“ und „Live“ finden Videos und Live Photos. Bei mehreren Wörtern muss jedes passen.</li>
+  <li>Die Treffer stehen in einer Liste über dem Suchfeld und sind im Filmstreifen gelb markiert. <kbd>↑</kbd> / <kbd>↓</kbd> und <kbd>Enter</kbd> springen zu einem Treffer: Die Folie wird ausgewählt und in der Vorschau gezeigt. <kbd>Enter</kbd> / <kbd>Umschalt+Enter</kbd> oder <kbd>F3</kbd> / <kbd>Umschalt+F3</kbd> gehen zum nächsten / vorigen Treffer, <kbd>Esc</kbd> schließt die Suche.</li>
+  <li><strong>Kapitel:</strong> Das Menü <strong>Kapitel</strong> listet Titel, Kapitel und Textfolien mit ihrer Zeit; ein Klick springt hin.</li>
+</ul>
+<h3>Fotos an einer Stelle einfügen</h3>
+<ul>
+  <li><strong>Aus dem Explorer ziehen:</strong> Fotos, Videos oder Ordner zwischen zwei Karten des Filmstreifens ziehen; eine blaue Linie zeigt, wo sie landen. Sie werden wie beim Hinzufügen eingelesen (Live Photos und RAW+JPEG als ein Foto) und nach Aufnahmezeit geordnet. Auf die Mitte einer Karte gezogen, kommen sie mit auf diese Folie, wenn das Thema mehrere Fotos pro Folie zeigt und Platz ist. Woanders im Fenster abgelegt, landen sie wie bisher hinter der Auswahl.</li>
+  <li><strong>Kopieren und einfügen:</strong> Im Explorer kopierte Dateien (<kbd>Strg+C</kbd>) fügt <kbd>Strg+V</kbd> hinter der ausgewählten Folie ein, ohne Auswahl am Ende. Ein kopiertes Bild ohne Datei, etwa ein Bildschirmfoto mit <kbd>Win+Umschalt+S</kbd>, speichert die App als PNG in <code>Dokumente\Diashow Studio\Eingefügt\&lt;Diashow&gt;</code> und fügt es ein. <strong>Nach dem Projekt aufräumen</strong> kann diese Bilder wieder löschen.</li>
+  <li><strong>Einfügen…</strong> im Menü einer Folie wählt Dateien aus und setzt sie hinter diese Folie.</li>
+</ul>
+<p>Die eingefügten Folien sind danach ausgewählt; <kbd>Strg+Z</kbd> nimmt das ganze Einfügen in einem Schritt zurück. In Themen mit mehreren Fotos pro Folie (Magazin, Origami, …) bleiben alle anderen Folien, wie sie sind: Die neuen Fotos bilden eigene Folien.</p>
 <h3>Fotos bearbeiten</h3>
 <p>Schiefe oder liegende Handyfotos richtest du wie in Fotos auf dem Mac: Foto auswählen und im Reiter <strong>Folie</strong> unter <strong>Bild</strong> auf <strong>Bearbeiten</strong> klicken (oder <strong>Bearbeiten</strong> im Menü der Folie). Über der Vorschau erscheint das Werkzeug <strong>Zuschneiden</strong>:</p>
 <ul>
@@ -245,9 +259,10 @@
 <p>Ist die Diashow fertig, entfernst du an einer Stelle, was die App zu ihr gespeichert hat: <strong>⋯ → Nach dem Projekt aufräumen…</strong>, der Radiergummi an der Diashow auf der Startseite oder <strong>Einstellungen → Datenschutz</strong>. Der Dialog zeigt jeden Teil mit seiner Größe:</p>
 <ul>
   <li><strong>Gesichtsdaten:</strong> erkannte Gesichter, Gesichtsmerkmale und die Personenliste mit den Namen, auch in älteren Versionen und im Zwischenspeicher. Was verpixelt ist, bleibt verpixelt, in der Vorschau und in jedem späteren Export. Neue Fotos werden danach aber nicht mehr automatisch erkannt.</li>
-  <li><strong>Hochgeladene Fotos und Videos</strong> der Klasse (<code>Dokumente\Diashow Studio\Uploads</code>): alle oder nur die, die nicht in der Show sind. Folien mit gelöschten Fotos verschwinden aus der Show; exportiere vorher.</li>
+  <li><strong>Hochgeladene Fotos und Videos</strong> der Klasse (<code>Dokumente\Diashow Studio\Uploads</code>) und mit <kbd>Strg+V</kbd> eingefügte Bilder (<code>Dokumente\Diashow Studio\Eingefügt</code>): alle oder nur die, die nicht in der Show sind. Folien mit gelöschten Fotos verschwinden aus der Show; exportiere vorher.</li>
   <li><strong>Zwischenspeicher</strong> (Vorschaubilder, Videokopien, Ton): entsteht bei Bedarf neu.</li>
   <li><strong>Ältere Versionen</strong> und <strong>Export-Aufträge</strong> (Momentaufnahmen in der Warteschlange).</li>
+  <li><strong>Rückgängig-Verlauf:</strong> frühere Stände der Diashow, damit <kbd>Strg+Z</kbd> auch nach einem Neustart geht. Löschst du Gesichtsdaten oder hochgeladene Fotos, wird er immer mitgelöscht, weil die früheren Stände sie noch enthalten. In <strong>Einstellungen → Datenschutz</strong> löschst du ihn auch für eine oder alle Diashows.</li>
 </ul>
 <figure>
   <img src="img/de/cleanup.jpg" width="1100" height="688" alt="Nach dem Projekt aufräumen" loading="lazy" decoding="async">
@@ -329,6 +344,10 @@
 <tr><td><kbd>Strg</kbd>+Klick, <kbd>Umschalt</kbd>+Klick</td><td>Mehrere Folien auswählen</td></tr>
 <tr><td><kbd>Strg+A</kbd></td><td>Alle Folien auswählen</td></tr>
 <tr><td><kbd>Strg+R</kbd></td><td>Ausgewählte Fotos nach links drehen</td></tr>
+<tr><td><kbd>Strg+F</kbd></td><td>Folien suchen (Name, Kapitel, Datum, Person)</td></tr>
+<tr><td><kbd>F3</kbd> / <kbd>Umschalt+F3</kbd></td><td>Nächster / voriger Treffer der Suche</td></tr>
+<tr><td><kbd>Strg+V</kbd></td><td>Kopierte Fotos, Videos oder ein Bildschirmfoto hinter der ausgewählten Folie einfügen</td></tr>
+<tr><td><kbd>Strg</kbd>+Mausrad</td><td>Filmstreifen vergrößern / verkleinern</td></tr>
 <tr><td><kbd>Alt+Enter</kbd></td><td>Vollbild abspielen</td></tr>
 <tr><td><kbd>Esc</kbd></td><td>Vollbild, Präsentation oder Dialog beenden</td></tr>
 <tr><td><kbd>F1</kbd></td><td>Dieses Handbuch</td></tr>
@@ -346,6 +365,7 @@
   <li><kbd>Tab</kbd> und <kbd>Umschalt+Tab</kbd> springen von Bedienelement zu Bedienelement; das aktive ist blau umrandet. <kbd>Leertaste</kbd> oder <kbd>Enter</kbd> drücken einen Knopf.</li>
   <li>In der rechten Leiste wechseln <kbd>↑</kbd> und <kbd>↓</kbd> zwischen den Reitern <strong>Themen</strong>, <strong>Musik</strong>, <strong>Dauer</strong> und <strong>Folie</strong>.</li>
   <li>Der Filmstreifen ist ein einziger Halt für <kbd>Tab</kbd>: Dort gehen <kbd>←</kbd> und <kbd>→</kbd> von Folie zu Folie und wählen sie aus (<kbd>Umschalt</kbd> wählt einen Bereich), <kbd>Alt+←</kbd> / <kbd>Alt+→</kbd> verschieben die Folie, <kbd>Umschalt+F10</kbd> öffnet ihr Menü.</li>
+  <li><kbd>Strg+F</kbd> öffnet die Suche im Filmstreifen; <kbd>↑</kbd> / <kbd>↓</kbd> wählen einen Treffer, <kbd>Enter</kbd> springt hin. <kbd>Strg+V</kbd> fügt kopierte Fotos hinter der ausgewählten Folie ein.</li>
   <li>Menüs bedienst du mit den Pfeiltasten und <kbd>Enter</kbd>; <kbd>Esc</kbd> schließt sie.</li>
   <li><kbd>Esc</kbd> schließt jeden Dialog; danach steht der Fokus wieder dort, wo du vorher warst.</li>
   <li>Bei Songs verschieben <kbd>↑</kbd> und <kbd>↓</kbd> auf der Nummer den Song in der Liste. Die Griffe zum Kürzen von Videos und Songs bewegen sich mit <kbd>←</kbd> und <kbd>→</kbd>, mit <kbd>Umschalt</kbd> in größeren Schritten.</li>
