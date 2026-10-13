@@ -88,7 +88,17 @@ async function dropFiles(page: Page, files: string[], x: number, y: number, chec
     hovering = false
     await hover
   }
+  await page.evaluate(() => {
+    const w = window as any
+    w.__dropSeen = false
+    window.addEventListener('drop', () => (w.__dropSeen = true), { capture: true, once: true })
+  })
   await cdp.send('Input.dispatchDragEvent', { type: 'drop', x, y, data })
+  // the session must stay until the page has the drop: detaching first cancels the drag, which a
+  // slow machine (GitHub's runner) still delivers at that moment
+  await page.waitForFunction(() => (window as any).__dropSeen, null, { timeout: 15_000, polling: 100 }).catch(() => {
+    throw new Error(`the drop at ${x},${y} never reached the page`)
+  })
   await cdp.detach()
 }
 
@@ -358,31 +368,10 @@ test('filmstrip: zoom, search, chapters, insert by drop and Ctrl+V, undo', async
     // not pano.png: a panorama always has a slide of its own
     const onto = copyMedia(['misc/photo.webp'], join(dataDir, 'drop3'), true)
     const tb = (await cardBox(page, target))!
-    // what the page saw of the drop, for the report when it doesn't arrive (it failed on GitHub's runner only)
-    await page.evaluate(() => {
-      const w = window as any
-      w.__drops = []
-      window.addEventListener(
-        'drop',
-        (e) => {
-          const el = e.target as Element | null
-          w.__drops.push({ files: e.dataTransfer?.files.length, types: [...(e.dataTransfer?.items ?? [])].map((i) => `${i.kind}:${i.type}`), on: el?.className?.toString().slice(0, 60), x: e.clientX, y: e.clientY })
-        },
-        { capture: true, once: true }
-      )
-    })
     await dropFiles(page, onto, tb.left + tb.width / 2, tb.top + 20, async () => {
       await expect(page.locator(`.cards .card[data-index="${target}"]`)).toHaveClass(/merge-target/)
     })
-    try {
-      await expect.poll(async () => (await entryIds(page)).length, { timeout: 20_000 }).toBe(ids0.length + 1)
-    } catch (err) {
-      const seen = await page.evaluate(() => ({
-        drops: (window as any).__drops,
-        notices: [...document.querySelectorAll('[role="alert"], [role="status"]')].map((n) => n.textContent?.trim()).filter(Boolean)
-      }))
-      throw new Error(`${err instanceof Error ? err.message : String(err)}\ndrop at ${JSON.stringify(tb)} (target ${target}): ${JSON.stringify(seen)}\nerrors: ${JSON.stringify(s.errors)}`)
-    }
+    await expect.poll(async () => (await entryIds(page)).length, { timeout: 20_000 }).toBe(ids0.length + 1)
     after = await slides(page)
     expect(after.length).toBe(before.length)
     expect(after[target].paths).toContain(onto[0])
