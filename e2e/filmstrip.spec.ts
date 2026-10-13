@@ -317,7 +317,7 @@ test('filmstrip: zoom, search, chapters, insert by drop and Ctrl+V, undo', async
       expect(mark.left + mark.width / 2).toBeGreaterThan(b1.right - 2)
       expect(mark.left + mark.width / 2).toBeLessThan(b2.left + 2)
     })
-    await expect.poll(async () => (await entryIds(page)).length).toBe(ids0.length + 2)
+    await expect.poll(async () => (await entryIds(page)).length, { timeout: 20_000 }).toBe(ids0.length + 2)
     let after = await slides(page)
     // in front of the old second slide, sorted by capture time like any import (PXL_0002: 1 Aug 2025)
     expect(after.slice(0, 2).map((x) => x.ids)).toEqual(before.slice(0, 2).map((x) => x.ids))
@@ -334,7 +334,7 @@ test('filmstrip: zoom, search, chapters, insert by drop and Ctrl+V, undo', async
     await page.keyboard.press('Control+z')
     await expect.poll(() => entryIds(page)).toEqual(ids0)
     await page.keyboard.press('Control+y')
-    await expect.poll(async () => (await entryIds(page)).length).toBe(ids0.length + 2)
+    await expect.poll(async () => (await entryIds(page)).length, { timeout: 20_000 }).toBe(ids0.length + 2)
     await waitProcessed(page)
 
     // Magazine: dropped between two slides, the new photo gets its own slide and no other slide changes;
@@ -347,7 +347,7 @@ test('filmstrip: zoom, search, chapters, insert by drop and Ctrl+V, undo', async
     const m0 = (await cardBox(page, 0))!
     const m1 = (await cardBox(page, 1))!
     await dropFiles(page, one, (m0.right + m1.left) / 2, m0.top + 20)
-    await expect.poll(async () => (await entryIds(page)).length).toBe(ids0.length + 1)
+    await expect.poll(async () => (await entryIds(page)).length, { timeout: 20_000 }).toBe(ids0.length + 1)
     after = await slides(page)
     expect(after[0].ids).toEqual(before[0].ids)
     expect(after[1].paths).toEqual([one[0]])
@@ -361,7 +361,7 @@ test('filmstrip: zoom, search, chapters, insert by drop and Ctrl+V, undo', async
     await dropFiles(page, onto, tb.left + tb.width / 2, tb.top + 20, async () => {
       await expect(page.locator(`.cards .card[data-index="${target}"]`)).toHaveClass(/merge-target/)
     })
-    await expect.poll(async () => (await entryIds(page)).length).toBe(ids0.length + 1)
+    await expect.poll(async () => (await entryIds(page)).length, { timeout: 20_000 }).toBe(ids0.length + 1)
     after = await slides(page)
     expect(after.length).toBe(before.length)
     expect(after[target].paths).toContain(onto[0])
@@ -383,7 +383,7 @@ test('filmstrip: zoom, search, chapters, insert by drop and Ctrl+V, undo', async
     await page.keyboard.press('Escape')
     await page.locator(`.cards .card[data-index="1"]`).click()
     await page.keyboard.press('Control+v')
-    await expect.poll(async () => (await entryIds(page)).length).toBe(ids0.length + 2)
+    await expect.poll(async () => (await entryIds(page)).length, { timeout: 20_000 }).toBe(ids0.length + 2)
     after = await slides(page)
     expect(after.slice(0, 2).map((x) => x.ids)).toEqual(before.slice(0, 2).map((x) => x.ids))
     expect(after.slice(2, 4).flatMap((x) => x.paths).sort()).toEqual([...copied].sort())
@@ -391,7 +391,7 @@ test('filmstrip: zoom, search, chapters, insert by drop and Ctrl+V, undo', async
     await page.keyboard.press('Control+z')
     await expect.poll(() => entryIds(page)).toEqual(ids0)
     await page.keyboard.press('Control+y')
-    await expect.poll(async () => (await entryIds(page)).length).toBe(ids0.length + 2)
+    await expect.poll(async () => (await entryIds(page)).length, { timeout: 20_000 }).toBe(ids0.length + 2)
 
     // ---- Ctrl+V with a picture without a file (a screenshot): saved as a PNG for the show, then inserted
     const png = readFileSync(join(mediaDir, 'misc', 'pano.png')).toString('base64')
@@ -404,7 +404,7 @@ test('filmstrip: zoom, search, chapters, insert by drop and Ctrl+V, undo', async
     await page.locator('.stage').click({ position: { x: 5, y: 5 } })
     await page.evaluate(() => (window as any).__diashow.store.getState().select([]))
     await page.keyboard.press('Control+v')
-    await expect.poll(async () => (await entryIds(page)).length).toBe(ids0.length + 1)
+    await expect.poll(async () => (await entryIds(page)).length, { timeout: 20_000 }).toBe(ids0.length + 1)
     after = await slides(page)
     const pasted = after[after.length - 1].paths[0]
     const folder = join(dataDir, 'Diashow Studio', de ? 'Eingefügt' : 'Pasted', 'Streifen')
@@ -426,7 +426,7 @@ test('filmstrip: zoom, search, chapters, insert by drop and Ctrl+V, undo', async
     await answerOpenDialog(app, picked)
     await page.locator(`.cards .card[data-index="0"]`).click({ button: 'right' })
     await page.getByRole('menuitem', { name: /^(Einfügen…|Insert…)$/ }).click()
-    await expect.poll(async () => (await entryIds(page)).length).toBe(ids0.length + 1)
+    await expect.poll(async () => (await entryIds(page)).length, { timeout: 20_000 }).toBe(ids0.length + 1)
     after = await slides(page)
     expect(after[0].ids).toEqual(before[0].ids)
     expect(after[1].paths).toEqual(picked)

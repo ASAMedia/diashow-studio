@@ -24,6 +24,8 @@ const DELETE_AT = new Date(2027, 0, 12).getTime()
 /** Screenshots of the dialog for a look afterwards. */
 const shots = join(root, 'test-results', 'archive')
 const LANG = process.env.DIASHOW_LOCALE?.startsWith('en') ? 'en' : 'de'
+// the app's language as the test expects it, also on a runner whose Windows is English
+const LOCALE = { DIASHOW_LOCALE: process.env.DIASHOW_LOCALE ?? 'de-DE' }
 
 /** File names of the music in the preview's audio plan. */
 const musicFiles = (page: Page): Promise<string[]> =>
@@ -84,7 +86,7 @@ test('archive a show as ZIP, open it extracted on another PC', async () => {
     // ---- PC A: photos, a Live Photo, a video, one photo left out, a song, a deletion date
     const media = copyMedia(sampleFiles({ video: true, live: true }), originals)
     const [song] = copyMedia(['music/track1.mp3'], originals)
-    s = await launch(dataA)
+    s = await launch(dataA, LOCALE)
     const { page } = s
     await page.evaluate(
       async ({ media, song, deleteAt }) => {
@@ -149,7 +151,7 @@ test('archive a show as ZIP, open it extracted on another PC', async () => {
     expect(files).toContain(`videos/${basename(exported)}`)
     expect(files).toContain('Klassenfahrt Berlin.dshow')
     const readmeName = files.find((f) => f === 'LIESMICH.txt' || f === 'README.txt')!
-    expect(readmeName).toBe(process.env.DIASHOW_LOCALE?.startsWith('en') ? 'README.txt' : 'LIESMICH.txt')
+    expect(readmeName).toBe(LANG === 'en' ? 'README.txt' : 'LIESMICH.txt')
     const readme = readFileSync(join(extracted, readmeName), 'utf8')
     expect(readme).toMatch(/Klassenfahrt Berlin\.dshow/)
     expect(readme).toMatch(/2027/)
@@ -157,7 +159,7 @@ test('archive a show as ZIP, open it extracted on another PC', async () => {
 
     // ---- another PC: the originals are not there; "Open project…" on the extracted folder
     renameSync(originals, `${originals}-weg`)
-    s = await launch(dataB)
+    s = await launch(dataB, LOCALE)
     const pageB = s.page
     await answerOpenDialog(s.app, [join(extracted, 'Klassenfahrt Berlin.dshow')])
     await pageB.locator('.home .hero button').filter({ hasText: /Projekt öffnen|Open project/ }).click()
@@ -202,7 +204,7 @@ test('a show with theme music: the theme song goes into the archive and plays af
   let s: Session | null = null
   try {
     const media = copyMedia(sampleFiles(), join(work, 'Fotos'))
-    s = await launch(join(work, 'pc-a'))
+    s = await launch(join(work, 'pc-a'), LOCALE)
     await s.page.evaluate(async (paths) => {
       await (window as any).__diashow.store.getState().createProject(paths, 'Themenmusik')
     }, media)
@@ -234,7 +236,7 @@ test('a show with theme music: the theme song goes into the archive and plays af
     expect(JSON.parse(readFileSync(dshow, 'utf8')).archivedThemeSong).toMatchObject({ path: 'music/kenburns.m4a' })
 
     // ---- opened with this app: its own theme song plays, as before
-    s = await launch(join(work, 'pc-b'))
+    s = await launch(join(work, 'pc-b'), LOCALE)
     await answerOpenDialog(s.app, [dshow])
     await s.page.locator('.home .hero button').filter({ hasText: /Projekt öffnen|Open project/ }).click()
     await expect.poll(async () => (await project(s!.page))?.name, { timeout: 30_000 }).toBe('Themenmusik')
