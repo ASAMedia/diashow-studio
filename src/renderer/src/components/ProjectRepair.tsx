@@ -10,6 +10,7 @@ import { localeTag, t, type StringKey } from '../i18n'
 import { ErrorNotices, ErrorText, notifyError, openRepair, useNotices } from '../errors'
 import { logEvent } from '../diagnostics'
 import { Modal } from './Modal'
+import { RepeatNotice } from './RepeatNotice'
 import { Section } from './ui'
 
 const REPORT_TEXT: Record<RepairReport['changes'][number]['code'], StringKey> = {
@@ -268,7 +269,9 @@ export function DiagnosticsHost() {
           ))}
         </div>
       )}
-      <ErrorNotices />
+      <ErrorNotices>
+        <RepeatNotice />
+      </ErrorNotices>
       {repair && <RepairDialog target={repair} />}
     </>
   )

@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useLayoutEffect, type CSSProperties } from 'react'
-import { Clock, Film, FolderPlus, ImagePlus, Plus, Type, Volume2, VolumeX, Trash2, Split, Merge, Move, EyeOff, Crop as CropIcon, RotateCcw, SlidersHorizontal } from 'lucide-react'
+import { Clock, Film, FolderPlus, ImagePlus, Plus, Type, Volume2, VolumeX, Trash2, Split, Merge, Move, EyeOff, Crop as CropIcon, RotateCcw, SlidersHorizontal, LayoutGrid, MoveHorizontal, MoveVertical } from 'lucide-react'
 import { isChanged } from '@shared/mediaEdit'
 import type { Timeline, TimelineSlide } from '@shared/timeline'
 import { prioritize } from '../priority'
@@ -12,6 +12,7 @@ import { friendly } from '../errors'
 import { modalOpen } from '../keys'
 import { handledDrops, insertFiles, placeAt, stripReveal } from '../insert'
 import { anchorAt, canJoin } from '../insertAt'
+import { isFixed } from '../entryEdits'
 import { AudioLane } from './AudioLane'
 import { addWidth, anchoredScroll, clampCard, fitCard, loadZoom, numberEvery, saveZoom, STRIP_PAD, stripScale, stripWidth, timeToX, zoomStep, type StripDetail } from './stripScale'
 import { ChaptersMenu, SearchBox, useStripSearch, ZoomControls } from './StripTools'
@@ -97,10 +98,13 @@ export function Filmstrip() {
   }
   const excluded = project.entries.filter((x) => x.excluded).length
   const maxPer = themeMeta(project.settings.theme).maxPerSlide
+  // slides whose photos were fixed by hand: the theme can group them again (after a theme change, say)
+  const fixedSlides = maxPer > 1 ? tl.slides.filter((s) => s.entries.some(isFixed)).length : 0
 
   /** Files dragged from Explorer: can they join slide `target` (same rule as dragging a slide onto another)? */
   const filesFit = (target: TimelineSlide | undefined, items: DataTransferItemList): boolean => {
-    if (!target) return false
+    // a panorama keeps its slide to itself
+    if (!target || target.pano) return false
     const list = [...items].filter((it) => it.kind === 'file')
     // folders and unknown types (HEIC, RAW) are only known after the import: they go between slides
     if (!list.length || !list.every((it) => /^(image|video)\//.test(it.type))) return false
@@ -118,7 +122,7 @@ export function Filmstrip() {
     const canMerge = files
       ? filesFit(target, e.dataTransfer.items)
       : maxPer > 1 && !!target && !!source && i !== dragRef.current && target.kind !== 'title' && target.kind !== 'text' && source.kind !== 'text' &&
-        target.entries.length + source.entries.length <= maxPer
+        target.entries.length + source.entries.length <= maxPer && !target.pano && !source.pano
     if (canMerge && scale.card >= MIN_MERGE_CARD && within > 0.25 && within < 0.75) return { merge: i }
     return { insert: Math.max(0, Math.min(n, Math.round(x / step))) }
   }
@@ -389,6 +393,11 @@ export function Filmstrip() {
       <div className="strip-bar" role="group" aria-label={t('stripTools')}>
         <SearchBox search={search} tl={tl} inputRef={searchInput} />
         <ChaptersMenu tl={tl} onJump={jumpTo} />
+        {fixedSlides > 0 && (
+          <button className="fixed-chip" title={t('autoGroupHint')} onClick={() => useStore.getState().autoGroup()}>
+            <LayoutGrid size={12} aria-hidden />{fixedSlides === 1 ? t('autoGroupChip1') : t('autoGroupChip').replace('{n}', String(fixedSlides))}
+          </button>
+        )}
         <span className="grow" />
         <ZoomControls card={scale.card} onZoom={(c) => zoomTo(c)} onFit={fitAll} />
       </div>
@@ -496,7 +505,7 @@ export function Filmstrip() {
               <MenuItem icon={<Type size={15} />} onSelect={() => useStore.getState().addText()}>
                 {t('addText')}
               </MenuItem>
-              {selectedSlides.length > 1 && maxPer > 1 && selectedSlides.reduce((k, x) => k + x.entries.length, 0) <= maxPer && (
+              {selectedSlides.length > 1 && maxPer > 1 && !selectedSlides.some((x) => x.pano) && selectedSlides.reduce((k, x) => k + x.entries.length, 0) <= maxPer && (
                 <MenuItem icon={<Merge size={15} />} onSelect={() => useStore.getState().mergeEntries(selectedSlides.flatMap((x) => x.entries.map((e) => e.id)))}>
                   {t('merge')}
                 </MenuItem>
@@ -506,7 +515,7 @@ export function Filmstrip() {
                   {t('split')}
                 </MenuItem>
               )}
-              {menu.slide.kind !== 'text' && maxPer > 1 && menu.slide.index > 0 && ['photos', 'video'].includes(tl.slides[menu.slide.index - 1]?.kind) && (
+              {menu.slide.kind !== 'text' && !menu.slide.pano && maxPer > 1 && menu.slide.index > 0 && ['photos', 'video'].includes(tl.slides[menu.slide.index - 1]?.kind) && !tl.slides[menu.slide.index - 1]?.pano && (
                 <MenuItem
                   icon={<Merge size={15} />}
                   onSelect={() => {
@@ -517,6 +526,18 @@ export function Filmstrip() {
                   {t('joinPrev')}
                 </MenuItem>
               )}
+              {maxPer > 1 &&
+                (() => {
+                  // the selected slides, or the one clicked when it isn't among them
+                  const targets = selectedSlides.some((x) => x.index === menu.slide!.index) ? selectedSlides : [menu.slide!]
+                  const ids = new Set(targets.flatMap((x) => x.entries.map((e) => e.id)))
+                  if (!project.entries.some((e) => ids.has(e.id) && isFixed(e))) return null
+                  return (
+                    <MenuItem icon={<LayoutGrid size={15} />} onSelect={() => useStore.getState().autoGroup([...ids])}>
+                      {t('autoGroup')}
+                    </MenuItem>
+                  )
+                })()}
               <MenuItem
                 icon={<EyeOff size={15} />}
                 onSelect={() => {
@@ -642,6 +663,11 @@ function SlideCard(props: {
               </span>
             )}
             {m0?.live && <span className="badge">LIVE</span>}
+            {s.pano && (
+              <span className="badge pano-mark" title={t('panorama')}>
+                {s.pano.axis === 'x' ? <MoveHorizontal size={10} /> : <MoveVertical size={10} />}
+              </span>
+            )}
           </span>
           <span>
             {s.media.some((m) => isChanged(m.edit)) && (

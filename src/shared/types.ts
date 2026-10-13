@@ -207,8 +207,10 @@ export interface PhotoEntry extends BaseEntry {
   kenBurns?: { start: Rect; end: Rect }
   /** Framing in cropped layouts (Magazine, Origami, Sliding Panels, Classic fill). */
   crop?: Crop
-  /** Show the whole picture (true) or crop it to fill its cell (false); undefined = project setting. */
+  /** Show the whole picture (true) or crop it to fill its cell (false); undefined = project setting (a panorama pans, shared/panorama.ts). */
   whole?: boolean
+  /** A panorama pans from its right (bottom) end to the left (top) one instead of the other way. */
+  panReverse?: boolean
   /** Play the motion part of a Live/Motion photo; undefined = project default. */
   playLive?: boolean
   /** Areas made unrecognisable (pixelated), normalised to the picture. */

@@ -9,6 +9,14 @@ import type { RawDecoding } from './raw'
 
 export const DISPLAY_MAX = 3840
 export const THUMB_MAX = 360
+/**
+ * Panoramas (2:1 or wider, either way round) fill the slide's height while they pan, so their display
+ * image keeps this much on the short side (1080p exports in every shape, 9:16 too, and the preview)
+ * instead of the 3840 px long side; 4K exports get a version with more (prepareHires).
+ */
+export const PANO_DISPLAY_SHORT = 1920
+/** Longest side of a panorama image: the largest texture most graphics cards take (the renderer scales down for smaller ones). */
+export const PANO_MAX_LONG = 16384
 
 sharp.cache(false)
 
@@ -94,13 +102,25 @@ export function photoFormatLabel(path: string, tags: Tags): string {
   return SIMPLE_LABEL[ext] ?? ext.toUpperCase()
 }
 
-async function writeOutputs(img: Sharp, display: string, thumb?: string): Promise<PhotoOutput> {
+async function writeOutputs(img: Sharp, display: string, thumb?: string, panoShort = PANO_DISPLAY_SHORT): Promise<PhotoOutput> {
   const tmp = `${display}.part`
-  const info = await img
+  // the shape is only known after decoding (orientation, RAW previews): a panorama that had to shrink
+  // to the long side is made again from a copy of the same input, keeping `panoShort` on its short side
+  const again = img.clone()
+  let info = await img
     .resize({ width: DISPLAY_MAX, height: DISPLAY_MAX, fit: 'inside', withoutEnlargement: true })
     .toColourspace('srgb')
     .jpeg({ quality: 92 })
     .toFile(tmp)
+  const long = Math.max(info.width, info.height)
+  if (long >= DISPLAY_MAX && long >= 2 * Math.min(info.width, info.height)) {
+    const wide = info.width > info.height
+    info = await again
+      .resize({ width: wide ? PANO_MAX_LONG : panoShort, height: wide ? panoShort : PANO_MAX_LONG, fit: 'inside', withoutEnlargement: true })
+      .toColourspace('srgb')
+      .jpeg({ quality: 92 })
+      .toFile(tmp)
+  }
   await rename(tmp, display)
   if (!thumb) return { width: info.width, height: info.height }
   const thumbTmp = `${thumb}.part`
@@ -209,12 +229,15 @@ export async function renderThumb(path: string, out: string): Promise<void> {
   }
 }
 
-/** Renders display.jpg (+ thumb.jpg unless out.thumb is omitted) for a still image. Returns the display dimensions. */
+/**
+ * Renders display.jpg (+ thumb.jpg unless out.thumb is omitted) for a still image. Returns the display
+ * dimensions. `out.panoShort`: short side a panorama keeps (PANO_DISPLAY_SHORT; more for 4K exports).
+ */
 export async function renderPhoto(
   deps: PhotoDeps,
   path: string,
   tags: Tags,
-  out: { display: string; thumb?: string },
+  out: { display: string; thumb?: string; panoShort?: number },
   signal?: AbortSignal
 ): Promise<PhotoOutput & { via: string }> {
   const ext = extOf(path)
@@ -231,7 +254,7 @@ export async function renderPhoto(
     img = sharp(path, { failOn: 'none', limitInputPixels: 1e9 }).rotate()
   }
   try {
-    const result = await writeOutputs(img, out.display, out.thumb)
+    const result = await writeOutputs(img, out.display, out.thumb, out.panoShort)
     return { ...result, via }
   } catch (err) {
     await rm(`${out.display}.part`, { force: true })

@@ -2,7 +2,7 @@
 // (src/shared/friendlyError.ts decides the kind), with the technical message kept as detail. Errors
 // that have no place of their own (saving, opening a project, importing) appear as notices at the
 // bottom of the window; a damaged project's notice offers "Repair…".
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { AlertTriangle, X } from 'lucide-react'
 import { create } from 'zustand'
 import type { ProjectRef } from '@shared/diagnostics'
@@ -118,13 +118,15 @@ export function openRepair(ref: ProjectRef): void {
   useNotices.setState({ repair: ref })
 }
 
-export function ErrorNotices() {
+/** The notices at the bottom right; `children` (the notice about skipped photos, RepeatNotice.tsx) come first. */
+export function ErrorNotices({ children }: { children?: ReactNode }) {
   const notices = useNotices((s) => s.notices)
-  if (!notices.length) return null
+  if (!notices.length && !children) return null
   return (
-    <div className="notice-stack" role="alert">
+    <div className="notice-stack">
+      {children}
       {notices.map((n) => (
-        <div key={n.id} className="notice" data-testid="error-notice">
+        <div key={n.id} className="notice" data-testid="error-notice" role="alert">
           <AlertTriangle size={16} className="notice-icon" aria-hidden />
           <div className="notice-body">
             <b>{n.title}</b>

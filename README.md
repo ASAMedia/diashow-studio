@@ -27,6 +27,12 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
   - Free collage: with the "Free" layout, the photos of a slide can be placed by hand. Drag one to move it, drag its corner to resize it (its shape stays) and turn it with the knob. Light themes show them as prints with a white border.
   - Crop or whole picture: "Crop photos to fill" sets the default for the show. Each photo or video can override it with "Crop to fill" or "Whole picture", from the Slide tab or the toggle in its cell in the preview.
     - In Magazine a whole picture sits on the paper; the darker themes put it on a blurred copy of itself.
+  - Panoramas pan across, like in Photos: a photo at least 2:1 and 1.4× as wide as the show (in 16:9 from about 2.5:1; very tall ones the same way round) gets a slide of its own in every theme. It fills the slide's height, and the view travels end to end at a calm, even speed with a soft start and stop (`src/shared/panorama.ts`).
+    - Its slide lasts longer the wider it is (at most 2.5× a photo's time) unless you set a time; "Fit to music", a custom total and beat sync stay exact.
+    - The Slide tab sets Pan, Whole picture or Crop to fill and the direction, for one or several panoramas. In Ken Burns the pan is the default start and end framing.
+    - Full-frame themes pan across the frame, Magazine across the page, Reflections on a card across the stage, and Vintage Prints, Scrapbook and Snapshots in a wide print. Pixelated faces pan along, and the filmstrip marks panoramas.
+    - Display images of panoramas keep 1920 px on the short side (up to 16384 on the long side). 4K exports get a sharper version from the original (`pano_<px>.jpg`, removed with the 4K versions).
+  - Group automatically: slides whose photos were fixed by hand (combined, split, or kept as they were when photos were inserted) keep them, also after a theme change. A chip above the filmstrip ("3 fixed slides · Group automatically") lets the theme spread all photos by its pattern again; the slide menu does it for the selected slides only, keeping the slides around them. "Sort by capture date" always groups again.
   - Magazine puts videos into its grids too: several clips play side by side, and the slide lasts as long as the longest clip. Only the first clip is heard unless you switch others on.
   - You decide which photos and videos form a slide:
     - Drag one slide onto another, or Ctrl+click several slides and choose "Combine into one slide".
@@ -40,6 +46,13 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
   - Filmstrip zoom: −/+, a slider or Ctrl+mouse wheel (around the mouse) set the cards from 6 to 144 px; "Show the whole slideshow" fits every slide. Small cards drop badges and text and keep a thin mark at each chapter. The audio lane and playhead share the cards' time-to-x mapping (`components/stripScale.ts`). The zoom is remembered.
   - Search (Ctrl+F): file names, chapters and day titles, captions, text slides, text boxes, people and capture dates in German or English ("12.5.", "12. Mai", "May 12", "Dienstag", "Mai 2025"), plus "Video" and "Live". A result list, yellow marks in the filmstrip, "n of m", Enter / Shift+Enter or F3 / Shift+F3, and a "Chapters" menu.
   - Insert at a place: drop files from Explorer between two cards (onto a card joins that slide in multi-photo themes when it fits), Ctrl+V for copied files or a screenshot (saved to `Documents\Diashow Studio\Eingefügt\<show>`), or "Insert…" in a slide's menu. One undo step; in multi-photo themes no other slide is regrouped (`src/renderer/src/insertAt.ts`).
+  - No doubles: photos and videos that are already in the show (left-out ones too) are skipped wherever new ones come in: Add photos / folder, a drop on the window or the filmstrip, Ctrl+V, "Insert…", the assistant and pupils' uploads. "Already there" means:
+    - the same file;
+    - a byte-identical copy under another name (size first, then sha256: whole files up to 8 MiB, otherwise first and last MiB and, if they match, the whole file; cached in the media's cache folder);
+    - the same file twice in one import;
+    - the same shot as HEIC and JPEG (same camera, picture size and capture time to the millisecond; bursts stay, and a Live Photo is never skipped for a still of its shot).
+
+    A notice says how many were skipped, with "Add anyway" (one undo step) and "Show"; the share dialog counts them as "already there". Recompressed copies stay for "Find rejects" (`src/shared/repeats.ts`, `src/main/media/repeats.ts`, `contentHash.ts`).
   - Rotate, straighten and crop like in Photos: **Edit** in the Slide tab (or the slide's menu) turns a photo or video by 90°, straightens it up to ±45° (zoomed so no corners are empty) and crops it freely or to Original, 1:1, 4:3, 3:2, 16:9 or 9:16. Ctrl+R turns all selected photos left.
     - The edit belongs to the photo: every slide, layout, Ken Burns move, thumbnail, presentation and export uses it.
     - Pixelated faces stay on the same faces. The edit is a mapping of texture coordinates in the shader (`src/shared/mediaEdit.ts`), and faces and pixelated areas stay in the coordinates of the original.
@@ -99,6 +112,7 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
     - Thumbnails come first, then the rest in show order. What the viewer, the filmstrip and the review grid show goes ahead of everything else.
     - Display images, video sound and proxies run side by side, each on its own resource (CPU, disk, graphics card).
     - Duplicate and sharpness analysis waits until every item is usable.
+    - The check for photos already in the show costs nothing measurable on a first import (400 photos: 0.41 s with it, 0.37–0.43 s without). The same folder again takes 0.05 s and adds nothing; 400 byte-identical copies under another name are recognised in about 2.9 s.
   - Preview quality (High, Medium, Low) is set in Settings, for slower laptops; exports are not affected.
   - Laptops with two graphics chips: the app renders on the high-performance one. Chromium alone would pick the integrated chip, and every exported frame would then travel to the other chip for encoding. On an Iris Xe + RTX 4070 laptop a 220 s show exported in 4K in 289 s instead of 419 s, and in 1080p in 58 s instead of 64 s. Settings → Graphics chip → Power saving leaves the choice to Windows.
   - PCs with only Intel graphics (e.g. school PCs) export with Quick Sync at the same quality as NVENC: H.264 uses look-ahead ICQ, HEVC lower quality values (calibrated by SSIM against a near-lossless export). Rotated H.264 phone videos get their proxies on Intel's GPU too; HDR proxies decode HEVC in software there, because Intel's Vulkan driver doesn't decode 10-bit HEVC.

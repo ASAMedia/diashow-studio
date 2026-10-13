@@ -4,7 +4,9 @@
 // Explorer dropped between two cards and onto a card (a real drop through Chromium's drag pipeline,
 // CDP Input.dispatchDragEvent with file paths); Ctrl+V of files copied like in Explorer (CF_HDROP via
 // PowerShell's Set-Clipboard) and of a picture without a file (written by the main process); "Insert…"
-// in a slide's menu; undo and redo of an insert. Selectors work in German and English.
+// in a slide's menu; undo and redo of an insert. Selectors work in German and English. The inserted
+// files are copies of photos the show has; a few extra bytes make them new files (duplicates.spec.ts
+// checks that real copies are skipped).
 import { expect, test, type Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync } from 'node:fs'
@@ -302,7 +304,7 @@ test('filmstrip: zoom, search, chapters, insert by drop and Ctrl+V, undo', async
     await expect.poll(async () => (await slides(page)).filter((x) => x.kind === 'text').length).toBe(0)
 
     // ---- drop files from Explorer between two cards (a real drop through Chromium)
-    const dropped = copyMedia(['misc/photo.webp', 'android/PXL_0002.jpg'], join(dataDir, 'drop'))
+    const dropped = copyMedia(['misc/photo.webp', 'android/PXL_0002.jpg'], join(dataDir, 'drop'), true)
     let before = await slides(page)
     let ids0 = await entryIds(page)
     const b1 = (await cardBox(page, 1))!
@@ -341,7 +343,7 @@ test('filmstrip: zoom, search, chapters, insert by drop and Ctrl+V, undo', async
     await expect.poll(async () => (await slides(page)).length).toBeLessThan(ids0.length + 2)
     before = await slides(page)
     ids0 = await entryIds(page)
-    const one = copyMedia(['iphone/IMG_0003.JPG'], join(dataDir, 'drop2'))
+    const one = copyMedia(['iphone/IMG_0003.JPG'], join(dataDir, 'drop2'), true)
     const m0 = (await cardBox(page, 0))!
     const m1 = (await cardBox(page, 1))!
     await dropFiles(page, one, (m0.right + m1.left) / 2, m0.top + 20)
@@ -353,7 +355,8 @@ test('filmstrip: zoom, search, chapters, insert by drop and Ctrl+V, undo', async
     before = after
     ids0 = await entryIds(page)
     const target = before.findIndex((x) => x.kind === 'photos' && x.ids.length < 6)
-    const onto = copyMedia(['misc/pano.png'], join(dataDir, 'drop3'))
+    // not pano.png: a panorama always has a slide of its own
+    const onto = copyMedia(['misc/photo.webp'], join(dataDir, 'drop3'), true)
     const tb = (await cardBox(page, target))!
     await dropFiles(page, onto, tb.left + tb.width / 2, tb.top + 20, async () => {
       await expect(page.locator(`.cards .card[data-index="${target}"]`)).toHaveClass(/merge-target/)
@@ -369,7 +372,7 @@ test('filmstrip: zoom, search, chapters, insert by drop and Ctrl+V, undo', async
     before = await slides(page)
     ids0 = await entryIds(page)
     await page.locator(`.cards .card[data-index="1"]`).click()
-    const copied = copyMedia(['misc/photo.webp', 'iphone/IMG_0003.JPG'], join(dataDir, 'copied'))
+    const copied = copyMedia(['misc/photo.webp', 'iphone/IMG_0003.JPG'], join(dataDir, 'copied'), true)
     copyFilesLikeExplorer(copied)
     // in a text field Ctrl+V pastes text, it doesn't insert slides
     await page.keyboard.press('Control+f')
@@ -419,7 +422,7 @@ test('filmstrip: zoom, search, chapters, insert by drop and Ctrl+V, undo', async
     // ---- "Insert…" in a slide's menu: the file dialog, then in behind that slide
     ids0 = await entryIds(page)
     before = await slides(page)
-    const picked = copyMedia(['misc/pano.png'], join(dataDir, 'picked'))
+    const picked = copyMedia(['misc/pano.png'], join(dataDir, 'picked'), true)
     await answerOpenDialog(app, picked)
     await page.locator(`.cards .card[data-index="0"]`).click({ button: 'right' })
     await page.getByRole('menuitem', { name: /^(Einfügen…|Insert…)$/ }).click()

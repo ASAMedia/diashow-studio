@@ -14,7 +14,7 @@ import type { MediaItem } from '@shared/types'
 import { startAnalysis, wantsAnalysis } from './analysisJobs'
 import { fromCache, persist, rememberSource } from './cacheMeta'
 import { preparePhoto, processPhoto } from './photoJobs'
-import { mediaId, pairFiles, scanPaths, type ImportGroup } from './scan'
+import { mediaId, pairFiles, scanPaths, type ImportGroup, type ScannedFile } from './scan'
 import { once, shortError, type ServiceContext } from './serviceContext'
 import { analyzeVideo } from './videoInfo'
 import { makeLiveVideo, makeVideoPlayback, prepareVideo, processVideo } from './videoJobs'
@@ -41,27 +41,42 @@ function prepare(ctx: ServiceContext, group: ImportGroup): Promise<MediaItem[]> 
 }
 
 export async function importPaths(ctx: ServiceContext, paths: string[]): Promise<MediaItem[]> {
+  const { items } = await collect(ctx, paths)
+  admit(ctx, items)
+  return items
+}
+
+/**
+ * The first half of an import: files and folders scanned, paired and their metadata read. Returns the
+ * items in show order (capture time, then name) and the scanned files by media id; nothing is
+ * processed until admit().
+ */
+export async function collect(ctx: ServiceContext, paths: string[]): Promise<{ items: MediaItem[]; files: Map<string, ScannedFile> }> {
   const { trace } = ctx
   const files = await trace.span('scan', undefined, () => scanPaths(paths))
   const groups = pairFiles(files)
   const lists = await trace.span('prepareAll', undefined, () => Promise.all(groups.map((g) => prepare(ctx, g))), { groups: groups.length })
   const seen = new Set<string>()
   const result: MediaItem[] = []
-  const now = Date.now()
   for (const it of lists.flat()) {
     if (seen.has(it.id)) continue
     seen.add(it.id)
-    ctx.recent.set(it.id, now)
     result.push({ ...(ctx.items.get(it.id) ?? it) })
   }
   result.sort((a, b) => a.captureTime - b.captureTime || a.name.localeCompare(b.name, undefined, { numeric: true }))
-  ctx.order.add(result.map((it) => it.id))
+  return { items: result, files: new Map(files.map((f) => [mediaId(f.path, f.size, f.mtimeMs), f])) }
+}
+
+/** The second half: the items join the show order and their processing starts. */
+export function admit(ctx: ServiceContext, items: MediaItem[]): void {
+  const now = Date.now()
+  for (const it of items) ctx.recent.set(it.id, now)
+  ctx.order.add(items.map((it) => it.id))
   schedule(
     ctx,
-    result.filter((it) => it.status === 'pending').map((it) => it.id),
-    result.filter((it) => wantsAnalysis(ctx, it)).map((it) => it.id)
+    items.filter((it) => it.status === 'pending').map((it) => it.id),
+    items.filter((it) => wantsAnalysis(ctx, it)).map((it) => it.id)
   )
-  return result
 }
 
 /**

@@ -52,7 +52,18 @@ The editor has three areas: the **preview** in the middle, the tabs **Themes**, 
 - **Copy and paste:** files copied in Explorer ([[Ctrl+C]]) go in behind the selected slide with [[Ctrl+V]], or at the end when nothing is selected. A copied picture without a file, such as a screenshot taken with [[Win+Shift+S]], is saved as a PNG in `Documents\Diashow Studio\Pasted\<slideshow>` and inserted. **Clean up after the project** can delete these pictures again.
 - **Insert…** in a slide's menu picks files and puts them behind that slide.
 
-The inserted slides are selected afterwards; [[Ctrl+Z]] takes back the whole insert in one step. In themes with several photos per slide (Magazine, Origami, …) every other slide stays as it is: the new photos form slides of their own.
+The inserted slides are selected afterwards; [[Ctrl+Z]] takes back the whole insert in one step. In themes with several photos per slide (Magazine, Origami, …) every other slide stays as it is: the new photos form slides of their own. To let the theme mix the slides by its pattern again, click **Group automatically** above the filmstrip (see [Themes](#themes)).
+
+### Photos that are already in the slideshow
+
+What is already in the slideshow doesn't go in again: when adding photos or folders, dropping them on the window or the filmstrip, with [[Ctrl+V]], **Insert…**, in the assistant and with uploads over the Wi-Fi. "Already there" means:
+
+- the same file, also when its slide is left out;
+- a copy under another name or in another folder that is identical byte for byte;
+- the same file twice in one selection: only the first goes in;
+- the same photo as HEIC and as JPEG from the same phone (same camera, picture size and capture time to the millisecond). Burst photos are different photos and all go in.
+
+A notice at the bottom right says how many were skipped. **Show** selects the existing slides in the filmstrip, **Add anyway** adds them after all ([[Ctrl+Z]] takes that back in one step). Smaller copies, e.g. from WhatsApp, are found by **Find rejects…** (see [Review](#cull)).
 
 ### Editing photos
 
@@ -83,10 +94,20 @@ The edited photo is used everywhere: on every slide, in the Ken Burns motion, in
 The **theme** decides how slides look and change. There are 11 themes, e.g. **Ken Burns** (slow moves across the photo), **Magazine** (several photos in a grid) or **Snapshots** (instant photos landing on a table).
 
 - Themes with several photos per slide arrange them automatically. In the **Slide** tab you choose another layout, or **Free** for your own collage.
+- **Group automatically:** slides you combined or split, and slides kept as they were when photos were inserted, keep their photos, also after a theme change. Above the filmstrip you then see how many there are, e.g. **3 fixed slides · Group automatically**; a click lets the theme spread all photos by its pattern again. For single slides, **Group automatically** is in the slide's menu. **Sort by capture date** always groups again. [[Ctrl+Z]] undoes it.
 - The **look** (Natural, Vivid, Warm, Cool, Dramatic, Faded, Mono, Noir) colours only the photos and videos, never the background.
 - **Crop photos to fill** applies to the whole show; any photo can be an exception with **Whole picture**.
 - **Title:** title text, font, size, colour and an animation (handwriting, typewriter, big date) are set in the **Themes** tab.
 - In the **Classic** theme you choose the transition (Dissolve, Push, Cube…) in the **Duration** tab.
+
+### Panoramas
+
+Very wide photos, such as panoramas from a phone, are shown as in Photos on the Mac: they get a slide of their own, fill its height, and the view travels calmly and evenly from one end to the other. Very tall photos travel from top to bottom. A photo counts as a panorama from twice as wide as high on, when it is clearly wider than the slideshow (in 16:9 from about 2.5:1). Its slide lasts longer the wider it is, at most two and a half times a photo's time; a time of your own still applies. In the filmstrip such slides carry a double arrow.
+
+- In the **Slide** tab, **Panorama** sets **Pan**, **Whole picture** or **Crop to fill** for one or several panoramas, and the **Direction** (left → right or right → left, top → bottom or bottom → top).
+- In **Ken Burns** the pan is the start and end framing; you can still set your own framing as usual.
+- **Magazine** shows the panorama on the whole page, **Reflections** as a wide card, **Vintage Prints**, **Scrapbook** and **Snapshots** as a wide print the picture travels in.
+- Pixelated faces stay pixelated while the view pans.
 
 ## Music {#music}
 
@@ -148,7 +169,7 @@ Faces of pupils without photo consent can be pixelated. Face detection runs offl
 
 ![Collecting photos from phones](share.jpg)
 
-- **Collect photos:** the laptop shows a QR code. Pupils open a page with it and upload photos and videos. They are stored in `Documents\Diashow Studio\Uploads` and go straight into the show.
+- **Collect photos:** the laptop shows a QR code. Pupils open a page with it and upload photos and videos. They are stored in `Documents\Diashow Studio\Uploads` and go straight into the show. When two send the same photo, it goes into the show once; the list counts the second as "already there".
 - **Hand out the video:** a finished export can be watched and saved on the phones. There is a small 720p version for phones.
 - The server only runs while the dialog is open and only answers links with a random key.
 

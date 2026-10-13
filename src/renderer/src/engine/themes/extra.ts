@@ -5,7 +5,8 @@ import type { Ctx, SlideState, Theme } from '../types'
 import type { TimelineSlide } from '@shared/timeline'
 import { localeTag } from '../../i18n'
 import {
-  aspectOf, clamp01, containBox, drawCell, drawMedia, drawText, dropFall, easeIn, easeOut, lerp, photoUv, rng, slideTexture, slotBoxes, smooth, titleOpacity, type Box
+  aspectOf, clamp01, containBox, drawCell, drawMedia, drawText, dropFall, easeIn, easeOut, lerp, panoPrintUv, panoShape, panProgress, photoUv, rng, slideTexture, slotBoxes, smooth,
+  titleOpacity, type Box
 } from '../draw'
 import { drawCenteredText } from './simple'
 
@@ -166,12 +167,17 @@ export const scrapbook: Theme = {
     const boxes = slotBoxes(sl, frame, H * 0.06)
     // far enough that the rightmost print has left the picture
     const sweep = -out * W * 1.15
+    // a panorama is one wide (tall) print that pans once it has landed, until the page is swept off
+    const panQ = sl.pano ? panProgress(s, sl.transIn, sl.duration - sl.transOut * 0.55) : 0
     boxes.forEach((cell, i) => {
       const m = sl.media[i]
       const tex = slideTexture(ctx, s, i)
       const a = aspectOf(m, tex)
-      const inner = containBox(a, { x: cell.x + cell.w * 0.06, y: cell.y + cell.h * 0.06, w: cell.w * 0.88, h: cell.h * 0.88 })
-      const rot = (r() - 0.5) * 0.12
+      const area = { x: cell.x + cell.w * 0.06, y: cell.y + cell.h * 0.06, w: cell.w * 0.88, h: cell.h * 0.88 }
+      const shape = panoShape(sl, a, area)
+      const inner = containBox(shape, area)
+      const uv = panoPrintUv(sl, m, tex, a, shape, panQ)
+      const rot = (r() - 0.5) * 0.12 * (sl.pano ? 0.4 : 1)
       // each print falls from above the top edge onto its place, one after another; the last one
       // lands exactly when the transition ends
       const step = Math.min(0.12, 0.35 / Math.max(1, boxes.length - 1))
@@ -185,7 +191,7 @@ export const scrapbook: Theme = {
       const h = inner.h * scale
       const startDy = -(inner.y + inner.h / 2 + h * 0.75 + H * 0.02)
       const box = { x: inner.x + (inner.w - w) / 2 + startDx * travel + sweep, y: inner.y + (inner.h - h) / 2 + startDy * travel, w, h }
-      print(ctx, tex, a, box, rot + startRot * travel - out * 0.15, { opacity: 1, border: Math.min(w, h) * 0.04, tape: true, lift, shadow: smooth(q / 0.2) })
+      print(ctx, tex, a, box, rot + startRot * travel - out * 0.15, { opacity: 1, border: Math.min(w, h) * 0.04, tape: true, lift, shadow: smooth(q / 0.2), uv })
     })
     const text = captionLines(sl)
     if (text) {
@@ -233,26 +239,37 @@ function dateLabel(time: number): string {
   return s
 }
 
-/** An instant photo: square picture, thick bottom border with a handwritten line. */
+/**
+ * An instant photo: square picture, thick bottom border with a handwritten line. A panorama gets a
+ * wide (tall) one, like a wide-format instant film, and pans in it after landing.
+ */
 function polaroid(ctx: Ctx, s: SlideState, pose: Pose, opacity: number, text: string, o: { shade?: number; textOpacity?: number } = {}): void {
-  const { H } = ctx
-  const size = H * 0.56 * pose.scale
+  const { W, H } = ctx
+  const sl = s.slide
+  const tex = slideTexture(ctx, s, 0)
+  const m = sl.media[0]
+  const a = aspectOf(m, tex)
+  const area = !sl.pano ? { w: H * 0.56, h: H * 0.56 } : sl.pano.axis === 'x' ? { w: W * 0.78, h: H * 0.5 } : { w: W * 0.5, h: H * 0.6 }
+  const shape = sl.pano ? panoShape(sl, a, area) : 1
+  const fit = containBox(shape, { x: 0, y: 0, ...area })
+  const w = fit.w * pose.scale
+  const h = fit.h * pose.scale
+  const size = Math.min(w, h)
   const b = size * 0.06
   const bottom = size * 0.24
-  const box = { x: pose.x - size / 2, y: pose.y - (size + b + bottom) / 2 + b, w: size, h: size }
-  const tex = slideTexture(ctx, s, 0)
-  const m = s.slide.media[0]
-  print(ctx, tex, aspectOf(m, tex), box, pose.rot, { opacity, border: b, bottom, uv: photoUv(s.slide.entries[0], m, 1, tex), shade: o.shade })
+  const box = { x: pose.x - w / 2, y: pose.y - (h + b + bottom) / 2 + b, w, h }
+  const uv = sl.pano ? panoPrintUv(sl, m, tex, a, shape, panProgress(s, sl.transIn, sl.duration - sl.transOut)) : photoUv(sl.entries[0], m, 1, tex)
+  print(ctx, tex, a, box, pose.rot, { opacity, border: b, bottom, uv, shade: o.shade })
   const textOpacity = opacity * (o.textOpacity ?? 1)
   if (text && textOpacity > 0.001) {
     const cx = pose.x
-    const cy = box.y + size + bottom * 0.55
+    const cy = box.y + h + bottom * 0.55
     // rotate the text with the print around the print's centre
     const dx = cx - pose.x
     const dy = cy - pose.y
     const x = pose.x + dx * Math.cos(pose.rot) - dy * Math.sin(pose.rot)
     const y = pose.y + dx * Math.sin(pose.rot) + dy * Math.cos(pose.rot)
-    drawText(ctx, { text, font: 'hand', size: H * 0.045 * pose.scale, weight: 600, color: '#2b2b33', maxWidth: size * 0.95 }, x, y, { opacity: textOpacity, rotZ: pose.rot })
+    drawText(ctx, { text, font: 'hand', size: H * 0.045 * pose.scale, weight: 600, color: '#2b2b33', maxWidth: w * 0.95 }, x, y, { opacity: textOpacity, rotZ: pose.rot })
   }
 }
 
@@ -320,7 +337,8 @@ export const shatter: Theme = {
       drawCenteredText(ctx, s, 'sans', '#ffffff', { scale: 0.95 })
       return
     }
-    drawCell(ctx, s, 0, { x: 0, y: 0, w: W, h: H }, { zoom: lerp(1, 1.05, s.p) }, 'blur', 0.08)
+    // a panning panorama moves on its own: no slow zoom on top
+    drawCell(ctx, s, 0, { x: 0, y: 0, w: W, h: H }, { zoom: sl.pano?.mode === 'pan' ? undefined : lerp(1, 1.05, s.p) }, 'blur', 0.08)
     if (sl.titleOverlay) drawCenteredText(ctx, s, 'sans', '#ffffff', { opacity: titleOpacity(s.local), shadow: true, overlay: true })
   },
   transition() {

@@ -1,6 +1,7 @@
 // Photo items: what the import reads (a header-only read for JPEG & co., else exiftool), then the
 // thumbnail, the display image and, for Live / Motion Photos, the playable motion part.
 import { existsSync } from 'node:fs'
+import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { extOf, SHARP_IMAGE_EXT } from '@shared/formats'
 import type { MediaItem } from '@shared/types'
@@ -8,7 +9,8 @@ import { abortError, isAbort } from '../abort'
 import { fromCache } from './cacheMeta'
 import { captureTimeOf, deviceOf, orientationOf, readTags, type Tags } from './exif'
 import { endsAtJpegEoi, extractMotionVideo, isMotionPhoto } from './motion'
-import { photoFormatLabel, renderPhoto, renderThumb } from './photo'
+import { PANO_MAX_LONG, photoFormatLabel, renderPhoto, renderThumb } from './photo'
+import type { HiresOptions } from './service'
 import { quickPhotoMeta } from './quickMeta'
 import { mediaId, type ImportGroup } from './scan'
 import { clean, PRI_DISPLAY, PRI_THUMB, type ImportContext, type ServiceContext, type Stages } from './serviceContext'
@@ -140,4 +142,46 @@ export async function processPhoto(ctx: ServiceContext, id: string, stages: Stag
     // The still is fine; only the motion part is unusable
     ctx.set(id, { live: undefined, liveVideo: undefined })
   }
+}
+
+/**
+ * Panorama photos for an export (export:hires): id → an image whose short side reaches `short` px (the
+ * output's height for a wide one, its width for a tall one), so the pan stays sharp. The display image
+ * is enough unless the export is bigger than 1080p, or it was made before panoramas kept their height
+ * (then pano_<short>.jpg is made once from the original and kept with the 4K versions). Other photos and
+ * videos are left out.
+ */
+export async function preparePanoramas(ctx: ServiceContext, ids: string[], short: number, opts: HiresOptions = {}): Promise<Record<string, string>> {
+  const edge = Math.round(short)
+  const stop = opts.signal ? AbortSignal.any([ctx.signal, opts.signal]) : ctx.signal
+  const result: Record<string, string> = {}
+  const todo: Array<{ id: string; it: MediaItem; out: string }> = []
+  for (const id of new Set(ids)) {
+    const it = ctx.items.get(id)
+    if (!it || it.kind !== 'photo' || !it.display || !(edge > 0)) continue
+    const long = Math.max(it.width, it.height)
+    const side = Math.min(it.width, it.height)
+    if (long < 2 * side) continue
+    result[id] = it.display
+    if (side >= edge || long >= PANO_MAX_LONG) continue
+    const out = join(ctx.folder(id), `pano_${edge}.jpg`)
+    if (existsSync(out)) result[id] = out
+    else todo.push({ id, it, out })
+  }
+  const report = opts.onProgress ?? (() => {})
+  for (const [i, t] of todo.entries()) {
+    report({ phase: 'prepare', frame: i, totalFrames: todo.length, message: `${i + 1}/${todo.length}` })
+    try {
+      await mkdir(ctx.folder(t.id), { recursive: true })
+      const tags = SHARP_IMAGE_EXT.includes(extOf(t.it.path)) ? ({} as Tags) : await readTags(t.it.path, false)
+      if (stop.aborted) throw abortError()
+      await renderPhoto({ ff: ctx.ff, raw: ctx.raw }, t.it.path, tags, { display: t.out, panoShort: edge }, stop)
+      result[t.id] = t.out
+    } catch (err) {
+      if (stop.aborted || isAbort(err)) throw abortError()
+      // the original can't be read now: keep the display image
+    }
+  }
+  if (todo.length) report({ phase: 'prepare', frame: todo.length, totalFrames: todo.length, message: `${todo.length}/${todo.length}` })
+  return result
 }

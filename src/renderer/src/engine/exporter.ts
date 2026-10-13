@@ -10,6 +10,8 @@ import type { ExportJobInfo, ExportJobRequest, ExportTask, SegmentInput } from '
 import { buildTimeline, type Timeline } from '@shared/timeline'
 import { buildAudioPlan } from '@shared/audioPlan'
 import { buildChapters } from '@shared/chapters'
+import { shownAspect } from '@shared/mediaEdit'
+import { panoramaOf } from '@shared/panorama'
 import type { ThemeTrack } from '@shared/themeMusic'
 import { useStore } from '../store'
 import { Engine, loadFonts } from './engine'
@@ -94,6 +96,28 @@ export async function withHiresSources(project: Project, maxEdge: number): Promi
   if (maxEdge <= 1920 || !proxied.length) return project
   const paths = await window.api.prepareHires(proxied.map((m) => m.id), maxEdge)
   return { ...project, media: project.media.map((m) => (paths[m.id] ? { ...m, playback: paths[m.id] } : m)) }
+}
+
+/**
+ * Panoramas fill the output's height (a tall one its width) while they pan: those whose display image
+ * has fewer pixels there (4K exports, display images made before panoramas kept their height) get a
+ * sharper image of the original first.
+ */
+export async function withPanoramaSources(project: Project, width: number, height: number): Promise<Project> {
+  const used = new Set(project.entries.flatMap((e) => (e.type === 'photo' && !e.excluded ? [e.mediaId] : [])))
+  const want = new Map<number, string[]>()
+  for (const m of project.media) {
+    const axis = used.has(m.id) && m.status === 'ready' ? panoramaOf(m, width / height) : null
+    if (!axis) continue
+    // the short side of the original is the side that spans the frame (rotated or not)
+    const need = shownAspect(m) >= 1 ? height : width
+    if (Math.min(m.width, m.height) >= need) continue
+    want.set(need, [...(want.get(need) ?? []), m.id])
+  }
+  const paths: Record<string, string> = {}
+  for (const [need, ids] of want) Object.assign(paths, await window.api.prepareHires(ids, need))
+  if (!Object.keys(paths).length) return project
+  return { ...project, media: project.media.map((m) => (m.kind === 'photo' && paths[m.id] ? { ...m, display: paths[m.id] } : m)) }
 }
 
 /** One export's engine and canvas; renders any range of frames and keeps timing statistics. */
@@ -245,6 +269,7 @@ export async function exportShow(
   themeTracks: readonly ThemeTrack[] = useStore.getState().themeTracks
 ): Promise<string> {
   await loadFonts()
+  project = await withPanoramaSources(project, req.width, req.height)
   const r = new FrameRenderer(project, req, locale, themeTracks)
   try {
     const audio = buildAudioPlan(project, r.tl)
@@ -298,7 +323,7 @@ export async function runExportWorker(): Promise<void> {
 
 async function renderTask(task: ExportTask): Promise<void> {
   const { request: q } = task
-  const project = q.hires ? await withHiresSources(task.project, Math.max(q.width, q.height)) : task.project
+  const project = await withPanoramaSources(q.hires ? await withHiresSources(task.project, Math.max(q.width, q.height)) : task.project, q.width, q.height)
   const req: ExportRequest = { outPath: q.outPath, width: q.width, height: q.height, fps: q.fps, codec: q.codec, quality: q.quality, hardware: q.hardware }
   // a resumed job keeps the input of its finished segments
   const config = !task.input || task.input === q.codec ? await webCodecsConfig(req) : null

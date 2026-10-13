@@ -1,5 +1,6 @@
 import type { LookId, MediaAdjust, MediaEdit, MediaItem, Project, TextEntry, ThemeId } from '@shared/types'
 import { editedSize, editToSource, isEdited, sourceAspect, type Affine } from '@shared/mediaEdit'
+import { panoramaOf } from '@shared/panorama'
 import { adjustParams, type AdjustParams } from '@shared/adjust'
 import { buildTimeline, clipSeconds, slidesAt, titleStyleOf, type Timeline, type TimelineSlide } from '@shared/timeline'
 import { Compositor, NEUTRAL_LOOK, NEUTRAL_POST, type Look, type PostParams, type Tex } from './gl'
@@ -160,7 +161,7 @@ export class Engine {
       settings: project.settings,
       image: (m: MediaItem | undefined) => {
         if (!m) return null
-        const full = this.images.get(m.display)
+        const full = this.images.get(m.display, this.panoNeed(m))
         if (full) return this.markPrivate(m, full)
         this.missing++
         return this.markPrivate(m, this.images.get(m.thumb))
@@ -174,6 +175,15 @@ export class Engine {
       },
       text: (spec) => this.texts.get(applyTextStyle(spec, project.settings.text))
     }
+  }
+
+  /**
+   * Pixels a panorama needs on its short side: it fills the frame's height (a tall one its width)
+   * while it pans, so it is loaded sharper than a photo of the same long side would be; 0 for others.
+   */
+  private panoNeed(m: MediaItem): number {
+    const axis = panoramaOf(m, this.c.W / this.c.H)
+    return axis ? (axis === 'x' ? this.c.H : this.c.W) : 0
   }
 
   /** Media needed around time t: visible slides plus the Vintage pile and the Magazine cover. */
@@ -199,7 +209,7 @@ export class Engine {
   /** Export: wait until every texture for time t is decoded. */
   async prepare(t: number): Promise<void> {
     if (!this.tl || !this.project) return
-    await Promise.all(this.neededMedia(t, 0).map((m) => (m.kind === 'photo' ? this.images.ensure(m.display) : Promise.resolve())))
+    await Promise.all(this.neededMedia(t, 0).map((m) => (m.kind === 'photo' ? this.images.ensure(m.display, this.panoNeed(m)) : Promise.resolve())))
     const paths = new Set<string>()
     for (const s of this.states(t)) for (let i = 0; i < Math.max(1, s.slide.entries.length); i++) {
       const src = this.videoSource(s.slide, s.local, i)
@@ -294,7 +304,8 @@ export class Engine {
 
   /** Resting cell rectangles of a slide for crop editing, in canvas pixels. */
   editBoxes(slide: TimelineSlide): Box[] {
-    if (!this.project || slide.kind !== 'photos' || slide.template?.id === 'free') return []
+    // a panning panorama has no framing to drag
+    if (!this.project || slide.kind !== 'photos' || slide.template?.id === 'free' || slide.pano?.mode === 'pan') return []
     const theme = THEME_IMPL[this.project.settings.theme]
     return theme.boxes?.(this.c.W, this.c.H, slide, this.project.settings) ?? []
   }

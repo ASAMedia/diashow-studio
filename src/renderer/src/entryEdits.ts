@@ -90,6 +90,34 @@ export function sortByDate(p: Project): void {
   const { blocks, rest } = textBlocks(p.entries)
   blocks.sort((a, b) => time(a[a.length - 1]) - time(b[b.length - 1]))
   p.entries = [...blocks.flat(), ...rest]
+  // fixed slides would now hold photos that came apart: the theme groups them again
+  autoGroup(p)
+}
+
+/** Whether an entry's slide was fixed by hand (combined, split, or kept as it was when photos were inserted). */
+export const isFixed = (e: Entry): boolean => e.groupBreak === 'force' || e.groupBreak === 'join'
+
+/**
+ * The theme groups the photos into slides again, following its pattern: of the given entries (their
+ * slides, in a selection), or of the whole show. A selection keeps its edges, so the slides around it
+ * stay as they are.
+ */
+export function autoGroup(p: Project, ids?: string[]): void {
+  if (!ids) {
+    for (const e of p.entries) delete e.groupBreak
+    return
+  }
+  const want = new Set(ids)
+  const list = p.entries
+  list.forEach((e, i) => {
+    if (!want.has(e.id)) return
+    delete e.groupBreak
+    // each run of selected slides starts a slide, and so does the slide behind it
+    const prev = list[i - 1]
+    if (prev && !want.has(prev.id) && prev.type !== 'text') e.groupBreak = 'force'
+    const next = list[i + 1]
+    if (next && !want.has(next.id) && next.type !== 'text') next.groupBreak = 'force'
+  })
 }
 
 /** The given entries become one slide at the position of the first of them. */

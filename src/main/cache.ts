@@ -10,7 +10,8 @@ export type CleanTarget = 'unused' | 'hires' | 'proxies'
 
 /** Cache folders are named by media / track id: 16 hex chars (see mediaId). */
 export const ID_FOLDER = /^[0-9a-f]{16}$/
-const HIRES = /^proxy_\d+\.mp4$/i
+/** Hi-res versions for big exports: video proxies and panorama images (made again when needed). */
+const HIRES = /^(proxy_\d+\.mp4|pano_\d+\.jpg)$/i
 
 /** What a file inside a media folder is, by its path relative to that folder ('/'-separated). */
 export function classifyCacheFile(rel: string): CachePart {

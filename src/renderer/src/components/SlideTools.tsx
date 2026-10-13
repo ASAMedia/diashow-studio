@@ -2,9 +2,10 @@
 import { Crop as CropIcon, EyeOff, Plus, RotateCcw, RotateCw, ScanFace, Trash2, Merge } from 'lucide-react'
 import { isChanged, isEdited, rotateEdit } from '@shared/mediaEdit'
 import { closePhotoEdit, openPhotoEdit, rotateSelection, selectedMediaIds, setMediaEdit } from '../photoEdit'
-import type { Entry, FreeText, MediaItem, PhotoEntry, Rect, VideoEntry } from '@shared/types'
+import type { AspectRatio, Entry, FreeText, MediaItem, PhotoEntry, Rect, VideoEntry } from '@shared/types'
 import { themeMeta } from '@shared/themes'
-import { MAX_SPEED, MIN_SPEED, speedHasSound, type TimelineSlide } from '@shared/timeline'
+import { aspectValue, MAX_SPEED, MIN_SPEED, speedHasSound, type TimelineSlide } from '@shared/timeline'
+import { panoMode, panoramaOf, type PanAxis, type PanoMode } from '@shared/panorama'
 import { useStore } from '../store'
 import { t, type StringKey } from '../i18n'
 import { requestStabilize, useStabilizeRequest } from '../stabilize'
@@ -116,6 +117,82 @@ export function BatchAdjust() {
       <AdjustSliders media={media} />
       {media.length > 1 && <p className="hint">{t('adjBatchHint')}</p>}
     </>
+  )
+}
+
+// ---------------------------------------------------------------- panoramas
+
+/** The selected photos that are panoramas in this show, with the axis they pan along (shared/panorama.ts). */
+export function panoramaEntries(entries: Entry[], media: (id: string) => MediaItem | undefined, aspect: AspectRatio): { e: PhotoEntry; axis: PanAxis }[] {
+  const frame = aspectValue(aspect)
+  return entries.flatMap((e) => {
+    const axis = e.type === 'photo' ? panoramaOf(media(e.mediaId), frame) : null
+    return axis ? [{ e: e as PhotoEntry, axis }] : []
+  })
+}
+
+/** How one or several panoramas are shown: pan (default), whole picture or crop to fill, and which way they pan. */
+export function PanoramaControls({ entries }: { entries: { e: PhotoEntry; axis: PanAxis }[] }) {
+  const updateEntries = useStore((s) => s.updateEntries)
+  if (!entries.length) return null
+  const ids = entries.map((x) => x.e.id)
+  const mode = common(entries, (x) => panoMode(x.e))
+  const dir = common(entries, (x) => (x.e.panReverse ? 'reverse' : 'forward'))
+  const axes = new Set(entries.map((x) => x.axis))
+  const way = (reverse: boolean): string => {
+    const x = t(reverse ? 'panRightLeft' : 'panLeftRight')
+    const y = t(reverse ? 'panBottomTop' : 'panTopBottom')
+    return axes.size > 1 ? `${x} / ${y}` : axes.has('x') ? x : y
+  }
+  const mixed = <option value="mixed">{t('unchanged')}</option>
+  return (
+    <Section title={t('panorama')}>
+      <div className="stack">
+        <Field label={t('panoShow')}>
+          <select
+            data-testid="pano-mode"
+            value={mode}
+            onChange={(ev) => {
+              const v = ev.target.value as PanoMode | 'mixed'
+              if (v === 'mixed') return
+              // the crop / whole-picture setting of the photo; panning is a panorama's default
+              updateEntries(ids, (x) => {
+                if (x.type !== 'photo') return
+                if (v === 'pan') delete x.whole
+                else x.whole = v === 'whole'
+              })
+            }}
+          >
+            {mode === 'mixed' && mixed}
+            <option value="pan">{t('panMode')}</option>
+            <option value="whole">{t('wholeMode')}</option>
+            <option value="crop">{t('panCrop')}</option>
+          </select>
+        </Field>
+        {mode !== 'whole' && mode !== 'crop' && (
+          <Field label={t('direction')}>
+            <select
+              data-testid="pano-dir"
+              value={dir}
+              onChange={(ev) => {
+                const v = ev.target.value
+                if (v === 'mixed') return
+                updateEntries(ids, (x) => {
+                  if (x.type !== 'photo') return
+                  if (v === 'reverse') x.panReverse = true
+                  else delete x.panReverse
+                })
+              }}
+            >
+              {dir === 'mixed' && mixed}
+              <option value="forward">{way(false)}</option>
+              <option value="reverse">{way(true)}</option>
+            </select>
+          </Field>
+        )}
+        <p className="hint">{t('panHint')}</p>
+      </div>
+    </Section>
   )
 }
 
@@ -316,7 +393,9 @@ export function BatchPanel({ entries, slides }: { entries: Entry[]; slides: Time
   const live = common(lives, (e) => (e.playLive == null ? 'default' : e.playLive ? 'on' : 'off'))
   const withFaces = visual.filter((e) => media.get(e.mediaId)?.faces?.length || media.get(e.mediaId)?.videoFaces?.some((s) => s.faces.length))
   const pixelated = visual.filter((e) => e.privacy?.length || (e.type === 'video' && e.privacyTracks?.length)).length
-  const mergeable = meta.maxPerSlide > 1 && slides.length > 1 && slides.every((s) => s.kind === 'photos' || s.kind === 'video') && visual.length <= meta.maxPerSlide
+  const panos = panoramaEntries(visual, (id) => media.get(id), project.settings.aspect)
+  // a panorama always keeps a slide of its own
+  const mergeable = meta.maxPerSlide > 1 && slides.length > 1 && slides.every((s) => (s.kind === 'photos' && !s.pano) || s.kind === 'video') && visual.length <= meta.maxPerSlide
 
   const mixed = <option value="mixed">{t('unchanged')}</option>
   return (
@@ -437,6 +516,7 @@ export function BatchPanel({ entries, slides }: { entries: Entry[]; slides: Time
           )}
         </div>
       </Section>
+      <PanoramaControls entries={panos} />
       {visual.length > 0 && (
         <Section title={t('pePicture')}>
           <div className="row wrap">

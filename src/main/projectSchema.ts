@@ -390,7 +390,7 @@ function validateEntry(raw: Data, mediaKinds: Map<string, string>): { entry: Dat
   }
   if (e.type === 'photo') {
     fixes += dropBad(e, ['kenBurns'], (v) => isObj(v) && rect(v.start) && rect(v.end))
-    fixes += dropBad(e, ['playLive'], (v) => typeof v === 'boolean')
+    fixes += dropBad(e, ['playLive', 'panReverse'], (v) => typeof v === 'boolean')
   }
   if (e.type === 'video') {
     fixes += dropBad(e, ['trimIn', 'trimOut', 'volume', 'speed'], num)

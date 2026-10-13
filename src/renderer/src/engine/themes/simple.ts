@@ -2,7 +2,9 @@
 // Classic, Ken Burns and Retro Film.
 import type { PhotoEntry } from '@shared/types'
 import type { Ctx, SlideState, Theme } from '../types'
-import { aspectOf, dirVector, drawCell, drawMedia, drawText, drawTextBlock, drawWhole, kenBurnsEase, kenBurnsUv, showsWhole, textPosition, titleOpacity, rng } from '../draw'
+import {
+  aspectOf, dirVector, drawCell, drawMedia, drawText, drawTextBlock, drawWhole, kenBurnsEase, kenBurnsOf, kenBurnsUv, lerpRect, panProgress, showsWhole, textPosition, titleOpacity, rng
+} from '../draw'
 import type { FontRole } from '../media'
 import type { Box } from '../draw'
 
@@ -86,9 +88,13 @@ export const kenburns: Theme = {
       const tex = ctx.image(m)
       const a = aspectOf(m, tex)
       const box = { x: 0, y: 0, w: W, h: H }
+      const entry = sl.entries[0] as PhotoEntry
+      // a panorama travels end to end at full height (or along the user's own framing), evenly
+      const pan = sl.pano?.mode === 'pan'
+      const kb = pan ? kenBurnsOf(entry, m, W / H) : null
       // whole picture: a gentle zoom of the fitted photo instead of a pan across a crop
-      if (tex && showsWhole(sl.entries[0], ctx.settings, a, W / H)) drawWhole(ctx, tex, a, box, {}, 'blur', 1 + 0.06 * kenBurnsEase(s.p))
-      else drawMedia(ctx, tex, a, box, { uv: kenBurnsUv(sl.entries[0] as PhotoEntry, m, W / H, s.p) })
+      if (tex && !pan && showsWhole(entry, ctx.settings, a, W / H)) drawWhole(ctx, tex, a, box, {}, 'blur', 1 + 0.06 * kenBurnsEase(s.p))
+      else drawMedia(ctx, tex, a, box, { uv: kb ? lerpRect(kb.start, kb.end, panProgress(s)) : kenBurnsUv(entry, m, W / H, s.p) })
     } else fullFrameMedia(ctx, s)
     if (sl.titleOverlay) drawCenteredText(ctx, s, 'light', '#ffffff', { opacity: titleOpacity(s.local), shadow: true, scale: 1.1, overlay: true })
   },

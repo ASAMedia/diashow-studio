@@ -52,7 +52,18 @@ Der Editor hat drei Bereiche: die **Vorschau** in der Mitte, rechts die Reiter *
 - **Kopieren und einfügen:** Im Explorer kopierte Dateien ([[Strg+C]]) fügt [[Strg+V]] hinter der ausgewählten Folie ein, ohne Auswahl am Ende. Ein kopiertes Bild ohne Datei, etwa ein Bildschirmfoto mit [[Win+Umschalt+S]], speichert die App als PNG in `Dokumente\Diashow Studio\Eingefügt\<Diashow>` und fügt es ein. **Nach dem Projekt aufräumen** kann diese Bilder wieder löschen.
 - **Einfügen…** im Menü einer Folie wählt Dateien aus und setzt sie hinter diese Folie.
 
-Die eingefügten Folien sind danach ausgewählt; [[Strg+Z]] nimmt das ganze Einfügen in einem Schritt zurück. In Themen mit mehreren Fotos pro Folie (Magazin, Origami, …) bleiben alle anderen Folien, wie sie sind: Die neuen Fotos bilden eigene Folien.
+Die eingefügten Folien sind danach ausgewählt; [[Strg+Z]] nimmt das ganze Einfügen in einem Schritt zurück. In Themen mit mehreren Fotos pro Folie (Magazin, Origami, …) bleiben alle anderen Folien, wie sie sind: Die neuen Fotos bilden eigene Folien. Sollen die Folien wieder nach dem Muster des Themas gemischt werden, klicke über dem Filmstreifen auf **Automatisch gruppieren** (siehe [Themen](#themes)).
+
+### Fotos, die schon in der Diashow sind
+
+Was schon in der Diashow ist, kommt nicht noch einmal hinein – beim Hinzufügen von Fotos oder Ordnern, beim Ziehen ins Fenster oder in den Filmstreifen, mit [[Strg+V]], **Einfügen…**, im Assistenten und bei Uploads aus dem WLAN. Als „schon da“ zählt:
+
+- dieselbe Datei, auch wenn ihre Folie herausgenommen ist;
+- eine Kopie unter anderem Namen oder in einem anderen Ordner, die Byte für Byte gleich ist;
+- dieselbe Datei zweimal in einer Auswahl: nur die erste kommt hinein;
+- dasselbe Foto als HEIC und als JPEG vom selben Handy (gleiche Kamera, Bildgröße und Aufnahmezeit auf die Millisekunde). Serienbilder sind verschiedene Fotos und kommen alle hinein.
+
+Ein Hinweis unten rechts sagt, wie viele übersprungen wurden. **Zeigen** wählt die vorhandenen Folien im Filmstreifen aus, **Trotzdem einfügen** fügt sie doch hinzu ([[Strg+Z]] nimmt das in einem Schritt zurück). Verkleinerte Kopien, etwa aus WhatsApp, findet **Ausschuss prüfen…** (siehe [Sichten](#cull)).
 
 ### Fotos bearbeiten
 
@@ -83,10 +94,20 @@ Das bearbeitete Foto erscheint überall: in jeder Folie, beim Ken-Burns-Effekt, 
 Das **Thema** bestimmt, wie die Folien aussehen und wechseln. Es gibt 11 Themen, z. B. **Ken Burns** (langsame Fahrten über das Foto), **Magazin** (mehrere Fotos im Raster) oder **Schnappschüsse** (Sofortbilder auf einem Tisch).
 
 - Themen mit mehreren Fotos pro Folie ordnen die Fotos selbst an. Im Reiter **Folie** wählst du ein anderes Layout oder **Frei** für eine eigene Collage.
+- **Automatisch gruppieren:** Folien, die du zusammengefasst oder geteilt hast, und Folien, die beim Einfügen festgehalten wurden, behalten ihre Fotos, auch nach einem Themenwechsel. Über dem Filmstreifen steht dann, wie viele es sind, z. B. **3 feste Folien · Automatisch gruppieren**; ein Klick darauf lässt das Thema alle Fotos wieder nach seinem Muster verteilen. Für einzelne Folien steht **Automatisch gruppieren** im Menü der Folie. **Nach Aufnahmedatum sortieren** gruppiert immer neu. [[Strg+Z]] macht es rückgängig.
 - Der **Look** (Natürlich, Lebendig, Warm, Kühl, Dramatisch, Verblasst, Schwarzweiß, Noir) färbt nur die Fotos und Videos, nicht den Hintergrund.
 - **Fotos bildfüllend zuschneiden** gilt für die ganze Show; jedes Foto kann mit **Ganzes Bild** eine Ausnahme sein.
 - **Titel:** Titeltext, Schrift, Größe, Farbe und eine Animation (Handschrift, Schreibmaschine, großes Datum) stellst du im Reiter **Themen** ein.
 - Im Thema **Klassisch** wählst du den Übergang (Überblenden, Schieben, Würfel …) im Reiter **Dauer**.
+
+### Panoramen
+
+Sehr breite Fotos, z. B. Panoramen vom Handy, zeigt die Diashow wie Fotos auf dem Mac: Sie bekommen eine eigene Folie, füllen deren Höhe, und die Ansicht fährt in ruhigem, gleichmäßigem Tempo von einem Ende zum anderen. Sehr hohe Fotos fahren von oben nach unten. Als Panorama gilt ein Foto ab doppelt so breit wie hoch, das deutlich breiter als die Diashow ist (bei 16:9 ab etwa 2,5:1). Seine Folie dauert länger, je breiter es ist, höchstens zweieinhalbmal so lange wie ein Foto; eine eigene Dauer gilt trotzdem. Im Filmstreifen tragen solche Folien einen Doppelpfeil.
+
+- Im Reiter **Folie** wählst du unter **Panorama** für ein oder mehrere Panoramen **Schwenk**, **Ganzes Bild** oder **Zuschneiden** und die **Richtung** (links → rechts oder rechts → links, oben → unten oder unten → oben).
+- In **Ken Burns** ist der Schwenk der Start- und Endausschnitt; einen eigenen Ausschnitt legst du wie gewohnt fest.
+- **Magazin** zeigt das Panorama auf der ganzen Seite, **Reflexionen** als breite Karte, **Vintage-Abzüge**, **Sammelalbum** und **Schnappschüsse** als breiten Abzug, in dem das Bild wandert.
+- Verpixelte Gesichter bleiben beim Schwenken verpixelt.
 
 ## Musik {#music}
 
@@ -148,7 +169,7 @@ Für Schülerinnen und Schüler ohne Fotoerlaubnis kannst du Gesichter verpixeln
 
 ![Fotos von Handys einsammeln](share.jpg)
 
-- **Fotos einsammeln:** Der Laptop zeigt einen QR-Code. Die Schülerinnen und Schüler öffnen damit eine Seite und laden Fotos und Videos hoch. Sie landen in `Dokumente\Diashow Studio\Uploads` und direkt in der Show.
+- **Fotos einsammeln:** Der Laptop zeigt einen QR-Code. Die Schülerinnen und Schüler öffnen damit eine Seite und laden Fotos und Videos hoch. Sie landen in `Dokumente\Diashow Studio\Uploads` und direkt in der Show. Schicken zwei dasselbe Foto, kommt es nur einmal in die Show; die Liste zählt das zweite als „schon vorhanden“.
 - **Video verteilen:** Ein fertiger Export kann auf den Handys angesehen und gespeichert werden. Für Handys gibt es eine kleine 720p-Fassung.
 - Der Server läuft nur, solange der Dialog offen ist, und antwortet nur auf Links mit einem Zufallsschlüssel.
 

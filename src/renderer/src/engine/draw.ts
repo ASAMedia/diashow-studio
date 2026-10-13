@@ -2,6 +2,7 @@ import type { Entry, MediaItem, PhotoEntry, ProjectSettings, Rect, TextPosition,
 import { DEFAULT_TEXT_STYLE } from '@shared/types'
 import { faceCentre } from '@shared/people'
 import { facesInEdit, isEdited, pointToEdit, shownAspect, sourceAspect } from '@shared/mediaEdit'
+import { panEase, panFrames, panoMode, panoramaOf, panoWindow, panRamp, panUv } from '@shared/panorama'
 import type { TimelineSlide } from '@shared/timeline'
 import type { QuadSpec, Tex, UvRect } from './gl'
 import type { Ctx, SlideState } from './types'
@@ -151,10 +152,15 @@ export function kenBurnsUv(entry: PhotoEntry, m: MediaItem, frameAspect: number,
   return lerpRect(kb.start, kb.end, kenBurnsEase(t))
 }
 
-/** The Ken Burns frames of a photo: the user's (in the shape the picture has now) or the default motion. */
+/**
+ * The Ken Burns frames of a photo: the user's (in the shape the picture has now) or the default
+ * motion, which for a panning panorama is the pan from one end to the other.
+ */
 export function kenBurnsOf(entry: PhotoEntry, m: MediaItem | undefined, frameAspect: number): { start: Rect; end: Rect } {
   const a = aspectOf(m)
   if (entry.kenBurns) return { start: fitFrame(entry.kenBurns.start, a, frameAspect), end: fitFrame(entry.kenBurns.end, a, frameAspect) }
+  const axis = panoMode(entry) === 'pan' ? panoramaOf(m, frameAspect) : null
+  if (axis) return panFrames(a, frameAspect, axis, !!entry.panReverse)
   const f = shownFaceData(m)
   return defaultKenBurns(a, frameAspect, entry.id, f.faces, f.faceFocus)
 }
@@ -230,13 +236,50 @@ export function drawWhole(ctx: Ctx, tex: Tex | null, aspect: number, box: Box, o
   return drawMedia(ctx, tex, aspect, inner, { ...o, zoom: 1, fit: 'cover', pivot })
 }
 
-/** Entry i of a slide in a cell: cropped with the user's framing, or whole. */
+/**
+ * How far a panorama's pan has come (0..1) at the slide's time: from `from` to `to` seconds of the
+ * slide (themes whose prints first have to land start later), over the whole slide when that span
+ * would leave less than half of it.
+ */
+export function panProgress(s: SlideState, from = 0, to = s.slide.duration): number {
+  const d = s.slide.duration
+  if (to - from < 0.5 * d) {
+    from = 0
+    to = d
+  }
+  const span = Math.max(1e-3, to - from)
+  return panEase((s.local - from) / span, panRamp(span))
+}
+
+/** The part of a slide's panorama that fills a box of `boxAspect` at pan progress q. */
+export function panoUv(sl: TimelineSlide, aspect: number, boxAspect: number, q: number): UvRect {
+  const pano = sl.pano!
+  return panUv(aspect, boxAspect, pano.axis, pano.reverse, q)
+}
+
+/**
+ * Shape of the print, card or polaroid that holds a slide's picture in a theme that doesn't fill the
+ * frame with it: for a panorama (not shown whole) the theme's `area` limited to 2:1 or wider
+ * (shared/panorama.ts panoWindow), else the picture's own shape.
+ */
+export function panoShape(sl: TimelineSlide, aspect: number, area: { w: number; h: number }): number {
+  return sl.pano && sl.pano.mode !== 'whole' ? panoWindow(aspect, area.w / area.h, sl.pano.axis) : aspect
+}
+
+/** The part of a panorama in such a print: at pan progress q, its crop, or undefined (the whole picture, or no panorama). */
+export function panoPrintUv(sl: TimelineSlide, m: MediaItem | undefined, tex: Tex | null, aspect: number, shape: number, q: number): UvRect | undefined {
+  if (!sl.pano || sl.pano.mode === 'whole') return undefined
+  return sl.pano.mode === 'pan' ? panoUv(sl, aspect, shape, q) : photoUv(sl.entries[0], m, shape, tex)
+}
+
+/** Entry i of a slide in a cell: cropped with the user's framing, whole, or (a panorama) panning across it. */
 export function drawCell(ctx: Ctx, s: SlideState, i: number, box: Box, o: MediaDrawOpts = {}, fill: 'blur' | 'none' = 'blur', tolerance = 0.22): Box {
   const sl = s.slide
   const e = sl.entries[i]
   const m = sl.media[i]
   const tex = slideTexture(ctx, s, i)
   const a = aspectOf(m, tex)
+  if (tex && sl.pano?.mode === 'pan') return drawMedia(ctx, tex, a, box, { ...o, uv: panoUv(sl, a, box.w / box.h, panProgress(s)) })
   if (tex && showsWhole(e, ctx.settings, a, box.w / box.h, tolerance)) return drawWhole(ctx, tex, a, box, o, fill)
   return drawMedia(ctx, tex, a, box, { ...o, uv: photoUv(e, m, box.w / box.h, tex) })
 }

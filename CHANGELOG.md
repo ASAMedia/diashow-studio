@@ -2,6 +2,25 @@
 
 All notable changes to Diashow Studio. Versions follow [Semantic Versioning](https://semver.org). The release workflow publishes the section of a version as its release notes.
 
+## [1.5.0] - 2026-10-13
+
+**Downloads**
+
+- `Diashow.Studio-Setup-1.5.0.exe`: installer (no admin rights needed); it updates an installed version and keeps your slideshows and settings.
+- `Diashow.Studio-1.5.0-portable.exe`: runs without installing, e.g. from a USB stick.
+- The installer is not code-signed. If Windows SmartScreen says "Windows protected your PC", choose "More info" and then "Run anyway".
+- `THIRD_PARTY_NOTICES.txt` lists the licences of everything bundled, including all songs. The `ffmpeg-*` archives contain the source code of the bundled FFmpeg build and of every library compiled into it (GPL), listed in `ffmpeg-deps-sources-*.txt`.
+
+**New**
+
+- Panoramas pan across their slide, like in Photos: a wide (or very tall) panorama gets a slide of its own in every theme, fills its height and travels end to end at an even speed with a soft start and stop. Its slide lasts longer the wider it is (at most 2.5×). The Slide tab chooses Pan, Whole picture or Crop to fill and the direction; the filmstrip marks panoramas. 4K exports use a sharp version made from the original.
+- Photos that are already in the slideshow are not added twice: the same file, a copy under another name or in another folder, the same photo twice in one import, or the same shot as HEIC and JPEG, also when two pupils upload the same photo. A notice says how many were skipped and offers "Add anyway" and "Show". Recompressed copies (e.g. from WhatsApp) are still found by "Find rejects".
+- Group automatically: in Magazine, Origami and the other themes with several photos per slide, a chip above the filmstrip shows how many slides keep their photos (combined, split or kept when photos were inserted) and lets the theme group them again. The slide menu does the same for the selected slides only.
+
+**Fixes**
+
+- "Sort by capture date" now groups the photos again instead of keeping slides together whose photos had moved apart.
+
 ## [1.4.0] - 2026-10-13
 
 **Downloads**

@@ -1,11 +1,11 @@
 // Themes that animate the elements of both slides themselves (no full-frame blend):
 // Origami, Reflections, Sliding Panels, Vintage Prints and Magazine.
-import type { Compositor, Tex } from '../gl'
+import type { Compositor, Tex, UvRect } from '../gl'
 import type { Ctx, Theme } from '../types'
 import type { TimelineSlide } from '@shared/timeline'
 import {
-  aspectOf, clamp01, containBox, drawCell, drawMedia, drawText, drawTextBlock, dropFall, easeIn, easeInOut, easeOut, lerp, rng, slideTexture, textPosition,
-  slotBoxes, smooth, titleOpacity, type Box
+  aspectOf, clamp01, containBox, drawCell, drawMedia, drawText, drawTextBlock, dropFall, easeIn, easeInOut, easeOut, lerp, panoPrintUv, panoShape, panProgress, rng,
+  slideTexture, textPosition, slotBoxes, smooth, titleOpacity, type Box
 } from '../draw'
 import { drawCenteredText } from './simple'
 
@@ -46,9 +46,11 @@ export const origami: Theme = {
       return
     }
     const boxes = slotBoxes(sl, { x: 0, y: 0, w: W, h: H }, Math.max(2, H * 0.008))
+    // a panning panorama moves on its own: no slow zoom on top
+    const zoom = sl.pano?.mode === 'pan' ? undefined : lerp(1.06, 1, s.p)
     boxes.forEach((box, i) => {
       const q = stagger(s.inP, i, boxes.length)
-      fold(q, (o) => drawCell(ctx, s, i, box, { ...o, zoom: lerp(1.06, 1, s.p) }))
+      fold(q, (o) => drawCell(ctx, s, i, box, { ...o, zoom }))
     })
     if (sl.titleOverlay) drawCenteredText(ctx, s, 'sans', '#ffffff', { opacity: titleOpacity(s.local), shadow: true, overlay: true })
   }
@@ -106,16 +108,29 @@ export const reflections: Theme = {
       return
     }
     const n = sl.media.length
-    const cardH = H * (n === 1 ? 0.5 : n === 2 ? 0.42 : 0.34)
+    let cardH = H * (n === 1 ? 0.5 : n === 2 ? 0.42 : 0.34)
     const gap = H * 0.05
-    const widths = sl.media.map((m, i) => cardH * Math.min(1.8, Math.max(0.6, aspectOf(m, slideTexture(ctx, s, i)))))
+    let widths = sl.media.map((m, i) => cardH * Math.min(1.8, Math.max(0.6, aspectOf(m, slideTexture(ctx, s, i)))))
+    // a panorama stands as one card across the stage (a tall one up to the top), with its reflection,
+    // and pans inside it once the card has come in; it doesn't drift as well
+    const pano = sl.pano
+    let uvOf: (tex: Tex | null, a: number) => UvRect | undefined = () => undefined
+    if (pano) {
+      const a = aspectOf(sl.media[0], slideTexture(ctx, s, 0))
+      const area = pano.axis === 'x' ? { x: 0, y: 0, w: W * 0.92, h: Math.min(H * 0.5, W * 0.46) } : { x: 0, y: 0, w: W * 0.6, h: H * 0.62 }
+      const card = containBox(panoShape(sl, a, area), area)
+      cardH = card.h
+      widths = [card.w]
+      const q = panProgress(s, sl.transIn, sl.duration - sl.transOut)
+      uvOf = (tex, aa) => panoPrintUv(sl, sl.media[0], tex, aa, card.w / card.h, q)
+    }
     const total = widths.reduce((a, b) => a + b, 0) + gap * (n - 1)
-    let x = (W - total) / 2 + lerp(W * 0.03, -W * 0.03, s.p)
+    let x = (W - total) / 2 + (pano?.mode === 'pan' ? 0 : lerp(W * 0.03, -W * 0.03, s.p))
     sl.media.forEach((m, i) => {
       const w = widths[i]
       const qi = easeOut(stagger(s.inP, i, n, 0.15))
       const qo = easeIn(stagger(s.outP, i, n, 0.1))
-      const tilt = n === 1 ? 0.22 * (sl.index % 2 ? -1 : 1) : lerp(0.38, -0.38, i / (n - 1))
+      const tilt = n === 1 ? (pano ? 0.08 : 0.22) * (sl.index % 2 ? -1 : 1) : lerp(0.38, -0.38, i / (n - 1))
       const rotY = tilt - (1 - qi) * 0.9 + qo * 0.9
       const dx = (1 - qi) * W * 0.85 - qo * W * 0.85
       // cards are solid soon after they appear and only fade once they are almost gone
@@ -126,8 +141,9 @@ export const reflections: Theme = {
       }
       const tex = slideTexture(ctx, s, i)
       const box = { x: x + dx, y: base - cardH, w, h: cardH }
-      drawMedia(ctx, tex, aspectOf(m, tex), box, { rotY, opacity })
-      drawMedia(ctx, tex, aspectOf(m, tex), { ...box, y: base + H * 0.004 }, { rotY, opacity, flipY: true, fade: [0.32, 0] })
+      const uv = uvOf(tex, aspectOf(m, tex))
+      drawMedia(ctx, tex, aspectOf(m, tex), box, { rotY, opacity, uv })
+      drawMedia(ctx, tex, aspectOf(m, tex), { ...box, y: base + H * 0.004 }, { rotY, opacity, flipY: true, fade: [0.32, 0], uv })
       x += w + gap
     })
     if (sl.titleOverlay) {
@@ -156,7 +172,8 @@ export const panels: Theme = {
     boxes.forEach((box, i) => {
       const q = easeInOut(stagger(s.inP, i, boxes.length, 0.14))
       const dx = (1 - q) * W - out
-      const drift = i % 2 ? lerp(1.0, 1.07, s.p) : lerp(1.07, 1.0, s.p)
+      // a panning panorama moves on its own: no drifting zoom on top
+      const drift = sl.pano?.mode === 'pan' ? undefined : i % 2 ? lerp(1.0, 1.07, s.p) : lerp(1.07, 1.0, s.p)
       drawCell(ctx, s, i, { ...box, x: box.x + dx }, { zoom: drift })
     })
     if (sl.titleOverlay && sl.title && textPosition(ctx) !== 'theme') {
@@ -182,20 +199,30 @@ interface PrintGeo {
   w: number
   h: number
   rot: number
+  /** Shape of the picture on the print (a panorama's window, else the picture's own shape). */
+  shape: number
 }
 
-/** Where a slide's print lies on the table: a little off centre and turned, the same every time. */
+/**
+ * Where a slide's print lies on the table: a little off centre and turned, the same every time. A
+ * panorama is a big wide (tall) print, closer to the centre and straighter, that its picture pans in.
+ */
 function printGeo(ctx: Ctx, sl: TimelineSlide, aspect: number): PrintGeo {
   const { W, H } = ctx
   const r = rng(`print${sl.id}`)
-  const inner = containBox(aspect, { x: 0, y: 0, w: W * 0.6, h: H * 0.7 })
+  const pano = sl.pano
+  const area = !pano ? { x: 0, y: 0, w: W * 0.6, h: H * 0.7 } : pano.axis === 'x' ? { x: 0, y: 0, w: W * 0.84, h: H * 0.66 } : { x: 0, y: 0, w: W * 0.6, h: H * 0.82 }
+  const shape = panoShape(sl, aspect, area)
+  const inner = containBox(shape, area)
   const border = Math.min(inner.w, inner.h) * 0.045
+  const k = pano ? 0.4 : 1
   return {
-    cx: W / 2 + (r() - 0.5) * W * 0.09,
-    cy: H / 2 + (r() - 0.5) * H * 0.06,
+    cx: W / 2 + (r() - 0.5) * W * 0.09 * k,
+    cy: H / 2 + (r() - 0.5) * H * 0.06 * k,
     w: inner.w + border * 2,
     h: inner.h + border * 2,
-    rot: (r() - 0.5) * 0.16
+    rot: (r() - 0.5) * 0.16 * k,
+    shape
   }
 }
 
@@ -204,7 +231,7 @@ function drawPrint(
   g: PrintGeo,
   tex: Tex | null,
   aspect: number,
-  o: { scale: number; blur: number; shade: number; rot?: number; dx?: number; dy?: number; lift?: number; opacity?: number; shadow?: number }
+  o: { scale: number; blur: number; shade: number; rot?: number; dx?: number; dy?: number; lift?: number; opacity?: number; shadow?: number; uv?: UvRect }
 ): void {
   const { H } = ctx
   const w = g.w * o.scale
@@ -227,7 +254,7 @@ function drawPrint(
   ctx.c.quad({ x, y, w, h, rotZ: rot, color: [0.95, 0.94, 0.9, 1], opacity, shade: o.shade })
   const b = Math.min(w, h) * 0.045 / 1.09
   const inner = { x: x + b, y: y + b, w: w - 2 * b, h: h - 2 * b }
-  drawMedia(ctx, tex, aspect, inner, { rotZ: rot, pivot: [0.5, 0.5], opacity, blur: o.blur, shade: o.shade })
+  drawMedia(ctx, tex, aspect, inner, { rotZ: rot, pivot: [0.5, 0.5], opacity, blur: o.blur, shade: o.shade, uv: o.uv })
 }
 
 /**
@@ -264,7 +291,9 @@ export const vintage: Theme = {
       const m = sl.media[0]
       const tex = ctx.image(m)
       const a = aspectOf(m, tex)
-      drawPrint(ctx, printGeo(ctx, sl, a), tex, a, look)
+      const g = printGeo(ctx, sl, a)
+      // a panorama lies on the pile as its pan ended
+      drawPrint(ctx, g, tex, a, { ...look, uv: panoPrintUv(sl, m, tex, a, g.shape, 1) })
     }
   },
   drawSlide(ctx, s) {
@@ -302,7 +331,9 @@ export const vintage: Theme = {
       dy: from.dy * travel,
       lift,
       // the soft shadow of the print in the air would otherwise be on screen before the print
-      shadow: smooth(s.inP / 0.2)
+      shadow: smooth(s.inP / 0.2),
+      // a panorama pans while it lies on top, between its landing and the next print's fall
+      uv: panoPrintUv(sl, m, tex, a, g.shape, panProgress(s, sl.transIn, sl.duration - sl.transOut))
     })
     if (sl.titleOverlay) drawCenteredText(ctx, s, 'serif', '#f6f1e6', { opacity: titleOpacity(s.local), uppercase: true, tracking: 0.12, shadow: true, overlay: true })
   },

@@ -335,6 +335,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline-offs
 /* filmstrip tools: search, chapters, zoom (StripTools.tsx) */
 .strip-bar { display: flex; align-items: center; gap: 4px; height: 30px; padding: 0 12px 2px 16px; position: relative; z-index: 4; }
 .strip-bar .grow { flex: 1 1 auto; min-width: 8px; }
+.fixed-chip { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; margin-left: 6px; border-radius: 11px; border: 1px solid var(--line); background: var(--panel); color: var(--text-2); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.fixed-chip:hover { color: var(--text); border-color: var(--accent); }
 .strip-search { position: relative; display: flex; align-items: center; gap: 1px; height: 26px; padding: 0 2px 0 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--input-bg); min-width: 0; }
 .strip-search:focus-within { border-color: var(--accent); }
 .strip-search .lead { color: var(--text-3); flex: none; }

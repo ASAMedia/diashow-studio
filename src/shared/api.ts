@@ -18,6 +18,7 @@ import type {
 import type { ExportJobInfo, ExportTask, NewExportJob, SegmentInput } from './exportQueue'
 import type { ThemeTrack } from './themeMusic'
 import type { ShareCommand, ShareFilesEvent, ShareStatus } from './share'
+import type { ImportNewResult, RepeatCandidate } from './repeats'
 import type { CleanupChoice, CleanupInventory, CleanupResult, DeleteExtras } from './cleanup'
 import type { HistoryRestore, HistoryUpload } from './history'
 import type { ArchiveChoice, ArchiveInventory, ArchiveProgress, ArchiveResult, ArchiveTarget, ArchiveVideo } from './archive'
@@ -34,6 +35,11 @@ export interface DiashowApi {
   // returns items immediately (status 'pending'/'processing'), and keeps processing in the
   // background, reporting each change through onMediaUpdate.
   importPaths(paths: string[]): Promise<MediaItem[]>
+  /**
+   * importPaths for new photos and videos of a show, whose media (left-out slides included) are
+   * `show`: what it has already is not processed and comes back in `repeats` (src/shared/repeats.ts).
+   */
+  importNew(paths: string[], show: RepeatCandidate[]): Promise<ImportNewResult>
   /** Re-validate media from a saved project (cache present? file still there?). */
   restoreMedia(items: MediaItem[]): Promise<MediaItem[]>
   onMediaUpdate(cb: (item: MediaItem) => void): () => void
@@ -123,7 +129,9 @@ export interface DiashowApi {
   videoFrames(path: string, times: number[], maxEdge: number): Promise<Uint8Array[]>
   /**
    * Playable versions of proxied videos at up to maxEdge pixels (e.g. 3840) for sharp 4K
-   * exports. Reports ExportProgress with phase 'prepare'. Resolves with media id -> path.
+   * exports, and of panorama photos images with up to maxEdge pixels on their short side (the
+   * output's height they pan at). Reports ExportProgress with phase 'prepare'. Resolves with media
+   * id -> path.
    */
   prepareHires(ids: string[], maxEdge: number): Promise<Record<string, string>>
 

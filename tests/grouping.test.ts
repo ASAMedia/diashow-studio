@@ -3,7 +3,8 @@ import { buildTimeline } from '@shared/timeline'
 import { buildAudioPlan, audibleClips } from '@shared/audioPlan'
 import { DEFAULT_SETTINGS, type Entry, type MediaItem, type Project } from '@shared/types'
 import { showsWhole } from '../src/renderer/src/engine/draw'
-import { addMissingDayTitles, hasDateTitles, insertByTime } from '../src/renderer/src/entryEdits'
+import { addMissingDayTitles, autoGroup, hasDateTitles, insertByTime, isFixed, sortByDate, splitSlide } from '../src/renderer/src/entryEdits'
+import { insertEntries } from '../src/renderer/src/insertAt'
 import { localeTag } from '../src/renderer/src/i18n'
 
 // the store saves through window.api; a stub is enough here
@@ -200,5 +201,61 @@ describe('uploads sorted into their day', () => {
     expect(added).toMatchObject({ type: 'text', auto: 'day' })
     expect(added.subtitle).toBe(new Intl.DateTimeFormat(localeTag(), { day: 'numeric', month: 'long', year: 'numeric' }).format(at(18, 12)))
     expect(ids.slice(6)).toEqual(['new-mi', 'credits'])
+  })
+})
+
+describe('grouping automatically again', () => {
+  // twelve landscape photos, newest first, so sorting reverses them
+  const media = Array.from({ length: 12 }, (_, i) => ({ ...photo(`m${i}`), captureTime: 1000 * (12 - i) }))
+  const fresh = (): Entry[] => media.map((m, i) => ({ id: `e${i}`, type: 'photo', mediaId: m.id }))
+  const ids = (p: Project): string[][] => buildTimeline(p).slides.map((s) => s.entries.map((e) => e.id))
+  const allSingle = (): Project => {
+    const p = project(fresh(), media, { theme: 'magazine' })
+    splitSlide(p, p.entries.map((e) => e.id))
+    expect(sizes(p)).toEqual(Array(12).fill(1))
+    return p
+  }
+
+  it('the whole show: as if nothing had been fixed by hand', () => {
+    const p = allSingle()
+    autoGroup(p)
+    expect(sizes(p)).toEqual(sizes(project(fresh(), media, { theme: 'magazine' })))
+    expect(p.entries.some(isFixed)).toBe(false)
+  })
+
+  it('selected slides: they are grouped again among themselves, the slides around them stay', () => {
+    const p = allSingle()
+    autoGroup(p, ['e3', 'e4', 'e5', 'e6', 'e7', 'e8'])
+    const slides = ids(p)
+    expect(slides.slice(0, 3)).toEqual([['e0'], ['e1'], ['e2']])
+    expect(slides.slice(-3)).toEqual([['e9'], ['e10'], ['e11']])
+    const inner = slides.slice(3, -3)
+    expect(inner.flat()).toEqual(['e3', 'e4', 'e5', 'e6', 'e7', 'e8'])
+    expect(inner.length).toBeLessThan(6)
+    // two separate runs keep their own edges too
+    const q = allSingle()
+    autoGroup(q, ['e1', 'e2', 'e6', 'e7', 'e8'])
+    const runs = ids(q)
+    expect(runs.find((s) => s.includes('e0'))).toEqual(['e0'])
+    for (const k of ['e3', 'e4', 'e5', 'e9', 'e10', 'e11']) expect(runs.find((s) => s.includes(k))).toEqual([k])
+    expect(runs.find((s) => s.includes('e1'))).toEqual(['e1', 'e2'])
+  })
+
+  it('photos inserted between slides keep the others fixed, until the show is grouped again', () => {
+    const p = project(fresh(), media, { theme: 'magazine' })
+    const before = ids(p)
+    const added: Entry[] = [{ id: 'n1', type: 'photo', mediaId: 'm0' }]
+    insertEntries(p, added, before[1][0], buildTimeline(p))
+    expect(ids(p).filter((s) => !s.includes('n1'))).toEqual(before)
+    autoGroup(p)
+    expect(ids(p).filter((s) => !s.includes('n1'))).not.toEqual(before)
+  })
+
+  it('sorting by capture date groups the photos again', () => {
+    const p = allSingle()
+    sortByDate(p)
+    expect(p.entries.map((e) => e.id)).toEqual(fresh().map((e) => e.id).reverse())
+    expect(p.entries.some(isFixed)).toBe(false)
+    expect(sizes(p)).toEqual(sizes(project(fresh(), media, { theme: 'magazine' })))
   })
 })

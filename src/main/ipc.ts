@@ -3,6 +3,7 @@ import { app, BrowserWindow, dialog, ipcMain, powerSaveBlocker, shell, type IpcM
 import { join } from 'node:path'
 import { AUDIO_EXT, IMAGE_EXT, VIDEO_EXT } from '@shared/formats'
 import type { AppSettings, ExportOptions, ExportProgress, GpuChoiceInfo, MediaItem, MusicTrack, Project, Rect, VideoFaces } from '@shared/types'
+import type { RepeatCandidate } from '@shared/repeats'
 import { createAppSettingsStore } from './appSettings'
 import { directDecodeSupport } from './codecSupport'
 import { resolveFfmpegDir } from './ffmpeg'
@@ -156,6 +157,10 @@ export function registerIpc(): void {
   ipcMain.handle('media:import', async (_e, paths: string[]) => {
     await trustPaths(stringList(paths))
     return service.importPaths(stringList(paths))
+  })
+  ipcMain.handle('media:import-new', async (_e, paths: string[], show: unknown) => {
+    await trustPaths(stringList(paths))
+    return service.importNew(stringList(paths), show as RepeatCandidate[])
   })
   ipcMain.handle('media:restore', async (_e, items: MediaItem[]) => {
     await hostsLoaded

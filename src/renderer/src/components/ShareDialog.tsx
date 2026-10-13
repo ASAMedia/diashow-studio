@@ -39,6 +39,9 @@ function dims(aspect: number, short: number): { w: number; h: number } {
 
 const samePath = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
 
+/** Uploads the show had already (repeats.ts), per project, lower-case paths: counted, not added again. */
+const alreadyThere = new Map<string, Set<string>>()
+
 export function ShareDialog() {
   const project = useStore((s) => s.project)
   const jobs = useStore((s) => s.exportJobs)
@@ -50,6 +53,8 @@ export function ShareDialog() {
   const [qr, setQr] = useState('')
   const [copied, setCopied] = useState(false)
   const [mobileJob, setMobileJob] = useState<string | null>(null)
+  // a new count re-renders the list (the paths are in alreadyThere)
+  const [, setRepeated] = useState(0)
   const pending = useRef<{ paths: string[]; first: number; timer?: ReturnType<typeof setTimeout> }>({ paths: [], first: 0 })
   // where arrived files go: into their day by capture time, or behind the selected slide
   const [placement, setPlacement] = useState<'byTime' | 'selection'>('byTime')
@@ -67,7 +72,16 @@ export function ShareDialog() {
       p.timer = undefined
       const paths = p.paths.splice(0)
       p.first = 0
-      if (paths.length && useStore.getState().project) void useStore.getState().importMedia(paths, placementRef.current)
+      const project = useStore.getState().project
+      if (!paths.length || !project) return
+      // no notice: the list below counts what the show had already
+      void useStore.getState().importMedia(paths, placementRef.current, { quiet: true }).then(({ skipped }) => {
+        if (!skipped.length) return
+        const known = alreadyThere.get(project.id) ?? new Set<string>()
+        for (const m of skipped) known.add(m.path.toLowerCase())
+        alreadyThere.set(project.id, known)
+        if (alive) setRepeated(known.size)
+      })
     }
     const offFiles = window.api.onShareFiles((ev) => {
       if (useStore.getState().project?.id !== ev.projectId) return
@@ -168,6 +182,9 @@ export function ShareDialog() {
     return [...groups.entries()]
   }, [status?.received])
 
+  const known = project ? alreadyThere.get(project.id) : undefined
+  const repeats = (files: { path: string }[]): number => (known ? files.filter((f) => known.has(f.path.toLowerCase())).length : 0)
+
   const limits = status?.limits
   // a public address (eduroam & co.): the server may be reachable from outside the Wi-Fi
   const publicAddress = running && !!status?.addresses.find((a) => a.address === status.address)?.public
@@ -262,6 +279,7 @@ export function ShareDialog() {
               <div className="share-section">
                 <h3 className="subhead">
                   {t('shareReceived')} ({status?.received.length ?? 0})
+                  {repeats(status?.received ?? []) > 0 && ` · ${t('shareAlreadyThere').replace('{n}', String(repeats(status?.received ?? [])))}`}
                 </h3>
                 {!!status?.uploading && (
                   <span className="val" role="status">
@@ -280,6 +298,7 @@ export function ShareDialog() {
                   <div key={who} className="share-who">
                     <div className="who" title={who}>
                       {who} · {files.length}
+                      {repeats(files) > 0 && ` · ${t('shareAlreadyThere').replace('{n}', String(repeats(files)))}`}
                     </div>
                     <div className="files" title={files.map((f) => f.name).join(NEWLINE)}>
                       {files

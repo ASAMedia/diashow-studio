@@ -299,6 +299,8 @@ describe('inserting at a place in the filmstrip', () => {
     expect(canJoin(first, [{ kind: 'photo', live: { source: 'x.mov', duration: 2 } }], { ...p.settings, playLivePhotos: true })).toBe(false)
     expect(canJoin(first, [{ kind: 'video' }], { ...p.settings, theme: 'origami' })).toBe(false)
     expect(canJoin(first, [{ kind: 'photo' }], { ...p.settings, theme: 'kenburns' })).toBe(false)
+    // a panorama stays alone on its slide
+    expect(canJoin({ ...first, pano: { axis: 'x', mode: 'pan', reverse: false } }, [{ kind: 'photo' }], p.settings)).toBe(false)
     const before = slidesOf(p)
     const next = structuredClone(p)
     const n = fresh('n1', 'n2')

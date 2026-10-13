@@ -13,6 +13,7 @@ import { notifyError } from './errors'
 import type { Player } from './engine/player'
 import * as edits from './entryEdits'
 import { entriesFor, uid } from './entryEdits'
+import { againPaths, importChecked, noticeRepeats, serially, type CheckedImport } from './repeats'
 
 export type InspectorTab = 'themes' | 'music' | 'timing' | 'slide'
 
@@ -72,8 +73,11 @@ interface State {
   sortByDate(): void
   setSettings(patch: Partial<ProjectSettings>): void
   setTheme(theme: ThemeId): void
-  /** New files go behind the selection, or (`byTime`) where their capture time belongs. */
-  importMedia(paths: string[], placement?: 'selection' | 'byTime'): Promise<void>
+  /**
+   * New files go behind the selection, or (`byTime`) where their capture time belongs. What the show has
+   * already is skipped with a notice (repeats.ts; `quiet`: none, the share dialog counts them itself).
+   */
+  importMedia(paths: string[], placement?: 'selection' | 'byTime', opts?: { quiet?: boolean }): Promise<{ added: MediaItem[]; skipped: MediaItem[] }>
   addMusic(paths: string[]): Promise<void>
   addText(): void
   /** Rolling end credits as the last slide. */
@@ -95,6 +99,8 @@ interface State {
   releaseEntry(slideIds: string[], id: string): void
   /** Pulls the next entry of the show into the slide, or hands the last one on. */
   resizeSlide(slideIds: string[], delta: 1 | -1): void
+  /** The theme groups the photos again: of these slides' entries, or of the whole show. */
+  autoGroup(ids?: string[]): void
   select(ids: string[]): void
   set(patch: Partial<State>): void
 }
@@ -433,31 +439,50 @@ export const useStore = create<State>((set, get) => ({
     })
   },
 
-  async importMedia(paths, placement = 'selection') {
-    let items: MediaItem[]
-    try {
-      items = await window.api.importPaths(paths)
-    } catch (e) {
-      notifyError(e, 'import')
-      return
-    }
-    if (!items.length) return
-    const { selection } = get()
-    get().update((p) => {
-      const known = new Set(p.media.map((m) => m.id))
-      for (const m of items) if (!known.has(m.id)) p.media.push(m)
-      const fresh = entriesFor(items)
-      if (placement === 'byTime') {
-        const media = new Map(p.media.map((m) => [m.id, m]))
-        const dated = edits.hasDateTitles(p.entries, media)
-        p.entries = edits.insertByTime(p.entries, fresh, media)
-        // a show with day titles gets one for a day that came in new
-        if (dated) p.entries = edits.addMissingDayTitles(p.entries, media)
-        return
+  importMedia(paths, placement = 'selection', opts = {}) {
+    return serially(async () => {
+      let checked: CheckedImport
+      try {
+        checked = await importChecked(paths, get().project)
+      } catch (e) {
+        notifyError(e, 'import')
+        return { added: [], skipped: [] }
       }
-      const after = selection.length ? p.entries.findIndex((e) => e.id === selection[selection.length - 1]) : -1
-      if (after >= 0) p.entries.splice(after + 1, 0, ...fresh)
-      else p.entries.push(...fresh)
+      const { selection } = get()
+      // behind entry `behind` (else at the end), or by capture time; returns the new entry ids
+      const put = (items: MediaItem[], behind = selection[selection.length - 1]): string[] => {
+        const fresh = entriesFor(items)
+        get().update((p) => {
+          const known = new Set(p.media.map((m) => m.id))
+          for (const m of items) if (!known.has(m.id)) p.media.push(m)
+          if (placement === 'byTime') {
+            const media = new Map(p.media.map((m) => [m.id, m]))
+            const dated = edits.hasDateTitles(p.entries, media)
+            p.entries = edits.insertByTime(p.entries, fresh, media)
+            // a show with day titles gets one for a day that came in new
+            if (dated) p.entries = edits.addMissingDayTitles(p.entries, media)
+            return
+          }
+          const after = behind ? p.entries.findIndex((e) => e.id === behind) : -1
+          if (after >= 0) p.entries.splice(after + 1, 0, ...fresh)
+          else p.entries.push(...fresh)
+        })
+        return fresh.map((e) => e.id)
+      }
+      const added = checked.fresh.length ? put(checked.fresh) : []
+      const p = get().project
+      if (checked.skipped.length && !opts.quiet && p) {
+        // "Add anyway": behind the ones this import added (or where they would have gone), in one undo step
+        noticeRepeats(p, checked, () =>
+          serially(async () => {
+            const items = await window.api.importPaths(againPaths(checked.skipped))
+            const cur = get().project
+            if (!items.length || cur?.id !== p.id) return []
+            return put(items, [...added].reverse().find((id) => cur.entries.some((e) => e.id === id)))
+          })
+        )
+      }
+      return { added: checked.fresh, skipped: checked.skipped }
     })
   },
 
@@ -554,6 +579,10 @@ export const useStore = create<State>((set, get) => ({
 
   releaseEntry(slideIds, id) {
     get().update((p) => edits.releaseEntry(p, slideIds, id))
+  },
+
+  autoGroup(ids) {
+    get().update((p) => edits.autoGroup(p, ids))
   },
 
   resizeSlide(slideIds, delta) {

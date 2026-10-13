@@ -141,6 +141,8 @@ function rotationMatrix(rx: number, ry: number, rz: number): Float32Array {
 
 export class Compositor {
   readonly gl: WebGL2RenderingContext
+  /** Longest side of a texture on this GPU (often 16384, 8192 in software WebGL). */
+  readonly maxTexture: number
   W = 1
   H = 1
   private quadProg: WebGLProgram
@@ -170,6 +172,7 @@ export class Compositor {
     }) as WebGL2RenderingContext | null
     if (!gl) throw new Error('WebGL2 is not available')
     this.gl = gl
+    this.maxTexture = Number(gl.getParameter(gl.MAX_TEXTURE_SIZE)) || 4096
     this.quadProg = compile(gl, QUAD_VS, QUAD_FS)
     this.postProg = compile(gl, FULL_VS, POST_FS)
     this.vao = gl.createVertexArray()!

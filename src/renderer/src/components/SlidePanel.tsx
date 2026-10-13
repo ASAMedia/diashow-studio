@@ -7,10 +7,10 @@ import { mediaAspect, templatesFor, type Template } from '@shared/layout'
 import { audibleClips } from '@shared/audioPlan'
 import { showsWhole } from '../engine/draw'
 import { useStore } from '../store'
-import { timelineOf } from '../timeline'
+import { timelineOf, useTimeline } from '../timeline'
 import { fmtTime, localeTag, t } from '../i18n'
 import { Check, Field, Section, Slider, TITLE_STYLES } from './ui'
-import { BatchAdjust, BatchPanel, EditSection, FreeTextSection, PrivacySection, SpeedSelect } from './SlideTools'
+import { BatchAdjust, BatchPanel, EditSection, FreeTextSection, PanoramaControls, panoramaEntries, PrivacySection, SpeedSelect } from './SlideTools'
 import { MediaThumb } from './EditedPicture'
 import { openPhotoEdit } from '../photoEdit'
 import { TrimStrip } from './TrimStrip'
@@ -181,7 +181,8 @@ function CaptionField({ entry }: { entry: Entry }) {
 function CropSection({ slide }: { slide: TimelineSlide }) {
   const project = useStore((s) => s.project)!
   const update = useStore((s) => s.update)
-  if (!themeMeta(project.settings.theme).cropEdit || slide.kind !== 'photos') return null
+  // a panning panorama has no framing to drag
+  if (!themeMeta(project.settings.theme).cropEdit || slide.kind !== 'photos' || slide.pano?.mode === 'pan') return null
   const ids = new Set(slide.entries.map((e) => e.id))
   return (
     <div className="section">
@@ -216,8 +217,11 @@ function FramingSelect({ entry }: { entry: PhotoEntry | VideoEntry }) {
 /** How many items form this slide: take the next item of the show in, or hand the last one on. */
 function GroupControl({ slide }: { slide: TimelineSlide }) {
   const project = useStore((s) => s.project)!
+  const tl = useTimeline()
   const meta = themeMeta(project.settings.theme)
-  if (meta.maxPerSlide < 2 || (slide.kind !== 'photos' && !(slide.kind === 'video' && meta.videoInGrid))) return null
+  // a panorama is always alone on its slide, and no slide takes one in
+  if (meta.maxPerSlide < 2 || slide.pano || (slide.kind !== 'photos' && !(slide.kind === 'video' && meta.videoInGrid))) return null
+  const nextPano = !!tl?.slides[slide.index + 1]?.pano
   const ids = slide.entries.map((e) => e.id)
   const n = slide.entries.length
   return (
@@ -229,7 +233,7 @@ function GroupControl({ slide }: { slide: TimelineSlide }) {
             <Minus size={14} />
           </button>
           <span aria-live="polite">{n}</span>
-          <button className="btn small icon" title={t('itemsMore')} aria-label={t('itemsMore')} disabled={n >= meta.maxPerSlide} onClick={() => useStore.getState().resizeSlide(ids, 1)}>
+          <button className="btn small icon" title={t('itemsMore')} aria-label={t('itemsMore')} disabled={n >= meta.maxPerSlide || nextPano} onClick={() => useStore.getState().resizeSlide(ids, 1)}>
             <Plus size={14} />
           </button>
         </div>
@@ -411,6 +415,8 @@ export function SlidePanel() {
   }
 
   const pe = e as PhotoEntry
+  // a panorama chooses pan, whole picture or crop (and the direction) instead of the framing
+  const panos = panoramaEntries([pe], () => m, project.settings.aspect)
   return (
     <>
       <MediaInfo m={m} />
@@ -418,10 +424,14 @@ export function SlidePanel() {
       <Section title={t('duration')}>
         <DurationOverride entry={pe} />
       </Section>
-      <div className="section">
-        <FramingSelect entry={pe} />
-      </div>
-      {slide && <GroupControl slide={slide} />}
+      {panos.length ? (
+        <PanoramaControls entries={panos} />
+      ) : (
+        <div className="section">
+          <FramingSelect entry={pe} />
+        </div>
+      )}
+      {slide && !slide.pano && <GroupControl slide={slide} />}
       {slide && <CropSection slide={slide} />}
       <CaptionField entry={pe} />
       {slide && <FreeTextSection slide={slide} />}

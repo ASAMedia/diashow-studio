@@ -72,7 +72,8 @@ export function insertEntries(p: Project, fresh: Entry[], before: string | null,
  */
 export function canJoin(slide: TimelineSlide, items: readonly Pick<MediaItem, 'kind' | 'live'>[], settings: ProjectSettings): boolean {
   const meta = themeMeta(settings.theme)
-  if (meta.maxPerSlide < 2 || !items.length || slide.live) return false
+  // a panorama is always alone on its slide (shared/panorama.ts)
+  if (meta.maxPerSlide < 2 || !items.length || slide.live || slide.pano) return false
   if (slide.kind !== 'photos' && !(slide.kind === 'video' && meta.videoInGrid)) return false
   if (slide.entries.length + items.length > meta.maxPerSlide) return false
   return items.every((m) => (m.kind === 'video' ? !!meta.videoInGrid : !(m.live && settings.playLivePhotos)))

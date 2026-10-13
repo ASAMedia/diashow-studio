@@ -4,6 +4,7 @@
 // project, see tsconfig.web.json.)
 import { describe, expect, it } from 'vitest'
 import type { MediaEdit, MediaItem, Rect } from '@shared/types'
+import { panFrames } from '@shared/panorama'
 import { DEFAULT_FOCUS_Y, facesFocus, fitFrame, kenBurnsOf } from '../src/renderer/src/engine/draw'
 
 const photo = (id: string, w: number, h: number, edit?: MediaEdit, faces?: Rect[]): MediaItem =>
@@ -38,5 +39,24 @@ describe('framing on the edited picture', () => {
     expect(fitted.y + fitted.h).toBeLessThanOrEqual(1 + 1e-12)
     const kb = kenBurnsOf({ id: 'e', type: 'photo', mediaId: 'p', kenBurns: { start: r, end: r } }, photo('p', 4000, 3000, { rotate: 90, straighten: 0 }), 16 / 9)
     expect(kb.start).toEqual(fitted)
+  })
+})
+
+describe('panoramas in Ken Burns', () => {
+  it('pan end to end by default; the user’s own framing still wins', () => {
+    const m = photo('p', 8000, 1600)
+    const R = 16 / 9
+    const kb = kenBurnsOf({ id: 'e', type: 'photo', mediaId: 'p' }, m, R)
+    expect(kb).toEqual(panFrames(5, R, 'x', false))
+    expect(kb.start).toEqual({ x: 0, y: 0, w: R / 5, h: 1 })
+    expect(kenBurnsOf({ id: 'e', type: 'photo', mediaId: 'p', panReverse: true }, m, R)).toEqual(panFrames(5, R, 'x', true))
+    // turned a quarter it pans top to bottom
+    expect(kenBurnsOf({ id: 'e', type: 'photo', mediaId: 'p' }, photo('p', 8000, 1600, { rotate: 90, straighten: 0 }), R)).toEqual(panFrames(1 / 5, R, 'y', false))
+    const own = { start: { x: 0.2, y: 0, w: R / 5, h: 1 }, end: { x: 0.4, y: 0, w: R / 5, h: 1 } }
+    const mine = kenBurnsOf({ id: 'e', type: 'photo', mediaId: 'p', kenBurns: own }, m, R)
+    expect(mine.start.x).toBeCloseTo(0.2, 6)
+    expect(mine.end.x).toBeCloseTo(0.4, 6)
+    // cropped to fill: the ordinary Ken Burns motion
+    expect(kenBurnsOf({ id: 'e', type: 'photo', mediaId: 'p', whole: false }, m, R)).not.toEqual(kb)
   })
 })

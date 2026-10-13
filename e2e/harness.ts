@@ -3,7 +3,7 @@
 // native file dialogs, and the first-run overlay. Selectors work in German and English.
 import { _electron as electron, expect, type ElectronApplication, type Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { launchOptions } from './launch'
 
@@ -26,13 +26,20 @@ export function sampleFiles(opts: { video?: boolean; live?: boolean } = {}): str
   return files
 }
 
-/** Copies test-media files (relative paths) into `dest`, keeping their folders and modification times. */
-export function copyMedia(files: string[], dest: string): string[] {
+/**
+ * Copies test-media files (relative paths) into `dest`, keeping their folders and modification times.
+ * `distinct`: a few bytes go after the picture data (readers ignore them), so a show that has the
+ * original takes the copy as a new photo instead of skipping it as a repeat (src/shared/repeats.ts).
+ */
+export function copyMedia(files: string[], dest: string, distinct = false): string[] {
   return files.map((rel) => {
     const to = join(dest, ...rel.split('/'))
     mkdirSync(dirname(to), { recursive: true })
     // CopyFileW keeps the modification time, from which media ids are derived
     copyFileSync(join(mediaDir, ...rel.split('/')), to)
+    if (distinct) appendFileSync(to, `
+${to}
+`)
     return to
   })
 }

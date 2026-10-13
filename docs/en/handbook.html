@@ -131,7 +131,16 @@
   <li><strong>Copy and paste:</strong> files copied in Explorer (<kbd>Ctrl+C</kbd>) go in behind the selected slide with <kbd>Ctrl+V</kbd>, or at the end when nothing is selected. A copied picture without a file, such as a screenshot taken with <kbd>Win+Shift+S</kbd>, is saved as a PNG in <code>Documents\Diashow Studio\Pasted\&lt;slideshow&gt;</code> and inserted. <strong>Clean up after the project</strong> can delete these pictures again.</li>
   <li><strong>Insert…</strong> in a slide&#39;s menu picks files and puts them behind that slide.</li>
 </ul>
-<p>The inserted slides are selected afterwards; <kbd>Ctrl+Z</kbd> takes back the whole insert in one step. In themes with several photos per slide (Magazine, Origami, …) every other slide stays as it is: the new photos form slides of their own.</p>
+<p>The inserted slides are selected afterwards; <kbd>Ctrl+Z</kbd> takes back the whole insert in one step. In themes with several photos per slide (Magazine, Origami, …) every other slide stays as it is: the new photos form slides of their own. To let the theme mix the slides by its pattern again, click <strong>Group automatically</strong> above the filmstrip (see <a href="#themes">Themes</a>).</p>
+<h3>Photos that are already in the slideshow</h3>
+<p>What is already in the slideshow doesn&#39;t go in again: when adding photos or folders, dropping them on the window or the filmstrip, with <kbd>Ctrl+V</kbd>, <strong>Insert…</strong>, in the assistant and with uploads over the Wi-Fi. &quot;Already there&quot; means:</p>
+<ul>
+  <li>the same file, also when its slide is left out;</li>
+  <li>a copy under another name or in another folder that is identical byte for byte;</li>
+  <li>the same file twice in one selection: only the first goes in;</li>
+  <li>the same photo as HEIC and as JPEG from the same phone (same camera, picture size and capture time to the millisecond). Burst photos are different photos and all go in.</li>
+</ul>
+<p>A notice at the bottom right says how many were skipped. <strong>Show</strong> selects the existing slides in the filmstrip, <strong>Add anyway</strong> adds them after all (<kbd>Ctrl+Z</kbd> takes that back in one step). Smaller copies, e.g. from WhatsApp, are found by <strong>Find rejects…</strong> (see <a href="#cull">Review</a>).</p>
 <h3>Editing photos</h3>
 <p>Crooked or sideways phone photos are fixed as in Photos on the Mac: select the photo and click <strong>Edit</strong> under <strong>Picture</strong> in the <strong>Slide</strong> tab (or <strong>Edit</strong> in the slide&#39;s menu). The preview then shows the <strong>Crop</strong> tool:</p>
 <ul>
@@ -161,10 +170,19 @@
 <p>The <strong>theme</strong> decides how slides look and change. There are 11 themes, e.g. <strong>Ken Burns</strong> (slow moves across the photo), <strong>Magazine</strong> (several photos in a grid) or <strong>Snapshots</strong> (instant photos landing on a table).</p>
 <ul>
   <li>Themes with several photos per slide arrange them automatically. In the <strong>Slide</strong> tab you choose another layout, or <strong>Free</strong> for your own collage.</li>
+  <li><strong>Group automatically:</strong> slides you combined or split, and slides kept as they were when photos were inserted, keep their photos, also after a theme change. Above the filmstrip you then see how many there are, e.g. <strong>3 fixed slides · Group automatically</strong>; a click lets the theme spread all photos by its pattern again. For single slides, <strong>Group automatically</strong> is in the slide&#39;s menu. <strong>Sort by capture date</strong> always groups again. <kbd>Ctrl+Z</kbd> undoes it.</li>
   <li>The <strong>look</strong> (Natural, Vivid, Warm, Cool, Dramatic, Faded, Mono, Noir) colours only the photos and videos, never the background.</li>
   <li><strong>Crop photos to fill</strong> applies to the whole show; any photo can be an exception with <strong>Whole picture</strong>.</li>
   <li><strong>Title:</strong> title text, font, size, colour and an animation (handwriting, typewriter, big date) are set in the <strong>Themes</strong> tab.</li>
   <li>In the <strong>Classic</strong> theme you choose the transition (Dissolve, Push, Cube…) in the <strong>Duration</strong> tab.</li>
+</ul>
+<h3>Panoramas</h3>
+<p>Very wide photos, such as panoramas from a phone, are shown as in Photos on the Mac: they get a slide of their own, fill its height, and the view travels calmly and evenly from one end to the other. Very tall photos travel from top to bottom. A photo counts as a panorama from twice as wide as high on, when it is clearly wider than the slideshow (in 16:9 from about 2.5:1). Its slide lasts longer the wider it is, at most two and a half times a photo&#39;s time; a time of your own still applies. In the filmstrip such slides carry a double arrow.</p>
+<ul>
+  <li>In the <strong>Slide</strong> tab, <strong>Panorama</strong> sets <strong>Pan</strong>, <strong>Whole picture</strong> or <strong>Crop to fill</strong> for one or several panoramas, and the <strong>Direction</strong> (left → right or right → left, top → bottom or bottom → top).</li>
+  <li>In <strong>Ken Burns</strong> the pan is the start and end framing; you can still set your own framing as usual.</li>
+  <li><strong>Magazine</strong> shows the panorama on the whole page, <strong>Reflections</strong> as a wide card, <strong>Vintage Prints</strong>, <strong>Scrapbook</strong> and <strong>Snapshots</strong> as a wide print the picture travels in.</li>
+  <li>Pixelated faces stay pixelated while the view pans.</li>
 </ul>
 </section>
 
@@ -247,7 +265,7 @@
   <figcaption>Collecting photos from phones</figcaption>
 </figure>
 <ul>
-  <li><strong>Collect photos:</strong> the laptop shows a QR code. Pupils open a page with it and upload photos and videos. They are stored in <code>Documents\Diashow Studio\Uploads</code> and go straight into the show.</li>
+  <li><strong>Collect photos:</strong> the laptop shows a QR code. Pupils open a page with it and upload photos and videos. They are stored in <code>Documents\Diashow Studio\Uploads</code> and go straight into the show. When two send the same photo, it goes into the show once; the list counts the second as &quot;already there&quot;.</li>
   <li><strong>Hand out the video:</strong> a finished export can be watched and saved on the phones. There is a small 720p version for phones.</li>
   <li>The server only runs while the dialog is open and only answers links with a random key.</li>
 </ul>

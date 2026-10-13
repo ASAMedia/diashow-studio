@@ -4,6 +4,7 @@ import type { AspectRatio, CollagePlace, Entry, MediaItem, MusicTrack, Project, 
 import { classicTransitionSeconds, themeMeta } from './themes'
 import { effectiveMusic, placementAudio, type ThemeTrack } from './themeMusic'
 import { groupEntries, mediaAspect, pickTemplate, templatesFor, type Slot, type Template } from './layout'
+import { panoMode, panoramaOf, panTimeFactor, type PanoSlide } from './panorama'
 
 export type SlideKind = 'photos' | 'video' | 'text' | 'title'
 
@@ -30,6 +31,8 @@ export interface TimelineSlide {
   places?: CollagePlace[]
   /** Photo slide playing a Live/Motion photo first. */
   live?: { duration: number }
+  /** A panorama, always alone on its slide: how it is shown and which way it pans (shared/panorama.ts). */
+  pano?: PanoSlide
   /** Title drawn over this slide (themes without a separate title slide). */
   titleOverlay?: boolean
   title?: { text: string; subtitle?: string }
@@ -238,9 +241,11 @@ export function buildTimeline(project: Project, locale = 'de-DE', themeTracks: r
   }
 
   const entryAspect = (e: Entry): number => mediaAspect(e.type === 'text' ? undefined : byId.get(e.mediaId))
+  const panoAxis = (e: Entry): PanoSlide['axis'] | null => (e.type === 'photo' ? panoramaOf(byId.get(e.mediaId), aspect) : null)
   let prevTemplate: string | undefined
   let pendingCaption: { text: string; subtitle?: string; id: string } | undefined
-  const groups = groupEntries(usable, settings.theme, playsLive, entryAspect)
+  // a panorama never shares a slide, in the grid themes too and also when it was joined by hand
+  const groups = groupEntries(usable, settings.theme, (e) => playsLive(e) || !!panoAxis(e), entryAspect)
   for (const [gi, g] of groups.entries()) {
     const first = g.entries[0]
     const nextIsMedia = groups[gi + 1] && groups[gi + 1].entries[0].type !== 'text'
@@ -292,15 +297,18 @@ export function buildTimeline(project: Project, locale = 'de-DE', themeTracks: r
         }
       }
       const live = playsLive(first) ? { duration: media[0].live!.duration } : undefined
+      const axis = entries.length === 1 && !live ? panoAxis(first) : null
+      const pano: PanoSlide | undefined = axis ? { axis, mode: panoMode(first), reverse: first.type === 'photo' && !!first.panReverse } : undefined
       // a slide's own time lives on its first entry (in show order)
       const custom = first.duration != null
       // videos in a grid play side by side; with "play in full" the slide lasts as long as the longest
       const clips = entries.map((e, i) => (e.type === 'video' ? span(e, media[i]) : null))
       const longest = Math.max(0, ...clips.map((c) => (c ? clipSeconds(c) : 0)))
       drafts.push({
-        slide: { id: first.id, index: 0, kind: 'photos', entries, media, template, customDuration: custom, live, caption, captionEntryId, ...(longest > 0 ? { clips } : {}), ...(places ? { places } : {}) },
+        slide: { id: first.id, index: 0, kind: 'photos', entries, media, template, customDuration: custom, live, caption, captionEntryId, ...(longest > 0 ? { clips } : {}), ...(places ? { places } : {}), ...(pano ? { pano } : {}) },
         fixed: custom ? first.duration : undefined,
-        weight: 1 + 0.4 * (g.entries.length - 1),
+        // a pan takes longer the wider the panorama (as a weight: fitting to the music or a total stays exact)
+        weight: pano?.mode === 'pan' ? panTimeFactor(mediaAspect(media[0]), aspect, pano.axis) : 1 + 0.4 * (g.entries.length - 1),
         min: Math.max(live ? live.duration + 0.8 : 0, settings.playFullVideos ? longest : 0)
       })
     }

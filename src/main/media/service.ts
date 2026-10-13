@@ -16,6 +16,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { CacheInfo, ExportProgress, MediaItem, MusicTrack, Rect, VideoFaces } from '@shared/types'
+import type { ImportNewResult, RepeatCandidate } from '@shared/repeats'
 import { ID_FOLDER, type CleanTarget } from '../cache'
 import type { Ffmpeg } from '../ffmpeg'
 import { cacheInfo, cleanCache, forgetFaces, fromCache, persist, releaseCache, stripFolder } from './cacheMeta'
@@ -24,12 +25,14 @@ import { sanitizeDescriptors, sanitizeRects, sanitizeVideoFaces } from './faceDa
 import { MAX_EDGE as FRAMES_MAX_EDGE, MAX_FRAMES, videoFrames, videoInfoCached } from './frames'
 import { importMusic, restoreMusic, waveform } from './musicJobs'
 import { importPaths } from './processing'
+import { importNew } from './repeats'
 import type { RawDecoding } from './raw'
 import { relinkMedia, restoreMedia } from './restore'
 import { createServiceContext } from './serviceContext'
 import { stripFiles, videoStrip } from './video'
 import { analyzeVideo, type DirectDecode } from './videoInfo'
 import { prepareHires, stabilizeVideo } from './videoJobs'
+import { preparePanoramas } from './photoJobs'
 
 export { pickRelinkCandidate } from './restore'
 export { sanitizeRects as sanitizeFaces } from './faceData'
@@ -75,6 +78,11 @@ export interface HiresOptions {
 export interface MediaService {
   readonly ffmpeg: Ffmpeg
   importPaths(paths: string[]): Promise<MediaItem[]>
+  /**
+   * importPaths for new photos and videos of a show (`show`: its media, left-out ones too): what the
+   * show has already is left out unprocessed (src/shared/repeats.ts, repeats.ts).
+   */
+  importNew(paths: string[], show: RepeatCandidate[]): Promise<ImportNewResult>
   restoreMedia(items: MediaItem[]): Promise<MediaItem[]>
   importMusic(paths: string[]): Promise<MusicTrack[]>
   restoreMusic(tracks: MusicTrack[]): Promise<MusicTrack[]>
@@ -88,7 +96,11 @@ export interface MediaService {
   setVideoFaces(id: string, samples: VideoFaces[]): Promise<void>
   /** JPEG frames of a video at source times (ascending), fitting maxEdge; empty where none could be read. */
   videoFrames(path: string, times: number[], maxEdge: number): Promise<Uint8Array[]>
-  /** Video id → playable path at up to maxEdge (hi-res proxies are created and cached as needed). */
+  /**
+   * Video id → playable path at up to maxEdge (hi-res proxies are created and cached as needed);
+   * panorama photo id → an image with maxEdge px on its short side where the original has them
+   * (photoJobs.ts preparePanoramas).
+   */
   prepareHires(ids: string[], maxEdge: number, opts?: HiresOptions): Promise<Record<string, string>>
   get(id: string): MediaItem | undefined
   getTrack(id: string): MusicTrack | undefined
@@ -146,6 +158,8 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
 
     importPaths: (paths) => importPaths(ctx, paths),
 
+    importNew: (paths, show) => importNew(ctx, paths, show),
+
     restoreMedia: (list) => restoreMedia(ctx, list),
 
     importMusic: (paths) => importMusic(ctx, paths),
@@ -180,7 +194,7 @@ export function createMediaService(config: MediaServiceConfig): MediaService {
       return videoFrames(ff, path, info, list, edge, signal)
     },
 
-    prepareHires: (ids, maxEdge, opts) => prepareHires(ctx, ids, maxEdge, opts),
+    prepareHires: async (ids, maxEdge, opts) => ({ ...(await preparePanoramas(ctx, ids, maxEdge, opts)), ...(await prepareHires(ctx, ids, maxEdge, opts)) }),
 
     async videoStrip(path, count, height) {
       if (typeof path !== 'string' || !path) throw new Error('no video')

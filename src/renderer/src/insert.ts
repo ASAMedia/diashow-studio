@@ -2,7 +2,7 @@
 // files or a picture pasted with Ctrl+V (behind the selected slide, else at the end), and "Insert…" in
 // a slide's menu (behind that slide). Files are imported like any import (folders expanded, Live
 // Photos and RAW+JPEG paired, sorted by capture time) and go in as one undo step; the new slides are
-// selected. Where they go is decided in insertAt.ts.
+// selected. Where they go is decided in insertAt.ts. What the show has already is skipped (repeats.ts).
 import { classify } from '@shared/formats'
 import type { MediaItem } from '@shared/types'
 import { useStore } from './store'
@@ -10,6 +10,7 @@ import { timelineOf } from './timeline'
 import { entriesFor } from './entryEdits'
 import { notifyError } from './errors'
 import { anchorAt, canJoin, insertEntries, insertInto } from './insertAt'
+import { againPaths, importChecked, noticeRepeats, serially, type CheckedImport } from './repeats'
 
 /**
  * Where new items go: in front of an entry (null: at the end), or (`into`, the entry ids of a slide
@@ -35,13 +36,35 @@ export async function insertFiles(paths: string[], place: InsertPlace): Promise<
   const media = paths.filter((p) => classify(p) !== 'audio')
   if (audio.length) void useStore.getState().addMusic(audio).catch((e) => notifyError(e, 'import'))
   if (!media.length) return []
-  let items: MediaItem[]
-  try {
-    items = await window.api.importPaths(media)
-  } catch (e) {
-    notifyError(e, 'import')
-    return []
-  }
+  return serially(async () => {
+    let checked: CheckedImport
+    try {
+      checked = await importChecked(media, useStore.getState().project)
+    } catch (e) {
+      notifyError(e, 'import')
+      return []
+    }
+    const ids = putAt(checked.fresh, place)
+    const cur = useStore.getState().project
+    if (checked.skipped.length && cur) {
+      // "Add anyway": at the same place (behind the ones that went in), one undo step
+      noticeRepeats(cur, checked, () =>
+        serially(async () => {
+          const items = await window.api.importPaths(againPaths(checked.skipped))
+          return useStore.getState().project?.id === cur.id ? putAt(items, place) : []
+        })
+      )
+    }
+    if (ids.length) {
+      useStore.getState().select(ids)
+      stripReveal.current?.(ids[0])
+    }
+    return ids
+  })
+}
+
+/** Puts imported items at `place` in one undo step; returns the new entry ids. */
+function putAt(items: MediaItem[], place: InsertPlace): string[] {
   const cur = useStore.getState().project
   if (!items.length || !cur) return []
   const fresh = entriesFor(items)
@@ -56,10 +79,7 @@ export async function insertFiles(paths: string[], place: InsertPlace): Promise<
     if (join) insertInto(p, fresh, target!.entries.map((e) => e.id))
     else insertEntries(p, fresh, before, tl)
   })
-  const ids = fresh.map((e) => e.id)
-  useStore.getState().select(ids)
-  stripReveal.current?.(ids[0])
-  return ids
+  return fresh.map((e) => e.id)
 }
 
 /** The slide boundary behind the last selected slide, or the end of the show without a selection. */

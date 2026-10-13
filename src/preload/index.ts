@@ -11,6 +11,7 @@ const api: DiashowApi = {
   platform: process.platform,
   locale: () => ipcRenderer.invoke('app:locale'),
   importPaths: (paths) => ipcRenderer.invoke('media:import', paths),
+  importNew: (paths, show) => ipcRenderer.invoke('media:import-new', paths, show),
   restoreMedia: (items) => ipcRenderer.invoke('media:restore', items),
   onMediaUpdate: (cb) => subscribe('media:update', cb),
   importMusic: (paths) => ipcRenderer.invoke('music:import', paths),
