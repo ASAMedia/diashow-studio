@@ -418,6 +418,15 @@ describe('inserting: the import queue', () => {
     noticeRepeats(p, { fresh: [], skipped: [item('x1'), item('x2')], repeatOf: { x1: 'A-m', x2: 'A-m' } }, async () => [])
     const notice = useRepeatNotice.getState().notice!
     expect(leftOutTargets(p, notice.targets)).toBe(2)
-    expect(noticeText(p, notice)).toMatch(/^Alle 2 Fotos .* 2 davon sind herausgenommen/)
+    // the text in both languages, whatever the machine's language is (GitHub's runner is English)
+    const { setLocale } = await import('../src/renderer/src/i18n')
+    try {
+      setLocale('de-DE')
+      expect(noticeText(p, notice)).toMatch(/^Alle 2 Fotos .* 2 davon sind herausgenommen/)
+      setLocale('en-US')
+      expect(noticeText(p, notice)).toMatch(/^All 2 photos .* 2 of them are left out/)
+    } finally {
+      setLocale(navigator.language)
+    }
   })
 })

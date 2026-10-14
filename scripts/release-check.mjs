@@ -103,12 +103,13 @@ async function main() {
   // out/, which they don't read
   const build = quick ? null : start('npx', ['electron-vite', 'build'])
 
-  await step('Type check and unit tests with fresh test media', () => {
+  await step('Type check and unit tests with fresh test media, in German and English', () => {
     const media = join(root, 'test-media')
     const aside = join(root, 'test-media.before-release-check')
     if (existsSync(aside)) return `${aside} is left over from an earlier run; put it back or delete it`
     if (existsSync(media)) renameSync(media, aside)
-    const ok = run('npm', ['run', 'typecheck']) && run('npx', ['vitest', 'run'])
+    // in both UI languages: GitHub's runner is English, a teacher's PC usually German (tests/setupLocale.ts)
+    const ok = run('npm', ['run', 'typecheck']) && run('npx', ['vitest', 'run'], { DIASHOW_LOCALE: 'de-DE' }) && run('npx', ['vitest', 'run'], { DIASHOW_LOCALE: 'en-US' })
     if (existsSync(join(media, '.complete-v2'))) rmSync(aside, { recursive: true, force: true })
     else if (existsSync(aside)) {
       rmSync(media, { recursive: true, force: true })
