@@ -107,6 +107,7 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
   - Each export is a snapshot of the show, so later edits don't change it.
   - A hidden window renders exports in 30-second parts. After a crash or a restart the export continues from the last finished part ("Continue" in the queue).
   - The PC doesn't go to sleep while an export runs.
+  - The taskbar button shows the running job's progress (busy while it prepares, yellow when paused, red for 10 s when one fails), and a Windows notification says when a job is done or failed while the app isn't in front; a click shows the video in its folder. No notification while the app shows something fullscreen (presentation, kiosk, fullscreen player), so it never pops up in front of an audience (`src/main/export/feedback.ts`). The app sets the installer's app id (`de.asamedia.diashowstudio`) so Windows lists it under Settings → Notifications; the portable exe has no Start menu entry, so Windows may not show its notifications. The tests switch them off (`DIASHOW_NOTIFY=0`).
 - **Large shows:** the filmstrip renders only what is visible (a 400-slide show at the smallest zoom keeps about 270 cards in the page), layout results are cached, and processing updates are batched.
 - **Speed:**
   - Exports run about 3x faster than before: the graphics card converts each frame to YUV, and the next frame renders while the last one is read back. A 220-second show exports in 55 s at 1080p with NVENC, at the same quality.

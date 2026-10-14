@@ -68,6 +68,17 @@ test('export queue: background jobs one after another, resume after a worker cra
     )
   const a = join(dataDir, 'a-large.mp4')
   const b = join(dataDir, 'b-small.mp4')
+  // what the editor's taskbar button shows (export/feedback.ts)
+  await app.evaluate(({ BrowserWindow }) => {
+    const g = globalThis as unknown as { __bars: [number, string | undefined][] }
+    g.__bars = []
+    const set = BrowserWindow.prototype.setProgressBar
+    BrowserWindow.prototype.setProgressBar = function (progress: number, options?: { mode?: string }) {
+      g.__bars.push([progress, options?.mode])
+      return set.call(this, progress, options as never)
+    }
+  })
+  const bars = (): Promise<[number, string | undefined][]> => app.evaluate(() => (globalThis as unknown as { __bars: [number, string | undefined][] }).__bars)
   const t0 = Date.now()
   await add('A', EXPORT_SIZE.width, EXPORT_SIZE.height, a)
   await add('B', EXPORT_SIZE.width / 2, EXPORT_SIZE.height / 2, b)
@@ -89,6 +100,9 @@ test('export queue: background jobs one after another, resume after a worker cra
 
   await expect.poll(async () => (await jobs(page)).map((j) => j.state).join(','), { timeout: 600_000, intervals: [250] }).toBe('done,done')
   console.log(`two jobs in ${((Date.now() - t0) / 1000).toFixed(0)} s`)
+  // the taskbar button followed the jobs and is empty again
+  await expect.poll(async () => (await bars()).at(-1)).toEqual([-1, 'none'])
+  expect((await bars()).some(([p, mode]) => mode === 'normal' && p > 0 && p < 1)).toBe(true)
   for (const f of [a, b]) {
     const p = probe(f)
     console.log(f, JSON.stringify(p))

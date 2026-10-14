@@ -14,7 +14,8 @@ export const appArgs = (): string[] => [process.env.DIASHOW_MAIN ?? '.', ...swit
 
 /** Launch options for the app with its data in `dataDir`; DIASHOW_EXE runs a packaged build instead. */
 export function launchOptions(root: string, dataDir: string): { executablePath?: string; args?: string[]; cwd?: string; env: Record<string, string> } {
-  const env = { ...(process.env as Record<string, string>), DIASHOW_DATA_DIR: dataDir }
+  // no Windows notifications for the tests' exports (the app is rarely in front while they run)
+  const env = { DIASHOW_NOTIFY: '0', ...(process.env as Record<string, string>), DIASHOW_DATA_DIR: dataDir }
   const exe = process.env.DIASHOW_EXE
   return exe ? { executablePath: exe, args: switches(), env } : { args: appArgs(), cwd: root, env }
 }

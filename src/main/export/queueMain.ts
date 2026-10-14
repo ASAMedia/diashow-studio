@@ -1,11 +1,16 @@
 // Electron side of the export queue (queue.ts): the hidden worker window that renders the jobs, the
 // queue:* and worker:* IPC channels, throttled updates to the other windows, and keeping the PC
 // from sleeping while a job runs.
-import { app, BrowserWindow, ipcMain, powerSaveBlocker, type IpcMainInvokeEvent, type WebContents } from 'electron'
+import { app, BrowserWindow, ipcMain, Notification, powerSaveBlocker, shell, type IpcMainInvokeEvent, type WebContents } from 'electron'
 import type { EncoderInfo, ExportProgress } from '@shared/types'
-import type { ExportJobState } from '@shared/exportQueue'
+import type { ExportJobInfo, ExportJobState } from '@shared/exportQueue'
+import { dialogText } from '../dialogText'
 import { denyPopups, loadRenderer, rendererWebPreferences } from '../presentation'
+import { createExportFeedback } from './feedback'
 import { openExportQueue, throttle, type ExportQueue } from './queue'
+
+/** The installer's app id (electron-builder.yml): Windows shows the app's notifications under its Start menu entry. */
+const APP_ID = 'de.asamedia.diashowstudio'
 
 /** No frame for this long while rendering: the worker hangs. */
 const VIDEO_STALL_MS = 3 * 60_000
@@ -51,10 +56,39 @@ export function registerExportQueue(cfg: { dir: string; ffmpegDir: string; theme
   const visibleWindows = (except?: BrowserWindow): BrowserWindow[] =>
     BrowserWindow.getAllWindows().filter((w) => !w.isDestroyed() && w !== worker && w !== except)
 
+  // the taskbar button and a notification when a job is done or failed (feedback.ts)
+  if (process.platform === 'win32') app.setAppUserModelId(APP_ID)
+  const notify = (kind: 'done' | 'error', job: ExportJobInfo): void => {
+    if (!Notification.isSupported()) return
+    const n = new Notification({
+      title: dialogText(kind === 'done' ? 'notifyDone' : 'notifyFailed'),
+      body: `${job.name}\n${dialogText(kind === 'done' ? 'notifyDoneHint' : 'notifyFailedHint')}`
+    })
+    n.on('click', () => {
+      if (kind === 'done') shell.showItemInFolder(job.outPath)
+      const win = visibleWindows()[0]
+      if (win) {
+        if (win.isMinimized()) win.restore()
+        win.focus()
+      }
+    })
+    n.show()
+  }
+  const feedback = createExportFeedback({
+    setProgress: (progress, mode) => {
+      for (const win of visibleWindows()) win.setProgressBar(progress, { mode })
+    },
+    notify,
+    focused: () => visibleWindows().some((w) => w.isFocused()),
+    fullscreen: () => visibleWindows().some((w) => w.isFullScreen()),
+    notifications: process.env.DIASHOW_NOTIFY !== '0'
+  })
+
   const sendUpdate = throttle(() => {
     if (!queue) return
     const jobs = queue.list()
     for (const win of visibleWindows()) win.webContents.send('queue:update', jobs)
+    feedback.update(jobs)
   }, 250)
 
   const syncAwake = (): void => {

@@ -190,6 +190,7 @@ Für Schülerinnen und Schüler ohne Fotoerlaubnis verpixelst du Gesichter. Die 
 ![Der Export-Dialog](export.jpg)
 
 - Exporte laufen im Hintergrund nacheinander; du kannst weiterarbeiten. Die Titelleiste zeigt den Fortschritt, die Liste **Exporte** alle Aufträge.
+- Auch das Symbol in der Windows-Taskleiste füllt sich mit dem Fortschritt (gelb bei Pause, kurz rot bei einem Fehler). Arbeitest du in einem anderen Programm, meldet Windows, wenn ein Export fertig ist; ein Klick zeigt das Video im Ordner. Während eine Diashow im Vollbild läuft (Präsentation, Kiosk), kommt keine Meldung.
 - Jeder Export ist eine Momentaufnahme: Spätere Änderungen verändern ihn nicht.
 - Nach einem Absturz oder Neustart geht es mit **Fortsetzen** in der Liste **Exporte** weiter.
 - **Kapitel als Sprungmarken:** Ab zwei Kapiteln springen Player wie VLC damit direkt zu „Dienstag“. **Kapitel kopieren** legt die Liste für eine YouTube-Beschreibung in die Zwischenablage.

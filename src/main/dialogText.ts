@@ -24,7 +24,12 @@ const TEXT = {
   saveDiagnostics: ['Diagnosepaket speichern', 'Save diagnostics package'],
   offerFile: ['Datei zum Herunterladen anbieten', 'Offer a file for download'],
   // the window on the second display (taskbar, Alt+Tab)
-  presentation: ['Diashow Studio – Präsentation', 'Diashow Studio – Presentation']
+  presentation: ['Diashow Studio – Präsentation', 'Diashow Studio – Presentation'],
+  // Windows notifications when an export in the background is done or failed
+  notifyDone: ['Export fertig', 'Export finished'],
+  notifyDoneHint: ['Ein Klick zeigt das Video im Ordner.', 'Click to show the video in its folder.'],
+  notifyFailed: ['Export fehlgeschlagen', 'Export failed'],
+  notifyFailedHint: ['Mehr dazu in der Export-Warteschlange.', 'The export queue tells you more.']
 } as const
 
 export type DialogTextKey = keyof typeof TEXT

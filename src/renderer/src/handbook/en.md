@@ -190,6 +190,7 @@ Faces of pupils without photo consent can be pixelated. Face detection runs offl
 ![The export dialog](export.jpg)
 
 - Exports run in the background, one after another; you can keep working. The title bar shows the progress, the **Exports** list every job.
+- The app's icon in the Windows taskbar fills up with the progress too (yellow when paused, red for a moment when one fails). When you are working in another program, Windows tells you when an export is finished; a click shows the video in its folder. While a slideshow plays fullscreen (presentation, kiosk), no notification appears.
 - Each export is a snapshot: later edits don't change it.
 - After a crash or a restart, **Continue** in the **Exports** list picks up where it stopped.
 - **Chapters as jump marks:** from two chapters on, players such as VLC jump straight to “Tuesday”. **Copy chapters** puts the list on the clipboard for a YouTube description.
