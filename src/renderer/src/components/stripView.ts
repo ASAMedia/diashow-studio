@@ -1,17 +1,23 @@
 // The filmstrip's view (Filmstrip.tsx): only the cards in view (plus a margin) are rendered, as big
-// shows have hundreds of slides; the zoom keeps a point in place; a slide is scrolled into view when it
-// is shown (a search match, a chapter, inserted slides). Sizes and positions follow stripScale.ts.
+// shows have hundreds of slides; the zoom keeps a point in place, and a show too long for the smallest
+// cards zooms out into the overview (StripOverview.tsx) as far as it takes to fit; a slide is scrolled
+// into view when it is shown (a search match, a chapter, inserted slides). Sizes and positions follow
+// stripScale.ts.
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import type { Timeline } from '@shared/timeline'
 import { useStore } from '../store'
 import { timelineOf } from '../timeline'
 import { prioritize } from '../priority'
 import { stripReveal } from '../insert'
-import { anchoredScroll, clampCard, fitCard, loadZoom, saveZoom, STRIP_PAD, stripScale, timeToX, zoomStep, type StripScale } from './stripScale'
+import { anchoredScroll, clampCard, fitCard, loadZoom, minCard, saveZoom, STRIP_PAD, stripScale, timeToX, zoomStep, type StripScale } from './stripScale'
 
 export interface StripView {
   scale: StripScale
-  /** The cards rendered: indices `first` to `last`. */
+  /** The narrowest zoom for this show in this width (below MIN_CARD: the overview of the whole show). */
+  min: number
+  /** The scrolled part: scroll position and width of the scrolling element. */
+  view: { left: number; width: number }
+  /** The cards rendered (in the overview: the bars drawn): indices `first` to `last`. */
   first: number
   last: number
   /** Until then (performance.now()) the playhead's autoscroll leaves the filmstrip alone: the user scrolled or zoomed it. */
@@ -29,13 +35,16 @@ export function useStripView(scrollRef: RefObject<HTMLDivElement | null>, tl: Ti
   // autoscroll pauses for a moment after the user scrolls the filmstrip by hand
   const manualUntil = useRef(0)
   // zoom: the card width, remembered per user; every size below follows from it
-  const [card, setCard] = useState(loadZoom)
-  const scale = stripScale(card)
-  const { step } = scale
+  const [chosen, setCard] = useState(loadZoom)
   const n = tl.slides.length
-
   // Only the cards in view (plus a margin) are rendered; big shows have hundreds of slides.
   const [view, setView] = useState({ left: 0, width: 2000 })
+  // never narrower than the whole show needs: a short show keeps its smallest cards, and the overview
+  // of a long one grows with the window
+  const min = minCard(n, view.width - 2 * STRIP_PAD - 1)
+  const card = clampCard(chosen, min)
+  const scale = stripScale(card)
+  const { step } = scale
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
@@ -68,7 +77,7 @@ export function useStripView(scrollRef: RefObject<HTMLDivElement | null>, tl: Ti
   const pendingZoom = useRef<{ scroll: number } | null>(null)
   const zoomTo = (next: number, clientX?: number): void => {
     const el = scrollRef.current
-    const c = clampCard(next)
+    const c = clampCard(next, min)
     if (!el || c === card) return
     const to = stripScale(c)
     let anchorX: number
@@ -100,11 +109,12 @@ export function useStripView(scrollRef: RefObject<HTMLDivElement | null>, tl: Ti
   }, [step])
   const fitAll = (): void => {
     const el = scrollRef.current
-    if (el) zoomTo(fitCard(n, el.clientWidth - 2 * STRIP_PAD))
+    // a pixel to spare: the overview's widths have fractions
+    if (el) zoomTo(fitCard(n, el.clientWidth - 2 * STRIP_PAD - 1))
   }
   // Ctrl+wheel (and a touchpad pinch) zooms around the mouse; a passive React handler can't stop the page zoom
-  const zoomRef = useRef({ zoomTo, card })
-  zoomRef.current = { zoomTo, card }
+  const zoomRef = useRef({ zoomTo, card, min })
+  zoomRef.current = { zoomTo, card, min }
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
@@ -112,8 +122,8 @@ export function useStripView(scrollRef: RefObject<HTMLDivElement | null>, tl: Ti
       if (!e.ctrlKey) return
       e.preventDefault()
       manualUntil.current = performance.now() + 4000
-      const { zoomTo: zoom, card: c } = zoomRef.current
-      zoom(zoomStep(c, Math.exp(-Math.max(-300, Math.min(300, e.deltaY)) * 0.0025)), e.clientX)
+      const { zoomTo: zoom, card: c, min: lo } = zoomRef.current
+      zoom(zoomStep(c, Math.exp(-Math.max(-300, Math.min(300, e.deltaY)) * 0.0025), lo), e.clientX)
     }
     el.addEventListener('wheel', wheel, { passive: false })
     return () => el.removeEventListener('wheel', wheel)
@@ -151,5 +161,5 @@ export function useStripView(scrollRef: RefObject<HTMLDivElement | null>, tl: Ti
     }
   }, [])
 
-  return { scale, first, last, manualUntil, zoomTo, fitAll, revealIndex }
+  return { scale, min, view, first, last, manualUntil, zoomTo, fitAll, revealIndex }
 }

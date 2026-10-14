@@ -7,7 +7,7 @@ import { ChevronDown, ChevronUp, ListTree, Maximize2, Search, X, ZoomIn, ZoomOut
 import type { Timeline, TimelineSlide } from '@shared/timeline'
 import type { Project, TextEntry } from '@shared/types'
 import { oneLine } from '@shared/chapters'
-import { fill, fmtTime, localeTag, t, type StringKey } from '../i18n'
+import { dateLocale, fill, fmtTime, localeTag, t, type StringKey } from '../i18n'
 import { searchSlides, type MatchField, type SearchHit } from '../search'
 import { useStore } from '../store'
 import { modalOpen } from '../keys'
@@ -39,7 +39,7 @@ export function useStripSearch(tl: Timeline, project: Project, onJump: (index: n
   // may be gone (its caption edited, say) or new ones may come before it
   const [shown, setShown] = useState<{ id: string; index: number } | null>(null)
   const people = project.people
-  const hits = useMemo(() => (open && query.trim() ? searchSlides(tl, { people }, query, localeTag()) : []), [open, query, tl, people])
+  const hits = useMemo(() => (open && query.trim() ? searchSlides(tl, { people }, query, dateLocale()) : []), [open, query, tl, people])
   const matched = useMemo(() => new Set(hits.map((h) => h.index)), [hits])
   const current = shown ? hits.findIndex((h) => tl.slides[h.index]?.id === shown.id) : -1
   const jump = useRef(onJump)
@@ -323,10 +323,11 @@ export function ChaptersMenu({ tl, onJump }: { tl: Timeline; onJump: (index: num
   )
 }
 
-export function ZoomControls({ card, onZoom, onFit }: { card: number; onZoom: (card: number) => void; onFit: () => void }) {
+/** `min`: the narrowest zoom for the show (below MIN_CARD the overview of a long show, stripScale.ts minCard). */
+export function ZoomControls({ card, min, onZoom, onFit }: { card: number; min: number; onZoom: (card: number) => void; onFit: () => void }) {
   return (
     <div className="strip-zoom" role="group" aria-label={t('stripZoom')}>
-      <button className="btn small icon ghost" title={`${t('stripZoomOut')} (${t('kbdCtrlWheel')})`} aria-label={t('stripZoomOut')} disabled={card <= MIN_CARD} onClick={() => onZoom(zoomStep(card, 1 / 1.25))}>
+      <button className="btn small icon ghost" title={`${t('stripZoomOut')} (${t('kbdCtrlWheel')})`} aria-label={t('stripZoomOut')} disabled={card <= min} onClick={() => onZoom(zoomStep(card, 1 / 1.25, min))}>
         <ZoomOut size={14} />
       </button>
       <input
@@ -334,17 +335,17 @@ export function ZoomControls({ card, onZoom, onFit }: { card: number; onZoom: (c
         min={0}
         max={100}
         step={1}
-        value={cardToSlider(card)}
+        value={cardToSlider(card, min)}
         aria-label={t('stripZoom')}
-        aria-valuetext={`${card} px`}
+        aria-valuetext={card < MIN_CARD ? `${t('stripOverview')}, ${card.toLocaleString(localeTag())} px` : `${card} px`}
         onChange={(e) => {
           // a step of the slider is less than a pixel on small cards: then one pixel its way
           const v = Number(e.target.value)
-          const next = sliderToCard(v)
-          onZoom(next !== card || v === cardToSlider(card) ? next : zoomStep(card, v > cardToSlider(card) ? 1.001 : 1 / 1.001))
+          const next = sliderToCard(v, min)
+          onZoom(next !== card || v === cardToSlider(card, min) ? next : zoomStep(card, v > cardToSlider(card, min) ? 1.001 : 1 / 1.001, min))
         }}
       />
-      <button className="btn small icon ghost" title={`${t('stripZoomIn')} (${t('kbdCtrlWheel')})`} aria-label={t('stripZoomIn')} disabled={card >= MAX_CARD} onClick={() => onZoom(zoomStep(card, 1.25))}>
+      <button className="btn small icon ghost" title={`${t('stripZoomIn')} (${t('kbdCtrlWheel')})`} aria-label={t('stripZoomIn')} disabled={card >= MAX_CARD} onClick={() => onZoom(zoomStep(card, 1.25, min))}>
         <ZoomIn size={14} />
       </button>
       <button className="btn small icon ghost" title={t('stripFit')} aria-label={t('stripFit')} onClick={onFit}>

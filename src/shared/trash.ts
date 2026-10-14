@@ -71,6 +71,8 @@ export type TrashRestoreResult =
       renamed: number
       /** The undo history came back too (it goes when uploads had to be renamed). */
       history: boolean
+      /** It had an undo history that did not come back (it no longer fits the show): the notice says so. */
+      historyDropped?: boolean
       /** Export jobs back in the queue. */
       exports: number
     }

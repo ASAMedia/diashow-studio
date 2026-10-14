@@ -1,6 +1,8 @@
 // The filmstrip end to end: zoom (slider, buttons, Ctrl+wheel around the mouse, "show the whole
-// slideshow") with the audio lane and playhead staying on the cards; a 400-slide show at the smallest
-// size; search by file name and date word with next/previous and the chapters menu; files from
+// slideshow") with the audio lane and playhead staying on the cards; a 400-slide show as an overview and
+// at the smallest size; a 1000-slide show as an overview of bars (fits, clickable, keyboard and screen
+// reader, chapter and search marks, zoom back in; time per frame and DOM size measured); search by file
+// name and date word with next/previous and the chapters menu; files from
 // Explorer dropped between two cards and onto a card (a real drop through Chromium's drag pipeline,
 // CDP Input.dispatchDragEvent with file paths); Ctrl+V of files copied like in Explorer (CF_HDROP via
 // PowerShell's Set-Clipboard) and of a picture without a file (written by the main process); "Insert…"
@@ -36,10 +38,22 @@ const cardBox = (page: Page, index: number): Promise<{ left: number; right: numb
     return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width }
   }, index)
 const playerTime = (page: Page): Promise<number> => page.evaluate(() => (window as any).__diashow.player.current.t)
+/**
+ * Where slide `index` starts on screen: its card's left edge, or in the overview (a show too long for
+ * the smallest cards) its bar's: the strip's left edge plus index × the step the canvas draws with.
+ */
+const slideLeft = (page: Page, index: number): Promise<number | null> =>
+  page.evaluate((i) => {
+    const card = document.querySelector(`.cards .card:not(.overview-card)[data-index="${i}"]`)
+    if (card) return card.getBoundingClientRect().left
+    const canvas = document.querySelector<HTMLCanvasElement>('canvas.strip-overview')
+    const inner = document.querySelector('.strip-inner')
+    return canvas && inner ? inner.getBoundingClientRect().left + i * Number(canvas.dataset.step) : null
+  }, index)
 
-/** The video's sound in the audio lane, and the playhead, sit where the cards say at this zoom. */
+/** The video's sound in the audio lane, and the playhead, sit where the cards (or the overview's bars) say at this zoom. */
 async function expectAligned(page: Page, videoIndex: number, label: string): Promise<void> {
-  const card = await page.locator(`.cards .card[data-index="${videoIndex}"]`).evaluate((el) => el.getBoundingClientRect().left)
+  const card = (await slideLeft(page, videoIndex))!
   const clip = await page.locator('.lane rect.clip').first().evaluate((el) => el.getBoundingClientRect().left)
   expect(Math.abs(clip - card), `${label}: lane clip ${clip} vs card ${card}`).toBeLessThan(1.5)
   // the playhead at the start of a slide sits on its card's left edge
@@ -48,8 +62,8 @@ async function expectAligned(page: Page, videoIndex: number, label: string): Pro
   await expect
     .poll(async () => {
       const ph = await page.locator('.playhead').evaluate((el) => el.getBoundingClientRect().left + 1)
-      const c = await cardBox(page, videoIndex)
-      return c ? Math.abs(ph - c.left) : 99
+      const c = await slideLeft(page, videoIndex)
+      return c != null ? Math.abs(ph - c) : 99
     }, { timeout: 5000 })
     .toBeLessThan(1.5)
 }
@@ -131,7 +145,8 @@ test('filmstrip: zoom, search, chapters, insert by drop and Ctrl+V, undo', { loc
     await expectAligned(page, videoIndex, 'fit all')
     await page.screenshot({ path: join(shots, 'fit-all.png') })
 
-    // ---- a 400-slide show at the smallest size: virtualised and quick to scroll
+    // ---- a 400-slide show: too long for the smallest cards, "show the whole slideshow" makes it an
+    // overview that fits; at the smallest cards it is virtualised and quick to scroll
     const big = await page.evaluate(() => {
       const st = (window as any).__diashow.store.getState()
       const photos = st.project.entries.filter((e: any) => e.type === 'photo')
@@ -143,6 +158,12 @@ test('filmstrip: zoom, search, chapters, insert by drop and Ctrl+V, undo', { loc
     })
     expect(big).toBe(400)
     await page.getByRole('button', { name: /Ganze Diashow zeigen|Show the whole slideshow/ }).click()
+    await expect(page.locator('section.strip')).toHaveClass(/zoom-overview/)
+    await expect.poll(() => page.locator('.strip-scroll').evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1)
+    await expectAligned(page, videoIndex, 'overview of 400')
+    // the slider starts at the overview: step by step up to the smallest card
+    await slider.focus()
+    for (let i = 0; i < 80 && (await slider.getAttribute('aria-valuetext')) !== '6 px'; i++) await page.keyboard.press('ArrowRight')
     await expect.poll(() => cardWidth(page)).toBe(6)
     const perf = await page.evaluate(async () => {
       const el = document.querySelector<HTMLElement>('.strip-scroll')!
@@ -397,12 +418,14 @@ test('filmstrip: zoom, search, chapters, insert by drop and Ctrl+V, undo', { loc
     await page.keyboard.press('Control+y')
     await expect.poll(async () => (await entryIds(page)).length, { timeout: 20_000 }).toBe(ids0.length + 2)
 
-    // ---- Ctrl+V with a picture without a file (a screenshot): saved as a PNG for the show, then inserted
+    // ---- Ctrl+V with a picture without a file (a screenshot): saved as a PNG for the show, then inserted;
+    // without a selection at the end, in front of the end credits
     const png = readFileSync(join(mediaDir, 'misc', 'pano.png')).toString('base64')
     await app.evaluate(async ({ clipboard, ClipboardItem }, b64) => {
       const bytes = Buffer.from(b64, 'base64')
       await clipboard.write([new ClipboardItem({ 'image/png': new Blob([bytes], { type: 'image/png' }) })])
     }, png)
+    await page.evaluate(() => (window as any).__diashow.store.getState().addCredits())
     ids0 = await entryIds(page)
     await page.keyboard.press('Escape')
     await page.locator('.stage').click({ position: { x: 5, y: 5 } })
@@ -410,7 +433,8 @@ test('filmstrip: zoom, search, chapters, insert by drop and Ctrl+V, undo', { loc
     await page.keyboard.press('Control+v')
     await expect.poll(async () => (await entryIds(page)).length, { timeout: 20_000 }).toBe(ids0.length + 1)
     after = await slides(page)
-    const pasted = after[after.length - 1].paths[0]
+    expect(after[after.length - 1].ids).toEqual([ids0[ids0.length - 1]])
+    const pasted = after[after.length - 2].paths[0]
     const folder = join(dataDir, 'Diashow Studio', de ? 'Eingefügt' : 'Pasted', 'Streifen')
     expect(pasted.startsWith(folder + '\\')).toBe(true)
     expect(basename(pasted)).toMatch(/^\d{4}-\d\d-\d\d \d\d-\d\d-\d\d( \(\d+\))?\.png$/)
@@ -447,5 +471,224 @@ test('filmstrip: zoom, search, chapters, insert by drop and Ctrl+V, undo', { loc
         // clipboard busy
       }
     }
+  }
+})
+
+test('filmstrip: a 1000-slide show as an overview of bars', async () => {
+  test.setTimeout(5 * 60 * 1000)
+  ensureTestMedia()
+  mkdirSync(shots, { recursive: true })
+  const dataDir = mkdtempSync(join(tmpdir(), 'diashow-overview-'))
+  const locale = process.env.DIASHOW_LOCALE ?? 'de-DE'
+  let s: Session | null = null
+  try {
+    s = await launch(dataDir, { DIASHOW_LOCALE: locale })
+    const { page } = s
+    const files = copyMedia(sampleFiles({ video: true }), join(dataDir, 'media'))
+    await page.evaluate(async (paths) => {
+      await (window as any).__diashow.store.getState().createProject(paths, 'Tausend')
+    }, files)
+    await waitProcessed(page)
+    // 1000 slides: the five imported ones, generated slides reusing their photos, a chapter every 100 slides
+    await page.evaluate(() => {
+      const st = (window as any).__diashow.store.getState()
+      const photos = st.project.entries.filter((e: any) => e.type === 'photo')
+      st.update((p: any) => {
+        for (let i = 0; i < 995; i++) {
+          p.entries.push(i % 100 === 45 ? { id: `ch-${i}`, type: 'text', title: `Kapitel ${(i - 45) / 100 + 1}` } : { id: `big-${i}`, type: 'photo', mediaId: photos[i % photos.length].mediaId })
+        }
+      })
+    })
+    await expect.poll(async () => (await slides(page)).length).toBe(1000)
+    const all = await slides(page)
+    const videoIndex = all.findIndex((x) => x.kind === 'video')
+    const chapter = all.findIndex((x) => x.kind === 'text' && x.index > 100)
+    const plain = 300
+    expect(all[plain].kind).toBe('photos')
+    const strip = page.locator('section.strip')
+    const fit = page.getByRole('button', { name: /Ganze Diashow zeigen|Show the whole slideshow/ })
+    const slider = page.getByRole('slider', { name: /Größe der Folien|Size of the slides/ })
+
+    // ---- "show the whole slideshow": every slide in the width, as a bar on one canvas
+    await fit.click()
+    await expect(strip).toHaveClass(/zoom-overview/)
+    await expect(slider).toHaveAttribute('aria-valuetext', /^(Übersicht|Overview), /)
+    const geo = await page.evaluate(() => {
+      const sc = document.querySelector('.strip-scroll')!
+      const canvas = document.querySelector<HTMLCanvasElement>('canvas.strip-overview')!
+      const add = document.querySelector('.cards .card.add')!.getBoundingClientRect()
+      return {
+        overflow: sc.scrollWidth - sc.clientWidth, right: sc.getBoundingClientRect().right, addRight: add.right, step: Number(canvas.dataset.step),
+        left: document.querySelector('.strip-inner')!.getBoundingClientRect().left, top: canvas.getBoundingClientRect().top
+      }
+    })
+    expect(geo.overflow).toBeLessThanOrEqual(1)
+    expect(geo.addRight).toBeLessThanOrEqual(geo.right)
+    expect(geo.step).toBeLessThan(6)
+    // the page holds one canvas and one card (the keyboard's), not a thousand cards
+    const dom = await page.evaluate(() => ({
+      cards: document.querySelectorAll('.cards .card:not(.add)').length, canvases: document.querySelectorAll('canvas.strip-overview').length,
+      strip: document.querySelectorAll('.strip *').length, page: document.querySelectorAll('*').length
+    }))
+    console.log('1000 slides, overview:', JSON.stringify({ step: geo.step, ...dom }))
+    expect(dom.cards).toBe(1)
+    expect(dom.canvases).toBe(1)
+    await expectAligned(page, videoIndex, 'overview of 1000')
+    await page.screenshot({ path: join(shots, 'overview-1000.png') })
+
+    // chapters have their mark above the bar (y 14 lies between the numbers and the search marks)
+    const pixel = (index: number, y: number): Promise<number[]> =>
+      page.evaluate(([i, yy]) => {
+        const c = document.querySelector<HTMLCanvasElement>('canvas.strip-overview')!
+        const dpr = c.width / c.getBoundingClientRect().width
+        const step = Number(c.dataset.step)
+        const x = (i * step + Math.min(step, 1) / 2 - parseFloat(c.style.left || '0')) * dpr
+        return [...c.getContext('2d')!.getImageData(Math.floor(x), Math.floor(yy * dpr), 1, 1).data]
+      }, [index, y] as const)
+    expect((await pixel(chapter, 14))[3]).toBeGreaterThan(0)
+    expect((await pixel(plain, 14))[3]).toBe(0)
+    // a photo's bar gets the average colour of its picture once that is read (until then the empty colour)
+    const empty = await page.evaluate(() => {
+      const g = document.createElement('canvas').getContext('2d')!
+      g.fillStyle = getComputedStyle(document.querySelector('canvas.strip-overview')!).getPropertyValue('--thumb-empty').trim()
+      g.fillRect(0, 0, 1, 1)
+      return [...g.getImageData(0, 0, 1, 1).data]
+    })
+    expect((await pixel(plain, 50))[3]).toBe(255)
+    await expect.poll(async () => (await pixel(plain, 50)).slice(0, 3)).not.toEqual(empty.slice(0, 3))
+
+    // ---- a click on a bar selects that slide and shows it
+    const k = 637
+    await page.mouse.click(geo.left + (k + 0.5) * geo.step, geo.top + 22 + 30)
+    await expect.poll(() => selection(page)).toEqual(all[k].ids)
+    await expect
+      .poll(async () => {
+        const t = await playerTime(page)
+        return t >= all[k].start && t < all[k + 1].start
+      })
+      .toBe(true)
+
+    // ---- the keyboard: Tab reaches the overview's one card on the selected slide, the arrows move it
+    await fit.focus()
+    await page.keyboard.press('Tab')
+    const keyCard = page.locator('.cards .card.overview-card')
+    await expect(keyCard).toBeFocused()
+    await expect(keyCard).toHaveAttribute('data-index', String(k))
+    await expect(keyCard).toHaveAttribute('aria-label', new RegExp(`^(Folie|Slide) ${k + 1}: `))
+    await page.keyboard.press('ArrowRight')
+    await expect.poll(() => selection(page)).toEqual(all[k + 1].ids)
+    await expect(keyCard).toBeFocused()
+    await expect(keyCard).toHaveAttribute('aria-label', new RegExp(`^(Folie|Slide) ${k + 2}: `))
+    await page.keyboard.press('Shift+ArrowRight')
+    await expect.poll(() => selection(page)).toEqual([...all[k + 1].ids, ...all[k + 2].ids])
+    await expect(keyCard).toHaveAttribute('data-index', String(k + 2))
+    await expect(keyCard).toBeFocused()
+    await page.keyboard.press('End')
+    await expect.poll(() => selection(page)).toEqual(all[999].ids)
+    await expect(keyCard).toHaveAttribute('data-index', '999')
+    await expect(keyCard).toBeFocused()
+
+    // ---- search marks on the bars
+    await page.locator('.stage').click({ position: { x: 5, y: 5 } })
+    await page.keyboard.press('Control+f')
+    const field = page.getByRole('combobox', { name: /Folien suchen|Search slides/ })
+    await field.fill('Kapitel')
+    await expect(page.locator('.strip-search [role="status"]')).toHaveText(/^(10 Treffer|10 matches)$/)
+    await expect.poll(async () => (await pixel(chapter, 18))[3]).toBeGreaterThan(0)
+    expect((await pixel(plain, 18))[3]).toBe(0)
+    await field.press('Escape')
+
+    // ---- time per frame: the overview drawn again (the selection moves), and Ctrl+wheel from the
+    // overview into the cards around the mouse and back out
+    const perf = await page.evaluate(async () => {
+      const st = (window as any).__diashow.store.getState()
+      const el = document.querySelector<HTMLElement>('.strip-scroll')!
+      const frame = (): Promise<void> => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
+      const avg = (xs: number[]): number => Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10
+      const ids: string[][] = (window as any).__diashow.player.current.tl.slides.map((x: any) => x.entries.map((e: any) => e.id))
+      // frames that took over 50 ms (Chromium's long animation frames)
+      const long: number[] = []
+      const watch = new PerformanceObserver((list) => list.getEntries().forEach((e) => long.push(e.duration)))
+      watch.observe({ type: 'long-animation-frame' })
+      const redraw: number[] = []
+      for (let i = 0; i < 20; i++) {
+        const t0 = performance.now()
+        st.select(ids[100 + i * 37])
+        await frame()
+        redraw.push(performance.now() - t0)
+      }
+      const r = el.getBoundingClientRect()
+      const zoom: number[] = []
+      const cards: number[] = []
+      for (let i = 0; i < 24; i++) {
+        const t0 = performance.now()
+        el.dispatchEvent(new WheelEvent('wheel', { deltaY: i < 12 ? -120 : 120, ctrlKey: true, clientX: r.left + r.width * 0.4, clientY: r.top + 40, bubbles: true, cancelable: true }))
+        await frame()
+        zoom.push(performance.now() - t0)
+        cards.push(document.querySelectorAll('.cards .card:not(.add)').length)
+      }
+      await frame()
+      watch.disconnect()
+      return {
+        redrawMs: avg(redraw), zoomMs: avg(zoom), zoomMaxMs: Math.round(Math.max(...zoom)), longFrames: long.length, longestMs: Math.round(Math.max(0, ...long)),
+        maxCards: Math.max(...cards), visible: el.clientWidth
+      }
+    })
+    console.log('1000 slides, frames:', JSON.stringify(perf))
+    expect(perf.redrawMs).toBeLessThan(250)
+    expect(perf.zoomMs).toBeLessThan(250)
+    // the cards in view and a margin only, also at the zoom steps between (12 steps in reach about 50 px)
+    expect(perf.maxCards).toBeLessThan(perf.visible / 7 + 2 * Math.ceil(200 / 7) + 20)
+    await expect(strip).toHaveClass(/zoom-overview/)
+
+    // ---- the smallest cards: virtualised and quick to scroll
+    await slider.focus()
+    for (let i = 0; i < 80 && (await slider.getAttribute('aria-valuetext')) !== '6 px'; i++) await page.keyboard.press('ArrowRight')
+    await expect(slider).toHaveAttribute('aria-valuetext', '6 px')
+    const scroll = await page.evaluate(async () => {
+      const el = document.querySelector<HTMLElement>('.strip-scroll')!
+      const frame = (): Promise<void> => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
+      const rendered: number[] = []
+      const long: number[] = []
+      const watch = new PerformanceObserver((list) => list.getEntries().forEach((e) => long.push(e.duration)))
+      watch.observe({ type: 'long-animation-frame' })
+      const t0 = performance.now()
+      for (let i = 0; i < 40; i++) {
+        el.scrollLeft = (i % 2 ? el.scrollWidth : 0) * Math.random()
+        await frame()
+        rendered.push(document.querySelectorAll('.cards .card:not(.add)').length)
+      }
+      const ms = Math.round(((performance.now() - t0) / 40) * 10) / 10
+      watch.disconnect()
+      return { ms, longFrames: long.length, longestMs: Math.round(Math.max(0, ...long)), max: Math.max(...rendered), strip: document.querySelectorAll('.strip *').length, visible: el.clientWidth, total: el.scrollWidth }
+    })
+    console.log('1000 slides at the smallest cards:', JSON.stringify(scroll))
+    expect(scroll.total).toBeGreaterThan(scroll.visible)
+    expect(scroll.max).toBeLessThan(scroll.visible / 7 + 2 * Math.ceil(200 / 7) + 20)
+    expect(scroll.ms).toBeLessThan(250)
+
+    // ---- back to the overview, then a double-click zooms in around the mouse: the slide under it stays
+    await fit.click()
+    await expect(strip).toHaveClass(/zoom-overview/)
+    const mx = geo.left + (k + 0.5) * geo.step
+    await page.mouse.dblclick(mx, geo.top + 22 + 30)
+    await expect(strip).toHaveClass(/zoom-compact/)
+    const box = (await cardBox(page, k))!
+    expect(mx).toBeGreaterThanOrEqual(box.left - 1.5)
+    expect(mx).toBeLessThanOrEqual(box.right + 1.5)
+    // Ctrl+wheel out stops at the whole show
+    await page.mouse.move(mx, geo.top + 30)
+    for (let i = 0; i < 10; i++) {
+      await page.keyboard.down('Control')
+      await page.mouse.wheel(0, 300)
+      await page.keyboard.up('Control')
+    }
+    await expect(strip).toHaveClass(/zoom-overview/)
+    await expect.poll(() => page.locator('.strip-scroll').evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1)
+    await expect(page.getByRole('button', { name: /^(Kleinere Folien|Smaller slides)$/ })).toBeDisabled()
+    expect(s.errors).toEqual([])
+  } finally {
+    await s?.app.close().catch(() => {})
+    removeDir(dataDir)
   }
 })

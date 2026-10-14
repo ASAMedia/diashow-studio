@@ -1,8 +1,10 @@
 // The filmstrip under the preview: a card per slide in show order (SlideCard.tsx) over the audio lane,
-// and the playhead. Click, Shift+click and Ctrl+click select; on a focused card the keyboard goes
+// and the playhead; a show too long for the smallest cards zooms out into an overview of thin bars
+// (StripOverview.tsx). Click, Shift+click and Ctrl+click select; on a focused card the keyboard goes
 // through the cards and moves slides. Drag and drop is in stripDrop.ts, the zoom and the cards rendered
 // in stripView.ts, search, chapters and zoom controls in StripTools.tsx, the menus in StripMenu.tsx.
 import { useRef, useState, useEffect, type CSSProperties } from 'react'
+import { flushSync } from 'react-dom'
 import { EyeOff, LayoutGrid, Plus } from 'lucide-react'
 import type { Timeline, TimelineSlide } from '@shared/timeline'
 import { themeMeta } from '@shared/themes'
@@ -17,8 +19,12 @@ import { ChaptersMenu, SearchBox, useSearchKeys, useStripSearch, ZoomControls } 
 import { reducedMotion } from '../appearance'
 import { SlideCard } from './SlideCard'
 import { StripMenu, type StripMenuAt } from './StripMenu'
+import { OverviewCard, StripOverview } from './StripOverview'
 import { useStripDrop } from './stripDrop'
 import { useStripView } from './stripView'
+
+/** Card width a double-click on the overview zooms in to (small cards with pictures). */
+const ZOOM_IN_CARD = 24
 
 export function Filmstrip() {
   const project = useStore((s) => s.project)!
@@ -32,10 +38,13 @@ export function Filmstrip() {
   const searchInput = useRef<HTMLInputElement>(null)
   const sel = new Set(selection)
   // the zoom (every size follows from the card width) and the cards rendered
-  const { scale, first, last, manualUntil, zoomTo, fitAll, revealIndex } = useStripView(scrollRef, tl, sel)
+  const { scale, min, view, first, last, manualUntil, zoomTo, fitAll, revealIndex } = useStripView(scrollRef, tl, sel)
   const { step, gap } = scale
+  const overview = scale.detail === 'overview'
   const n = tl.slides.length
   const width = Math.max(stripWidth(n, scale), 200)
+  // the overview's slide the keyboard went to last (its card has the focus while that slide is selected)
+  const [keyAt, setKeyAt] = useState<number | null>(null)
 
   const moveSlide = (from: number, to: number): void => {
     const src = tl.slides[from]
@@ -66,6 +75,12 @@ export function Filmstrip() {
     }
     useStore.getState().set({ tab: 'slide' })
   }
+  // a right click (or the menu key) selects the slide unless it is among the selected ones, and opens its menu
+  const openMenu = (s: TimelineSlide, e: React.MouseEvent): void => {
+    e.preventDefault()
+    if (s.kind !== 'title' && !s.entries.some((x) => sel.has(x.id))) select(s.entries.map((x) => x.id))
+    setMenu({ x: e.clientX, y: e.clientY, slide: s })
+  }
   const excluded = project.entries.filter((x) => x.excluded).length
   const maxPer = themeMeta(project.settings.theme).maxPerSlide
   // slides whose photos were fixed by hand: the theme can group them again (after a theme change, say)
@@ -95,7 +110,11 @@ export function Filmstrip() {
   // rendered while that one is scrolled out of the page (else Tab would skip the filmstrip). Focus a card
   // by index, scrolling it into the rendered part first.
   const tabIndexAt = Math.min(Math.max(Math.max(0, tl.slides.findIndex((sl) => sl.entries.some((e) => sel.has(e.id)))), first), last)
+  // in the overview the one card goes where the keyboard went (Shift+arrows: the end of the range)
+  const overviewAt = keyAt != null && tl.slides[keyAt]?.entries.some((e) => sel.has(e.id)) ? keyAt : tabIndexAt
   const focusCard = (index: number, tries = 6): void => {
+    // the overview's card moves to that slide now, so the next key press already reaches it
+    if (overview && tries === 6) flushSync(() => setKeyAt(index))
     const el = scrollRef.current
     if (el) {
       // where the card sits in the scrolled strip, past its left padding (as revealIndex and the playhead)
@@ -158,7 +177,7 @@ export function Filmstrip() {
           </button>
         )}
         <span className="grow" />
-        <ZoomControls card={scale.card} onZoom={(c) => zoomTo(c)} onFit={fitAll} />
+        <ZoomControls card={scale.card} min={min} onZoom={(c) => zoomTo(c)} onFit={fitAll} />
       </div>
       <div
         className="strip-scroll"
@@ -174,9 +193,28 @@ export function Filmstrip() {
         }}
       >
         <div className="strip-inner" ref={innerRef} style={{ width }} {...drop.handlers}>
+          {overview && (
+            <StripOverview
+              tl={tl}
+              step={step}
+              height={scale.height}
+              view={view}
+              selection={selection}
+              matched={search.matched}
+              current={current}
+              every={every}
+              onSlide={clickSlide}
+              onMenu={openMenu}
+              onZoomIn={(clientX) => zoomTo(ZOOM_IN_CARD, clientX)}
+            />
+          )}
           <div className="cards">
-            {first > 0 && <div style={{ flex: '0 0 auto', width: first * step - gap }} />}
-            {tl.slides.slice(first, last + 1).map((s) => (
+            {overview && <div style={{ flex: '0 0 auto', width: n * step }} />}
+            {overview && tl.slides[overviewAt] && (
+              <OverviewCard key={tl.slides[overviewAt].id} slide={tl.slides[overviewAt]} step={step} selected={tl.slides[overviewAt].entries.some((e) => sel.has(e.id))} onKeyDown={(e) => cardKey(tl.slides[overviewAt], e)} />
+            )}
+            {!overview && first > 0 && <div style={{ flex: '0 0 auto', width: first * step - gap }} />}
+            {!overview && tl.slides.slice(first, last + 1).map((s) => (
               <SlideCard
                 key={s.id}
                 slide={s}
@@ -195,19 +233,15 @@ export function Filmstrip() {
                 onDuration={(sec) => useStore.getState().setSlideDuration(s.entries.map((e) => e.id), sec)}
                 onClick={(e) => clickSlide(s, e)}
                 onKeyDown={(e) => cardKey(s, e)}
-                onMenu={(e) => {
-                  e.preventDefault()
-                  if (s.kind !== 'title' && !s.entries.some((x) => sel.has(x.id))) select(s.entries.map((x) => x.id))
-                  setMenu({ x: e.clientX, y: e.clientY, slide: s })
-                }}
+                onMenu={(e) => openMenu(s, e)}
                 onDragStart={() => drop.start(s.index)}
                 onDragEnd={drop.end}
               />
             ))}
-            {last < n - 1 && <div style={{ flex: '0 0 auto', width: (n - 1 - last) * step - gap }} />}
+            {!overview && last < n - 1 && <div style={{ flex: '0 0 auto', width: (n - 1 - last) * step - gap }} />}
             <button
               className="card add"
-              style={{ width: addWidth(scale) }}
+              style={overview ? { width: addWidth(scale) - 4, marginLeft: 4 } : { width: addWidth(scale) }}
               title={t('addToShow')}
               aria-label={t('addToShow')}
               aria-haspopup="menu"
@@ -221,7 +255,7 @@ export function Filmstrip() {
             </button>
           </div>
           {drop.dropAt != null && <div className="drop-indicator" style={{ left: drop.dropAt * step - gap / 2 - 1 }} />}
-          <AudioLane tl={tl} width={width} step={step} />
+          <AudioLane tl={tl} width={width} step={step} from={view.left - STRIP_PAD - 200} to={view.left - STRIP_PAD + view.width + 200} />
           <Playhead tl={tl} step={step} scrollRef={scrollRef} manualUntil={manualUntil} />
         </div>
       </div>

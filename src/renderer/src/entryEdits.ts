@@ -190,10 +190,30 @@ export function resizeSlide(p: Project, slideIds: string[], delta: 1 | -1): void
   if (after && after.type !== 'text' && after.groupBreak !== 'join') after.groupBreak = 'force'
 }
 
+/** End credits: a text slide with the rolling credits style ("Add end credits"). */
+export const isCredits = (e: Entry): boolean => e.type === 'text' && e.titleStyle === 'credits'
+
+/**
+ * Where photos and videos go that are added at the end of the show: in front of its closing end
+ * credits, else behind the last entry. Closing credits are credits behind the show's last photo or
+ * video, with only text slides and left-out items after it. New items go in front of the first of
+ * them: text slides in front of the credits stay in front of the new items, a text slide behind the
+ * credits (a last "The end") stays behind.
+ */
+export function endOfShow(entries: readonly Entry[]): number {
+  let at = entries.length
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const e = entries[i]
+    if (e.type !== 'text' && !e.excluded) break
+    if (isCredits(e)) at = i
+  }
+  return at
+}
+
 /**
  * New entries go where their capture time belongs: among the show's photos and videos in time
  * order, inside their day's chapter (behind its title slide), or in front of the next day's title.
- * Undated items, and items newer than everything, go to the end (before closing credits).
+ * Undated items, and items newer than everything, go to the end, in front of closing credits (endOfShow).
  */
 export function insertByTime(entries: Entry[], fresh: Entry[], media: Map<string, MediaItem>): Entry[] {
   const time = (e: Entry): number => (e.type === 'text' ? 0 : (media.get(e.mediaId)?.captureTime ?? 0))
@@ -201,11 +221,11 @@ export function insertByTime(entries: Entry[], fresh: Entry[], media: Map<string
   // undated ones last, behind everything that has a date
   for (const e of [...fresh].sort((a, b) => (time(a) || Infinity) - (time(b) || Infinity))) {
     const t = time(e)
+    const end = endOfShow(out)
     let at = t ? out.findIndex((x) => x.type !== 'text' && time(x) > t) : -1
-    if (at < 0) {
-      at = out.length
-      while (at > 0 && out[at - 1].type === 'text' && (out[at - 1] as TextEntry).titleStyle === 'credits') at--
-    } else {
+    // nothing goes behind the closing credits (a later item there is a left-out one)
+    if (at < 0 || at > end) at = end
+    else {
       // text slides right before the later item open its chapter: that is this item's chapter only on the same day
       let k = at
       while (k > 0 && out[k - 1].type === 'text') k--

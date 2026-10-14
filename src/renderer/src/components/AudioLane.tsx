@@ -39,17 +39,40 @@ function fitText(text: string, px: number): string {
   return text.length <= chars ? text : `${text.slice(0, Math.max(1, chars - 1)).trimEnd()}…`
 }
 
-/** `step`: the filmstrip's width of one slide at its zoom; the lane maps time to x exactly like the cards. */
-export function AudioLane({ tl, width, step = STEP }: { tl: Timeline; width: number; step?: number }) {
+/** Beat marks closer than this (px) are left out: at small zoom they would only make a grey band. */
+const BEAT_GAP = 3
+
+/**
+ * `step`: the filmstrip's width of one slide at its zoom; the lane maps time to x exactly like the cards.
+ * `from`..`to`: the part of the lane in view (x), where beat marks and waveforms are drawn: a long show
+ * loops its song for thousands of beats and tens of thousands of pixels.
+ */
+export function AudioLane({ tl, width, step = STEP, from = 0, to = Infinity }: { tl: Timeline; width: number; step?: number; from?: number; to?: number }) {
   const project = useStore((s) => s.project)!
   const plan = useMemo(() => buildAudioPlan(project, tl), [project, tl])
   const H = 40
-  const music = plan.clips.filter((c) => c.kind === 'music')
-  const videos = plan.clips.filter((c) => c.kind === 'video')
+  // kept per plan: the volume line and the waveforms below are only drawn again when it changes (a long
+  // show re-renders the filmstrip on every scroll frame)
+  const music = useMemo(() => plan.clips.filter((c) => c.kind === 'music'), [plan])
+  const videos = useMemo(() => plan.clips.filter((c) => c.kind === 'video'), [plan])
   // the songs that play: the timeline's (its own, or the theme song)
   const tracks = tl.music.filter((m) => m.playback && m.status === 'ready').map((m) => ({ path: m.playback!, duration: m.duration }))
   const waves = useWaveforms(tracks)
   const beats = useMemo(() => musicBeatTimes(project, tl.duration, tl), [project, tl])
+  const beatXs = useMemo(() => beats.map((b) => timeToX(tl, b, step)).sort((a, b) => a - b), [beats, tl, step])
+  // the beats in view, each at least BEAT_GAP from the last one drawn
+  const shownBeats: { x: number; i: number }[] = []
+  let lo = 0
+  for (let hi = beatXs.length; lo < hi; ) {
+    const mid = (lo + hi) >> 1
+    if (beatXs[mid] < from) lo = mid + 1
+    else hi = mid
+  }
+  for (let i = lo, last = -Infinity; i < beatXs.length && beatXs[i] <= to; i++) {
+    if (beatXs[i] - last < BEAT_GAP) continue
+    last = beatXs[i]
+    shownBeats.push({ x: last, i })
+  }
   const maxGain = Math.max(0.01, ...music.map((c) => Math.max(...c.gain.map((g) => g.g))))
   const points = useMemo(() => {
     if (!music.length) return ''
@@ -62,26 +85,27 @@ export function AudioLane({ tl, width, step = STEP }: { tl: Timeline; width: num
     }
     return pts.join(' ')
   }, [music, tl, width, maxGain, step])
-  // waveform of every placed song, following the filmstrip's time-to-x mapping
+  // waveform of every placed song in view (from..to), following the filmstrip's time-to-x mapping; the
+  // points stay on a 2 px grid from the song's start, so they don't move while the filmstrip scrolls
   const wavePaths = useMemo(() => {
     const mid = (H - 6) / 2 + 2
     return music.map((c) => {
       const peaks = waves.get(c.src)
       if (!peaks) return ''
       const x0 = timeToX(tl, c.start, step)
-      const x1 = timeToX(tl, c.start + c.duration, step)
+      const x1 = Math.min(to, timeToX(tl, c.start + c.duration, step))
       const top: string[] = []
       const bottom: string[] = []
-      for (let x = x0; x <= x1; x += 2) {
+      for (let x = x0 + Math.max(0, Math.ceil((from - x0) / 2)) * 2; x <= x1; x += 2) {
         const time = c.offset + xToTime(tl, x, step) - c.start
         const v = peaks[Math.min(peaks.length - 1, Math.max(0, Math.round(time * 10)))] ?? 0
         const a = v * (H - 14) * 0.5
         top.push(`${x.toFixed(1)},${(mid - a).toFixed(1)}`)
-        bottom.unshift(`${x.toFixed(1)},${(mid + a).toFixed(1)}`)
+        bottom.push(`${x.toFixed(1)},${(mid + a).toFixed(1)}`)
       }
-      return `M${top.join(' L')} L${bottom.join(' L')} Z`
+      return top.length ? `M${top.join(' L')} L${bottom.reverse().join(' L')} Z` : ''
     })
-  }, [music, waves, tl, step])
+  }, [music, waves, tl, step, from, to])
   const titles = new Map(tl.music.map((m) => [m.playback, tl.themeSong === m ? `${t('themeMusic')}: ${m.title}` : m.title]))
   // songs overlap in crossfades: a title ends where the next song begins
   const starts = music.map((c) => c.start).sort((a, b) => a - b)
@@ -113,8 +137,8 @@ export function AudioLane({ tl, width, step = STEP }: { tl: Timeline; width: num
           </g>
         )
       })}
-      {beats.map((b, i) => (
-        <line key={i} className="beat" x1={timeToX(tl, b, step)} x2={timeToX(tl, b, step)} y1={2} y2={6} />
+      {shownBeats.map((b) => (
+        <line key={b.i} className="beat" x1={b.x} x2={b.x} y1={2} y2={6} />
       ))}
       {videos.map((c) => {
         const x0 = timeToX(tl, c.start, step)

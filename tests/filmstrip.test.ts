@@ -5,10 +5,13 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { buildTimeline, type Timeline } from '@shared/timeline'
 import { DEFAULT_SETTINGS, type Entry, type MediaItem, type Project, type Rect } from '@shared/types'
 import {
-  anchoredScroll, CARD, cardToSlider, fitCard, MAX_CARD, MIN_CARD, numberEvery, sliderToCard, STEP, stripScale, stripWidth, timeToX, xToTime, zoomStep
+  addWidth, anchoredScroll, CARD, cardToSlider, clampCard, fitCard, MAX_CARD, MIN_CARD, MIN_STEP, minCard, numberEvery, sliderToCard, STEP, stripScale, stripWidth, timeToX,
+  xToTime, zoomStep
 } from '../src/renderer/src/components/stripScale'
-import { dateMatches, fold, kindOf, monthOf, parseQuery, searchSlides, weekdayOf } from '../src/renderer/src/search'
+import { dateMatches, fold, kindOf, monthBeforeDay, monthOf, parseQuery, searchSlides, weekdayOf } from '../src/renderer/src/search'
+import { dateLocale, setLocale } from '../src/renderer/src/i18n'
 import { anchorAt, canJoin, insertEntries, insertInto, moveSlide } from '../src/renderer/src/insertAt'
+import { endOfShow, insertByTime } from '../src/renderer/src/entryEdits'
 
 const photo = (id: string, extra: Partial<MediaItem> = {}): MediaItem => ({
   id, path: `C:\\p\\${id}.jpg`, name: `${id}.jpg`, kind: 'photo', format: 'JPEG', width: 4000, height: 3000, captureTime: 0, status: 'ready', ...extra
@@ -39,7 +42,7 @@ describe('filmstrip zoom: time ↔ x, shared with the audio lane', () => {
   })
 
   it('puts every slide start at its card at every zoom, so the lane and the cards line up', () => {
-    for (const card of [MIN_CARD, 20, 57, CARD, MAX_CARD]) {
+    for (const card of [MIN_STEP, 1.37, 4.8, MIN_CARD, 20, 57, CARD, MAX_CARD]) {
       const { step } = stripScale(card)
       for (const s of tl.slides) {
         expect(timeToX(tl, s.start, step)).toBeCloseTo(s.index * step, 6)
@@ -65,13 +68,47 @@ describe('filmstrip zoom: time ↔ x, shared with the audio lane', () => {
     expect(anchoredScroll(0, 16, 102, 7)).toBe(0)
   })
 
-  it('fits the whole show, or as close as the smallest cards allow', () => {
+  it('fits the whole show: with cards, or for a long show as an overview of thin bars', () => {
     const c = fitCard(200, 1800)
     expect(stripWidth(200, stripScale(c))).toBeLessThanOrEqual(1800)
     expect(stripWidth(200, stripScale(c + 1))).toBeGreaterThan(1800)
-    expect(fitCard(400, 1800)).toBe(MIN_CARD)
     expect(fitCard(5, 1800)).toBe(MAX_CARD)
-    expect(fitCard(5000, 1000)).toBe(MIN_CARD)
+    // too long for the smallest cards (about 250 slides here): the overview, every slide in the width
+    for (const [n, width] of [[400, 1800], [500, 1000], [1000, 1400], [1000, 992], [2000, 1050]]) {
+      const o = fitCard(n, width)
+      expect(o, `${n} in ${width}`).toBeLessThan(MIN_CARD)
+      expect(stripScale(o).detail).toBe('overview')
+      expect(stripWidth(n, stripScale(o))).toBeLessThanOrEqual(width)
+      expect(stripWidth(n, stripScale(o + 0.01))).toBeGreaterThan(width)
+      expect(minCard(n, width)).toBe(o)
+    }
+    // the narrowest bar: half a pixel
+    expect(fitCard(5000, 1000)).toBe(MIN_STEP)
+    // a show that fits with cards can't be zoomed out into the overview
+    expect(minCard(200, 1800)).toBe(MIN_CARD)
+  })
+
+  it('the overview: bars without gaps, fractional widths, zoom steps across the smallest card', () => {
+    expect(stripScale(2.5)).toEqual({ card: 2.5, gap: 0, step: 2.5, height: 64, detail: 'overview' })
+    expect(stripScale(MIN_STEP / 2).card).toBe(MIN_STEP)
+    expect(clampCard(1.234, 1)).toBe(1.23)
+    // cards keep whole pixels; without an overview to go to, the smallest card is the end
+    expect(clampCard(5.999, 1)).toBe(MIN_CARD)
+    expect(clampCard(2, MIN_CARD)).toBe(MIN_CARD)
+    const lo = minCard(1000, 1400)
+    expect(zoomStep(MIN_CARD, 1 / 1.25, lo)).toBe(4.8)
+    expect(zoomStep(4.8, 1.25, lo)).toBe(MIN_CARD)
+    expect(zoomStep(lo, 0.5, lo)).toBe(lo)
+    expect(zoomStep(5.5, 1.25, lo)).toBe(7)
+    // the slider starts at the overview of the whole show
+    expect(cardToSlider(lo, lo)).toBe(0)
+    expect(sliderToCard(0, lo)).toBe(lo)
+    expect(sliderToCard(100, lo)).toBe(MAX_CARD)
+    expect(cardToSlider(MIN_CARD, lo)).toBeGreaterThan(0)
+    expect(addWidth(stripScale(2))).toBe(44)
+    // numbers every 25 or 50 slides at a pixel or two
+    expect(numberEvery(stripScale(1.4))).toBe(25)
+    expect(numberEvery(stripScale(MIN_STEP))).toBe(100)
   })
 
   it('has a logarithmic slider, steps of at least a pixel and sparse numbers on small cards', () => {
@@ -223,6 +260,153 @@ describe('filmstrip search: what matches', () => {
     expect(who('Lena')).toEqual(['e-lena'])
     expect(who('Mia')).toEqual(['e-mia'])
   })
+})
+
+describe('filmstrip search: dates only where they are meant', () => {
+  it('reads short forms from three letters (two with the dot) and starts of names from four', () => {
+    expect(monthOf('Jan')).toBe(1)
+    expect(monthOf('Jan.')).toBe(1)
+    expect(monthOf('jän')).toBe(1)
+    expect(monthOf('Mai')).toBe(5)
+    expect(monthOf('Marc')).toBe(3)
+    expect(weekdayOf('Mo.')).toBe(1)
+    expect(weekdayOf('Sa.')).toBe(6)
+    expect(weekdayOf('Sams')).toBe(6)
+    expect(weekdayOf('frei')).toBe(5)
+    // ordinary words: starts of names with three letters
+    for (const w of ['die', 'mit', 'Sam', 'son', 'don', 'Mo', 'sa']) expect(weekdayOf(w), w).toBeNull()
+    for (const w of ['jun.x', 'ma', 'okto2']) expect(monthOf(w), w).toBeNull()
+  })
+
+  it('parses dates with and without spaces; a number like 1.5 is a word too; names with a dot are dates only', () => {
+    expect(parseQuery('Jan.')).toEqual([{ raw: 'Jan.', date: { month: 1 } }])
+    expect(parseQuery('Mo.')).toEqual([{ raw: 'Mo.', date: { weekday: 1 } }])
+    expect(parseQuery('Jan')).toEqual([{ raw: 'Jan', word: 'jan', date: { month: 1 } }])
+    for (const w of ['die', 'mit', 'Sam']) expect(parseQuery(w)).toEqual([{ raw: w, word: w.toLowerCase() }])
+    expect(parseQuery('12.Mai')).toEqual([{ raw: '12. Mai', date: { day: 12, month: 5 } }])
+    expect(parseQuery('12.Mai 2026')[0].date).toEqual({ day: 12, month: 5, year: 2026 })
+    expect(parseQuery('12.Mai2026')[0].date).toEqual({ day: 12, month: 5, year: 2026 })
+    expect(parseQuery('12. Mai')[0].date).toEqual({ day: 12, month: 5 })
+    expect(parseQuery('Mai 2026')[0].date).toEqual({ month: 5, year: 2026 })
+    expect(parseQuery('12.5.')).toEqual([{ raw: '12.5.', date: { day: 12, month: 5 } }])
+    expect(parseQuery('12.5.2026')).toEqual([{ raw: '12.5.2026', date: { day: 12, month: 5, year: 2026 } }])
+    expect(parseQuery('2026-05-12')[0].date).toEqual({ year: 2026, month: 5, day: 12 })
+    expect(parseQuery('1.5')).toEqual([{ raw: '1.5', word: '1.5', date: { day: 1, month: 5 } }])
+    // a word that only looks like a glued date stays a word
+    expect(parseQuery('12.Strand')).toEqual([{ raw: '12.Strand', word: '12.strand' }])
+  })
+
+  it('reads 12/5 in the order the Windows language writes it: day first in German and British English, month first in American', () => {
+    expect(monthBeforeDay('de-DE')).toBe(false)
+    expect(monthBeforeDay('en-GB')).toBe(false)
+    expect(monthBeforeDay('fr-FR')).toBe(false)
+    expect(monthBeforeDay('en-US')).toBe(true)
+    expect(parseQuery('12/5', 'de-DE')[0].date).toEqual({ day: 12, month: 5 })
+    expect(parseQuery('12/5', 'en-GB')[0].date).toEqual({ day: 12, month: 5 })
+    expect(parseQuery('12/5', 'en-US')[0].date).toEqual({ day: 5, month: 12 })
+    expect(parseQuery('12/5/2026', 'en-US')[0].date).toEqual({ day: 5, month: 12, year: 2026 })
+    // the UI's date order: German with a German UI, else the Windows language itself
+    try {
+      setLocale('de-AT')
+      expect(dateLocale()).toBe('de-DE')
+      setLocale('en-GB')
+      expect(dateLocale()).toBe('en-GB')
+      setLocale('en-US')
+      expect(dateLocale()).toBe('en-US')
+    } finally {
+      setLocale(navigator.language)
+    }
+  })
+
+  const axis = (k: number): number[] => Array.from({ length: 128 }, (_, i) => (i === k ? 1 : 0))
+  const FACE: Rect = { x: 0.4, y: 0.3, w: 0.1, h: 0.15 }
+  const on = (y: number, m: number, d: number): number => new Date(y, m - 1, d, 10).getTime()
+  const media = [
+    photo('a', { name: 'IMG_0001.JPG', captureTime: on(2026, 1, 10), faces: [FACE], faceDesc: [axis(3)] }), // Saturday, Jan
+    photo('b', { name: 'IMG_0002.JPG', captureTime: on(2026, 1, 20) }), // Tuesday
+    photo('c', { name: 'IMG_0003.JPG', captureTime: on(2026, 3, 3), faces: [FACE], faceDesc: [axis(5)] }), // Tuesday, Marc
+    photo('j', { name: 'IMG_0010.JPG', captureTime: on(2026, 3, 14) }), // Saturday
+    photo('k', { name: 'IMG_0011.JPG', captureTime: on(2026, 5, 1) }), // Friday
+    photo('d', { name: 'IMG_0004.JPG', captureTime: on(2026, 5, 7) }), // Thursday
+    photo('e', { name: 'IMG_0005.JPG', captureTime: on(2026, 5, 12) }), // Tuesday
+    photo('f', { name: 'IMG_20250715_0900.jpg', captureTime: on(2025, 7, 15) }), // Tuesday
+    photo('g', { name: 'Freibad.jpg', captureTime: on(2026, 6, 5) }), // Friday
+    photo('h', { name: 'IMG_0008.JPG', captureTime: on(2026, 12, 5) }), // Saturday
+    photo('i', { name: 'IMG_0009.JPG', captureTime: on(2026, 9, 4) }), // Friday
+    photo('l', { name: 'IMG_0012.JPG', captureTime: on(2026, 9, 20) }), // Sunday
+    photo('m', { name: 'IMG_0013.JPG', captureTime: on(2025, 12, 24) }) // Wednesday
+  ]
+  const byId = new Map(media.map((m) => [m.id, m]))
+  const ent = (id: string, extra: Partial<Entry> = {}): Entry => entryOf(byId.get(id)!, extra)
+  const box = (text: string): Partial<Entry> => ({ texts: [{ id: `t-${text}`, text, x: 0.5, y: 0.5, size: 0.1, font: 'theme', color: '#fff', bold: true, box: 'none', rotation: 0 }] })
+  const showOf = (captions: { b?: string; d?: string } = {}): { tl: Timeline; p: Project } => {
+    const entries: Entry[] = [
+      ent('a'), ent('b', { caption: captions.b ?? 'Maike am Strand' }), ent('c'), ent('j'), ent('k'), ent('d', { caption: captions.d ?? 'Version 1.5' }),
+      ent('e', { caption: 'Mai-Feier' }),
+      { id: 't1', type: 'text', title: 'Dienstag', subtitle: '15. Juli 2025', auto: 'day' },
+      ent('f'), ent('g'), ent('h', box('Sam und die anderen')), ent('i', { caption: 'Ausflug im September' }), ent('l'), ent('m')
+    ]
+    const p = project(entries, media, { theme: 'kenburns' }, { people: [{ id: 'jan', name: 'Jan', desc: [axis(3)] }, { id: 'marc', name: 'Marc', desc: [axis(5)] }] })
+    return { tl: buildTimeline(p), p }
+  }
+  const show = showOf()
+  const find = (q: string, locale = 'de-DE', s = show): string[] =>
+    searchSlides(s.tl, s.p, q, locale).map((h) => `${s.tl.slides[h.index].entries[0].id}:${h.field}`)
+
+  for (const locale of ['de-DE', 'en-US']) {
+    it(`a name or a word found in the show is searched as text only, else as a date (${locale})`, () => {
+      // a person's name: Jan's photo, not every January photo; with the dot or written out it is the month
+      expect(find('Jan', locale)).toEqual(['e-a:person'])
+      expect(find('Jan.', locale)).toEqual(['e-a:date', 'e-b:date'])
+      expect(find('Januar', locale)).toEqual(['e-a:date', 'e-b:date'])
+      expect(find('January', locale)).toEqual(['e-a:date', 'e-b:date'])
+      expect(find('Januar 2026', locale)).toEqual(['e-a:date', 'e-b:date'])
+      expect(find('Marc', locale)).toEqual(['e-c:person'])
+      expect(find('Mar', locale)).toEqual(['e-c:person'])
+      expect(find('März', locale)).toEqual(['e-c:date', 'e-j:date'])
+      expect(find('Mar.', locale)).toEqual(['e-c:date', 'e-j:date'])
+      // inside a word of a caption ("Maike"): the captions, not every May photo
+      expect(find('Mai', locale)).toEqual(['e-b:caption', 'e-e:caption'])
+      expect(find('Mai Strand', locale)).toEqual(['e-b:caption'])
+      expect(find('Mai 2026', locale)).toEqual(['e-k:date', 'e-d:date', 'e-e:date'])
+      expect(find('Mai.', locale)).toEqual(['e-k:date', 'e-d:date', 'e-e:date'])
+      // "May" is in no text: the month, and "Mai-Feier" names the month, so without "Maike" it is a date too
+      expect(find('May', locale)).toEqual(['e-k:date', 'e-d:date', 'e-e:date'])
+      expect(find('Mai', locale, showOf({ b: 'Am Strand' }))).toEqual(['e-k:date', 'e-d:date', 'e-e:caption'])
+      // a file name ("Freibad.jpg"): not every Friday
+      expect(find('frei', locale)).toEqual(['e-g:file'])
+      expect(find('Freitag', locale)).toEqual(['e-k:date', 'e-g:date', 'e-i:date'])
+      expect(find('Friday', locale)).toEqual(['e-k:date', 'e-g:date', 'e-i:date'])
+      // starts of names with three letters are words: no Tuesdays, Wednesdays or Saturdays
+      expect(find('die', locale)).toEqual(['t1:chapter', 'e-h:freeText'])
+      expect(find('mit', locale)).toEqual([])
+      expect(find('Sam', locale)).toEqual(['e-h:freeText'])
+      expect(find('Sams', locale)).toEqual(['e-a:date', 'e-j:date', 'e-h:date'])
+      expect(find('Sa.', locale)).toEqual(['e-a:date', 'e-j:date', 'e-h:date'])
+      expect(find('Mittwoch', locale)).toEqual(['e-m:date'])
+      // a day title names its date: "Juli" there doesn't make it a word
+      expect(find('Juli', locale)).toEqual(['t1:chapter', 'e-f:date'])
+      expect(find('July', locale)).toEqual(['t1:date', 'e-f:date'])
+      expect(find('Dienstag', locale)).toEqual(['e-b:date', 'e-c:date', 'e-e:date', 't1:chapter', 'e-f:date'])
+      // "September" written out in a caption is the month: "Sept" stays a date
+      expect(find('Sept', locale)).toEqual(['e-i:caption', 'e-l:date'])
+      // a version number in a caption: the caption, not 1 May; with the date's dot, 1 May
+      expect(find('1.5', locale)).toEqual(['e-d:caption'])
+      expect(find('1.5.', locale)).toEqual(['e-k:date'])
+      expect(find('1.5', locale, showOf({ d: 'Am See' }))).toEqual(['e-k:date'])
+      // a year stays a date also where a file name has it
+      expect(find('2025', locale)).toEqual(['t1:chapter', 'e-f:file', 'e-m:date'])
+    })
+
+    it(`keeps the date forms working (${locale})`, () => {
+      for (const q of ['12.Mai', '12. Mai', '12.Mai 2026', '12. Mai 2026', 'Mai 12', 'May 12, 2026', '12.5.', '12.5.2026', '12.05.26', '2026-05-12', '12.5']) {
+        expect(find(q, locale), q).toEqual(['e-e:date'])
+      }
+      // "12/5" follows the language: 12 May in German, 5 December in American English
+      expect(find('12/5', locale)).toEqual([locale === 'de-DE' ? 'e-e:date' : 'e-h:date'])
+      expect(find('12/5', 'en-GB')).toEqual(['e-e:date'])
+    })
+  }
 })
 
 describe('inserting at a place in the filmstrip', () => {
@@ -428,5 +612,110 @@ describe('inserting: the import queue', () => {
     } finally {
       setLocale(navigator.language)
     }
+  })
+})
+
+describe('new photos go in front of the end credits', () => {
+  const ph = (id: string, extra: Partial<Entry> = {}): Entry => ({ id, type: 'photo', mediaId: id, ...extra }) as Entry
+  const tx = (id: string, extra: Partial<Entry> = {}): Entry => ({ id, type: 'text', title: id, ...extra }) as Entry
+  const cr = (id: string): Entry => tx(id, { titleStyle: 'credits' } as Partial<Entry>)
+
+  it('the end of the show is in front of closing end credits', () => {
+    expect(endOfShow([])).toBe(0)
+    expect(endOfShow([ph('a'), ph('b')])).toBe(2)
+    // a text slide at the end without credits: behind it, as before
+    expect(endOfShow([ph('a'), tx('ende')])).toBe(2)
+    expect(endOfShow([ph('a'), cr('c')])).toBe(1)
+    // credits not at the very end: a last text slide, or a left-out photo, behind them
+    expect(endOfShow([ph('a'), cr('c'), tx('ende')])).toBe(1)
+    expect(endOfShow([ph('a'), cr('c'), ph('x', { excluded: true })])).toBe(1)
+    // several text slides at the end: those in front of the credits stay in front of the new photos
+    expect(endOfShow([ph('a'), tx('tag3'), cr('c')])).toBe(2)
+    expect(endOfShow([ph('a'), cr('c1'), tx('note'), cr('c2')])).toBe(1)
+    // a left-out photo in front of the credits doesn't end them
+    expect(endOfShow([ph('a'), ph('x', { excluded: true }), cr('c')])).toBe(2)
+    // credits in the middle of the show are no end credits
+    expect(endOfShow([ph('a'), cr('c'), ph('b')])).toBe(3)
+  })
+
+  it('by capture time: newer and undated photos go in front of the credits, also with something behind them', () => {
+    const at = (d: number): number => new Date(2025, 6, d, 10).getTime()
+    const media = new Map<string, MediaItem>(
+      [photo('a', { captureTime: at(14) }), photo('b', { captureTime: at(15) }), photo('late', { captureTime: at(30) }), photo('new', { captureTime: at(20) }), photo('undated')].map((m) => [m.id, m])
+    )
+    const order = (es: Entry[]): string[] => es.map((e) => e.id)
+    const show = [ph('a'), ph('b'), cr('c'), tx('ende'), ph('late', { excluded: true })]
+    expect(order(insertByTime(show, [ph('new'), ph('undated')], media))).toEqual(['a', 'b', 'new', 'undated', 'c', 'ende', 'late'])
+    // an older photo still goes where its time belongs
+    expect(order(insertByTime([ph('b'), cr('c')], [ph('a')], media))).toEqual(['a', 'b', 'c'])
+    // without credits: at the end, as before
+    expect(order(insertByTime([ph('a'), tx('ende')], [ph('new')], media))).toEqual(['a', 'ende', 'new'])
+  })
+})
+
+describe('new photos go in front of the end credits: every way in', () => {
+  // the renderer's store and insert.ts with a stub of the main process that imports at once
+  const item = (id: string): MediaItem => ({ id, path: `C:/Neu/${id}.jpg`, name: `${id}.jpg`, kind: 'photo', format: 'JPEG', width: 4000, height: 3000, captureTime: 0, status: 'pending' })
+  const idOf = (path: string): string => path.split('/').pop()!.replace(/\.jpg$/, '')
+  let clip: string[] = []
+  const api = {
+    saveProject: async () => undefined,
+    importNew: async (paths: string[]) => ({ items: paths.map((p) => item(idOf(p))), repeats: {} }),
+    importPaths: async () => [],
+    clipboardMedia: async () => clip
+  }
+  let store: typeof import('../src/renderer/src/store')
+  let insert: typeof import('../src/renderer/src/insert')
+  beforeAll(async () => {
+    ;(globalThis as unknown as { window: unknown }).window = { api }
+    store = await import('../src/renderer/src/store')
+    insert = await import('../src/renderer/src/insert')
+  })
+
+  const ph = (id: string): Entry => ({ id: `e-${id}`, type: 'photo', mediaId: id })
+  const tx = (id: string, credits = false): Entry => ({ id, type: 'text', title: id, ...(credits ? { titleStyle: 'credits' as const } : {}) })
+  const show = (entries: Entry[], theme: Project['settings']['theme'] = 'kenburns'): Project => ({
+    version: 1, id: `show-${theme}`, name: 'Show', createdAt: 0, updatedAt: 0, entries,
+    media: entries.flatMap((e) => (e.type === 'text' ? [] : [{ ...item(e.mediaId), status: 'ready' as const }])),
+    music: [], settings: { ...structuredClone(DEFAULT_SETTINGS), theme }
+  })
+  /** The show in order: media ids for photos, ids for text slides. */
+  const order = (): string[] => store.useStore.getState().project!.entries.map((e) => (e.type === 'text' ? e.id : e.mediaId))
+  /** "Add photos", a drop on the window, the assistant, pupils' uploads "after the selection". */
+  const add = async (entries: Entry[], selection: string[], placement?: 'selection' | 'byTime'): Promise<string[]> => {
+    store.useStore.setState({ project: show(entries), selection })
+    await store.useStore.getState().importMedia(['C:/Neu/n1.jpg', 'C:/Neu/n2.jpg'], placement)
+    return order()
+  }
+  /** Ctrl+V of copied files. */
+  const paste = async (entries: Entry[], selection: string[], theme?: Project['settings']['theme']): Promise<string[]> => {
+    store.useStore.setState({ project: show(entries, theme), selection })
+    clip = ['C:/Neu/v1.jpg', 'C:/Neu/v2.jpg']
+    await insert.pasteMedia()
+    return order()
+  }
+
+  it('without a selection: in front of the credits; without credits at the end', async () => {
+    expect(await add([ph('a'), ph('b')], [])).toEqual(['a', 'b', 'n1', 'n2'])
+    expect(await add([ph('a'), ph('b'), tx('c', true)], [])).toEqual(['a', 'b', 'n1', 'n2', 'c'])
+    // credits not at the very end, and several text slides at the end
+    expect(await add([ph('a'), tx('c', true), tx('ende')], [])).toEqual(['a', 'n1', 'n2', 'c', 'ende'])
+    expect(await add([ph('a'), tx('tag3'), tx('c', true)], [])).toEqual(['a', 'tag3', 'n1', 'n2', 'c'])
+    // by capture time (a drop onto the show's card on the home screen, uploads "into their day")
+    expect(await add([ph('a'), tx('c', true), tx('ende')], [], 'byTime')).toEqual(['a', 'n1', 'n2', 'c', 'ende'])
+    // Ctrl+V
+    expect(await paste([ph('a'), ph('b')], [])).toEqual(['a', 'b', 'v1', 'v2'])
+    expect(await paste([ph('a'), tx('c', true), tx('ende')], [])).toEqual(['a', 'v1', 'v2', 'c', 'ende'])
+    expect(await paste([ph('a'), ph('b'), ph('d'), tx('c', true)], [], 'magazine')).toEqual(['a', 'b', 'd', 'v1', 'v2', 'c'])
+    // the new slides are selected
+    expect(store.useStore.getState().selection).toHaveLength(2)
+  })
+
+  it('with a selection: behind it, as before, also inside the credits', async () => {
+    expect(await add([ph('a'), ph('b'), tx('c', true)], ['e-a'])).toEqual(['a', 'n1', 'n2', 'b', 'c'])
+    expect(await add([ph('a'), tx('c1', true), tx('c2', true)], ['c1'])).toEqual(['a', 'c1', 'n1', 'n2', 'c2'])
+    expect(await paste([ph('a'), ph('b'), tx('c', true)], ['e-a'])).toEqual(['a', 'v1', 'v2', 'b', 'c'])
+    expect(await paste([ph('a'), tx('c1', true), tx('c2', true)], ['c1'])).toEqual(['a', 'c1', 'v1', 'v2', 'c2'])
+    expect(await paste([ph('a'), tx('c', true)], ['c'])).toEqual(['a', 'c', 'v1', 'v2'])
   })
 })

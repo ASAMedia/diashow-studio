@@ -108,8 +108,9 @@ async function main() {
     const aside = join(root, 'test-media.before-release-check')
     if (existsSync(aside)) return `${aside} is left over from an earlier run; put it back or delete it`
     if (existsSync(media)) renameSync(media, aside)
-    // in both UI languages: GitHub's runner is English, a teacher's PC usually German (tests/setupLocale.ts)
-    const ok = run('npm', ['run', 'typecheck']) && run('npx', ['vitest', 'run'], { DIASHOW_LOCALE: 'de-DE' }) && run('npx', ['vitest', 'run'], { DIASHOW_LOCALE: 'en-US' })
+    // in both UI languages: GitHub's runner is English, a teacher's PC usually German (tests/setupLocale.ts);
+    // the German run also cuts off every start after a power cut in the trash (tests/trash.test.ts)
+    const ok = run('npm', ['run', 'typecheck']) && run('npx', ['vitest', 'run'], { DIASHOW_LOCALE: 'de-DE', DIASHOW_FULL_CRASH: '1' }) && run('npx', ['vitest', 'run'], { DIASHOW_LOCALE: 'en-US' })
     if (existsSync(join(media, '.complete-v2'))) rmSync(aside, { recursive: true, force: true })
     else if (existsSync(aside)) {
       rmSync(media, { recursive: true, force: true })

@@ -152,9 +152,9 @@
 <section class="hb-chapter" id="add" aria-labelledby="add-title">
 <h2 id="add-title">Adding and inserting photos</h2>
 <ul>
-  <li><strong>Adding:</strong> drag photos, videos or folders into the window, or use the <strong>+</strong> button at the end of the filmstrip with <strong>Add photos and videos…</strong> and <strong>Add folder…</strong>. They go in behind the selected slide, or at the end when nothing is selected.</li>
+  <li><strong>Adding:</strong> drag photos, videos or folders into the window, or use the <strong>+</strong> button at the end of the filmstrip with <strong>Add photos and videos…</strong> and <strong>Add folder…</strong>. They go in behind the selected slide, or at the end when nothing is selected, but in front of <strong>End credits</strong>.</li>
   <li><strong>Inserting at a place:</strong> drag them from Explorer between two cards of the filmstrip; a blue line shows where they go. Dropped on the middle of a card, they join that slide when the theme shows several photos per slide and there is room.</li>
-  <li><strong>Copy and paste:</strong> files copied in Explorer (<kbd>Ctrl+C</kbd>) go in behind the selected slide with <kbd>Ctrl+V</kbd>. A copied picture without a file, such as a screenshot taken with <kbd>Win+Shift+S</kbd>, is saved in <code>Documents\Diashow Studio\Pasted</code>.</li>
+  <li><strong>Copy and paste:</strong> files copied in Explorer (<kbd>Ctrl+C</kbd>) go in behind the selected slide with <kbd>Ctrl+V</kbd>, or without a selection at the end in front of the end credits. A copied picture without a file, such as a screenshot taken with <kbd>Win+Shift+S</kbd>, is saved in <code>Documents\Diashow Studio\Pasted</code>.</li>
   <li><strong>Insert…</strong> in a slide&#39;s menu picks files and puts them behind that slide.</li>
 </ul>
 <p>Live Photos and RAW+JPEG go in as one photo. The new slides are selected afterwards; <kbd>Ctrl+Z</kbd> takes back the whole insert in one step. In themes with several photos per slide, the other slides stay as they are (see <strong>Group automatically</strong> under <a href="#themes">Themes</a>).</p>
@@ -172,7 +172,9 @@
 <h2 id="filmstrip-title">Filmstrip: zoom, search and chapters</h2>
 <ul>
   <li><strong>Zoom:</strong> − and + or the slider above the filmstrip make the slides smaller or larger, and so does <kbd>Ctrl</kbd>+mouse wheel over the filmstrip. <strong>Show the whole slideshow</strong> fits every slide into the width. Small cards show only pictures; a thin blue line marks each chapter.</li>
-  <li><strong>Search:</strong> <kbd>Ctrl+F</kbd> or the magnifier. It looks in file names, chapters, captions, text slides, text boxes, names from the people list and the capture date (“5/12”, “May 12”, “Tuesday”, “May 2025”). “Video” and “Live” find videos and Live Photos. With several words, each must match.</li>
+  <li><strong>Overview:</strong> when the slideshow is too long for the smallest cards (from about 200 slides), the filmstrip becomes an overview: each slide is a thin bar in the colour of its picture, with chapter marks, the selection and the search matches. A click selects a slide and shows it, a double-click or <kbd>Ctrl</kbd>+mouse wheel zooms back in there. <kbd>←</kbd> and <kbd>→</kbd> still go from slide to slide.</li>
+  <li><strong>Search:</strong> <kbd>Ctrl+F</kbd> or the magnifier. It looks in file names, chapters, captions, text slides, text boxes, names from the people list and the capture date (“12 May”, “May 12”, “Tuesday”, “May 2025”; “12/5” in the order your Windows language writes dates). “Video” and “Live” find videos and Live Photos. With several words, each must match.</li>
+  <li>When a word is in the slideshow as a name or text (“Jan”, “Sunset.jpg”, “Version 1.5”), only that is searched, not the date. Then “Jan.”, “January 2026” or “12 Jan” find the date.</li>
   <li>The matches are listed and marked yellow in the filmstrip. <kbd>Enter</kbd> / <kbd>Shift+Enter</kbd> or <kbd>F3</kbd> / <kbd>Shift+F3</kbd> go to the next / previous match, <kbd>Esc</kbd> closes the search.</li>
   <li><strong>Chapters:</strong> the <strong>Chapters</strong> menu lists the title, chapters and text slides with their time; a click jumps there.</li>
 </ul>
@@ -309,6 +311,7 @@
 </figure>
 <ul>
   <li>Exports run in the background, one after another; you can keep working. The title bar shows the progress, the <strong>Exports</strong> list every job.</li>
+  <li>The app&#39;s icon in the Windows taskbar fills up with the progress too (yellow when paused, red for a moment when one fails). When you are working in another program, Windows tells you when an export is finished; a click shows the video in its folder. While a slideshow plays fullscreen (presentation, kiosk), no notification appears.</li>
   <li>Each export is a snapshot: later edits don&#39;t change it.</li>
   <li>After a crash or a restart, <strong>Continue</strong> in the <strong>Exports</strong> list picks up where it stopped.</li>
   <li><strong>Chapters as jump marks:</strong> from two chapters on, players such as VLC jump straight to “Tuesday”. <strong>Copy chapters</strong> puts the list on the clipboard for a YouTube description.</li>
@@ -362,7 +365,8 @@
 </figure>
 <ul>
   <li><strong>Trash (n)</strong> at the bottom of the home screen lists the deleted slideshows: when they were deleted, when they are deleted permanently, and their size.</li>
-  <li><strong>Restore</strong> brings a slideshow back as it was, also after a restart. Another slideshow is never overwritten.</li>
+  <li><strong>Restore</strong> brings a slideshow back as it was, also after a restart. Another slideshow is never overwritten. If another file now sits where an uploaded photo was, the photo comes back under another name; the undo history then no longer fits and is deleted.</li>
+  <li>A crash or power cut in the middle of deleting or restoring does no harm: at the next start the app finishes the step or takes it back.</li>
   <li><strong>Delete permanently…</strong> and <strong>Empty trash…</strong> delete at once, after asking. After 30 days the app deletes a slideshow in the trash permanently by itself.</li>
   <li>The deletion date still counts in the trash. When it has come, the home screen offers <strong>Delete permanently…</strong>.</li>
 </ul>

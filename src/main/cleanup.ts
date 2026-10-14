@@ -10,7 +10,7 @@
 // - the pupils' uploads in <Documents>/Diashow Studio/Uploads/<project name>/<pupil>/. An upload that
 //   two shows use (a duplicate and its original) belongs to both: neither the clean-up nor the trash
 //   of one takes it while the other uses it, also from the trash; the last one takes it along
-//   (releaseShared);
+//   (releaseMedia, in the trash's step that deletes it for good);
 // - the media cache, one folder per photo, video or song: thumbnails, display images, proxies, 4K
 //   versions, stabilised clips, extracted sound, frame strips;
 // - older versions in .backups/<id>/ (also damaged files a repair kept);
@@ -552,18 +552,19 @@ export async function trashProjectData(d: CleanupDeps, id: string): Promise<Tras
 }
 
 /**
- * After shows left the trash for good (deleted, emptied, expired; `before`: what the trash held, its
- * media()): uploads and pasted pictures they shared with another show stayed in place when they moved
- * in. Each one that no show uses any more, open or in the trash, goes now: the last show that used it
- * takes it along. Only the very file a show used counts (its media id still fits the file's size and
- * time), and only inside the app's folders of received files. Returns how many files went.
+ * A show left the trash for good (deleted, emptied, expired): the uploads and pasted pictures it shared
+ * with another show stayed in place when it moved in (`gone`, its photos and videos). Each one that no
+ * show uses any more, open or in the trash (`kept`: the photos and videos of the shows still there), goes
+ * now: the last show that used it takes it along. Only the very file a show used counts (its media id
+ * still fits the file's size and time), and only inside the app's folders of received files. Returns
+ * how many files went; throws when one stays busy (with `failed`: trash.ts reports them, keeps what is to
+ * be released and tries again).
+ * The trash calls it in the step that deletes the show (Trash.setRelease), so no delete or restore runs
+ * in between.
  */
-export async function releaseShared(d: CleanupDeps, before: ReadonlyMap<string, readonly TrashedMedia[]>): Promise<number> {
-  if (!d.trash || !before.size) return 0
-  const after = await d.trash.media()
-  const gone = [...before].flatMap(([id, media]) => (after.has(id) ? [] : media))
+export async function releaseMedia(d: Pick<CleanupDeps, 'projects' | 'uploadsRoot' | 'pastedRoots'>, gone: readonly TrashedMedia[], kept: readonly TrashedMedia[]): Promise<number> {
   if (!gone.length) return 0
-  const used = new Set([...(await d.projects.references()).paths, ...[...after.values()].flatMap(filesOf)].map(low))
+  const used = new Set([...(await d.projects.references()).paths, ...filesOf(kept)].map(low))
   const free = (p: string): boolean => received(d, p) && !used.has(low(p))
   const files: string[] = []
   for (const m of gone) {
@@ -582,5 +583,17 @@ export async function releaseShared(d: CleanupDeps, before: ReadonlyMap<string, 
     return out
   })
   await pruneEmptyDirs(dirs, roots)
+  if (done.failed.length) throw Object.assign(new Error(`EBUSY: ${done.failed.length} shared uploads in use`), { code: 'EBUSY', failed: done.failed })
   return done.files
+}
+
+/**
+ * The same for a trash without setRelease (`before`: what the trash held, its media(), before shows left
+ * it for good): what left it since releases what it shared.
+ */
+export async function releaseShared(d: CleanupDeps, before: ReadonlyMap<string, readonly TrashedMedia[]>): Promise<number> {
+  if (!d.trash || !before.size) return 0
+  const after = await d.trash.media()
+  const gone = [...before].flatMap(([id, media]) => (after.has(id) ? [] : media))
+  return releaseMedia(d, gone, [...after.values()].flat())
 }

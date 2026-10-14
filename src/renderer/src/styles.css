@@ -379,6 +379,11 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline-offs
 .zoom-tiny .card { outline-offset: 0; }
 .zoom-tiny .card .tiles { gap: 0; }
 .zoom-tiny .card .text-card { font-size: 0; }
+/* the overview of a long show (StripOverview.tsx): bars on a canvas over the cards row; the card of the
+   slide the keyboard is on lies invisible over its bar and shows only its focus ring */
+.strip-overview { position: absolute; top: 0; display: block; cursor: pointer; }
+.zoom-overview .card.overview-card { position: absolute; top: 22px; background: transparent; outline-color: transparent; border-radius: 2px; pointer-events: none; }
+.zoom-overview .card.overview-card:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 /* files from Explorer over the filmstrip go in at the marker: the window's "drop here" steps aside */
 .strip.files-over .strip-scroll { background: var(--accent-soft); }
 .app:has(.strip.files-over) .window-drop { display: none; }

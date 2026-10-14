@@ -4,9 +4,14 @@
 //   in the projects folder, the history in userData's trash), not listed as a show or as damaged;
 // - after a restart it is restored: it opens with its slides, its older version, its upload and its
 //   undo history (undo works at once);
+// - what a move cut off before it began left in the trash (a temp file) is gone after the start;
+// - deleted again while another pupil's file takes its upload's place: restored, the upload comes back
+//   under another name, the show follows it, and the notice says that its undo history was deleted;
 // - deleted again and deleted permanently: everything is gone from disk, the originals stay;
 // - a show in the trash whose deletion date has come gets "delete permanently" on the home screen;
 //   Settings → Privacy shows the trash's size and empties it after a confirmation;
+// - "Papierkorb (n)" counts shows only: an unreadable entry is named as such (Settings, emptying), and
+//   a trash that holds nothing else shows "Papierkorb" without a number;
 // - a show in the trash is not opened by kiosk mode and only counted in the diagnostics package; with
 //   the trash's clock 29 days ahead it stays, 31 days ahead it is deleted for good at the start
 //   (DIASHOW_TRASH_CLOCK_DAYS).
@@ -15,7 +20,7 @@ import { expect, test, type Page } from '@playwright/test'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { gunzipSync } from 'node:zlib'
 import { copyMedia, ensureTestMedia, isFullScreen, launch, project, projectFile, removeDir, root, sampleFiles, waitProcessed, waitSaved, type Session } from './harness'
 import { SOFTWARE_GL } from './launch'
@@ -54,13 +59,13 @@ const trashButton = (page: Page) => page.getByTestId('trash-open')
 const undoButton = (page: Page) => page.locator('.titlebar button[aria-label^="Rückgängig"], .titlebar button[aria-label^="Undo"]')
 
 /** Deletes a show from its card on the home screen: the dialog lists what goes into the trash. */
-async function deleteFromHome(page: Page, name: string): Promise<void> {
+async function deleteFromHome(page: Page, name: string, parts = ['backups', 'history', 'uploads']): Promise<void> {
   const c = card(page, name)
   await c.hover()
   await c.locator('button.del').click()
   const dialog = page.getByTestId('delete-dialog')
   await expect(dialog).toContainText(/Papierkorb|trash/)
-  for (const part of ['backups', 'history', 'uploads']) await expect(dialog.locator(`[data-category="${part}"]`)).toBeVisible({ timeout: 30_000 })
+  for (const part of parts) await expect(dialog.locator(`[data-category="${part}"]`)).toBeVisible({ timeout: 30_000 })
   await page.getByTestId('delete-run').click()
   await expect(dialog).toHaveCount(0, { timeout: 30_000 })
   await expect(card(page, name)).toHaveCount(0)
@@ -163,14 +168,22 @@ test('trash: delete, restore with versions, upload and undo history, delete for 
     s = null
 
     // ---------------------------------------------------------------- session 2: restore after a restart
+    // a move the power cut off before it began: a folder with nothing but a temp file of its description
+    const scratch = join(trashDocs, 'cutoff-1', 'trash.json.4711.1760000000000.tmp')
+    mkdirSync(join(trashDocs, 'cutoff-1'), { recursive: true })
+    writeFileSync(scratch, '{"format":"diashow-trash","ver')
     s = await launch(dataDir)
     page = s.page
     dialog = page.getByTestId('trash-dialog')
     await expect(trashButton(page)).toHaveText(/\(1\)/, { timeout: 30_000 })
+    expect(readdirSync(trashDocs)).toEqual([id])
     await expect(card(page, NAME)).toHaveCount(0)
     await trashButton(page).click()
+    await expect(page.getByTestId('trash-problem')).toHaveCount(0)
     await dialog.locator(`[data-testid="trash-entry"][data-id="${id}"]`).getByTestId('trash-restore').click()
     await expect(page.getByTestId('trash-notice')).toContainText(/wiederhergestellt|restored/)
+    // it came back with its undo history: nothing to say about it
+    await expect(page.getByTestId('trash-notice')).not.toContainText(/Rückgängig-Verlauf|undo history/)
     await expect(page.getByTestId('trash-none')).toBeVisible()
     await dialog.locator('.actions .btn.primary').click()
     await expect(trashButton(page)).toHaveCount(0)
@@ -195,8 +208,33 @@ test('trash: delete, restore with versions, upload and undo history, delete for 
     await expect(card(page, NAME)).toBeVisible()
     await page.waitForTimeout(1000)
 
-    // ---------------------------------------------------------------- deleted again, and permanently
+    // ---------------------------------------------------------------- deleted again; its upload's place is taken meanwhile
     await deleteFromHome(page, NAME)
+    expect(storedUndo(dataDir, id)).toBeNull()
+    // (the deletion removed the empty upload folders)
+    mkdirSync(dirname(upload), { recursive: true })
+    writeFileSync(upload, 'another pupil’s photo, sent with the same name')
+    await trashButton(page).click()
+    await dialog.locator(`[data-testid="trash-entry"][data-id="${id}"]`).getByTestId('trash-restore').click()
+    const notice = page.getByTestId('trash-notice')
+    await expect(notice).toContainText(/wiederhergestellt|restored/)
+    await expect(notice).toContainText(/1 hochgeladene Datei|1 uploaded file/)
+    // its undo history no longer fits the show that follows the new name: the notice says it is gone
+    await expect(notice).toContainText(/Der Rückgängig-Verlauf passte nicht mehr zur Diashow und ist gelöscht|The undo history no longer fitted the slideshow and was deleted/)
+    await expect(page.getByTestId('trash-none')).toBeVisible()
+    await dialog.locator('.actions .btn.primary').click()
+    const renamedUpload = join(dirname(upload), 'pano (2).png')
+    expect(readFileSync(upload, 'utf8')).toBe('another pupil’s photo, sent with the same name')
+    const followed = JSON.parse(readFileSync(projectFile(dataDir, id), 'utf8'))
+    expect(followed.media.map((m: any) => m.path)).toContain(renamedUpload)
+    expect(followed.media.map((m: any) => m.path)).not.toContain(upload)
+    expect(existsSync(historyFile(dataDir, id))).toBe(false)
+    expect(readdirSync(trashDocs)).toEqual([])
+    expect(readdirSync(trashData)).toEqual([])
+    await expect(card(page, NAME)).toBeVisible()
+
+    // ---------------------------------------------------------------- deleted again (no undo history now), and permanently
+    await deleteFromHome(page, NAME, ['backups', 'uploads'])
     await trashButton(page).click()
     await dialog.locator(`[data-testid="trash-entry"][data-id="${id}"]`).getByTestId('trash-purge').click()
     const confirm = page.getByTestId('trash-confirm')
@@ -216,29 +254,34 @@ test('trash: delete, restore with versions, upload and undo history, delete for 
     const other = await emptyShow(page, dataDir, 'Sportfest')
     await page.evaluate(({ pid, at }) => (window as any).api.setDeleteAt(pid, at), { pid: due, at: Date.now() - DAY })
     for (const pid of [due, other]) expect(await page.evaluate((x) => (window as any).api.deleteProject(x), pid)).toHaveProperty('entry')
+    // and something the app can't read (another program, a damaged disk): no show, so not counted as one
+    const unreadable = join(trashDocs, 'kaputt', 'trash.json')
+    mkdirSync(dirname(unreadable), { recursive: true })
+    writeFileSync(unreadable, '{"format":"diashow-trash", kaputt')
     await state(page, `s.loadProjects()`)
-    await expect(trashButton(page)).toHaveText(/\(2\)/)
+    await expect(trashButton(page)).toHaveText(/Papierkorb \(2\)|Trash \(2\)/)
     const banner = page.getByTestId('trash-due-banner')
     await expect(banner).toContainText('Elternabend')
     await expect(banner).not.toContainText('Sportfest')
     await page.getByTestId('trash-due-purge').click()
+    await expect(dialog.getByTestId('trash-problem')).toHaveCount(1)
     await expect(confirm).toContainText('Elternabend')
     await expect(confirm).not.toContainText('Sportfest')
     await page.getByTestId('trash-confirm-run').click()
     await expect(dialog.locator('[data-testid="trash-entry"]')).toHaveCount(1)
     await expect(dialog.locator(`[data-testid="trash-entry"][data-id="${other}"]`)).toBeVisible()
     await dialog.locator('.actions .btn.primary').click()
-    await expect(trashButton(page)).toHaveText(/\(1\)/)
+    await expect(trashButton(page)).toHaveText(/Papierkorb \(1\)|Trash \(1\)/)
     await expect(banner).toHaveCount(0)
 
     await state(page, `s.set({ dialog: 'settings' })`)
     const size = page.getByTestId('trash-setting-size')
-    await expect(size).toContainText(/Papierkorb: 1 Diashow|Trash: 1 slideshow/)
+    await expect(size).toContainText(/Papierkorb: 1 Diashow und 1 unlesbarer Eintrag, |Trash: 1 slideshow and 1 unreadable entry, /)
     const onDisk = [...filesBelow(trashDocs), ...filesBelow(trashData)].reduce((n, f) => n + f.bytes, 0)
     expect(onDisk).toBeGreaterThan(0)
     expect(Number(await size.getAttribute('data-bytes'))).toBe(onDisk)
     await page.getByTestId('trash-setting-empty').click()
-    await expect(confirm).toContainText(/Alles im Papierkorb: 1|Everything in the trash: 1/)
+    await expect(confirm).toContainText(/Alles im Papierkorb: 1 Diashow und 1 unlesbarer Eintrag, |Everything in the trash: 1 slideshow and 1 unreadable entry, /)
     await expect(confirm).toContainText(/nicht rückgängig|cannot be undone/)
     await page.getByTestId('trash-confirm-run').click()
     await expect(page.getByTestId('trash-none')).toBeVisible({ timeout: 30_000 })
@@ -248,6 +291,26 @@ test('trash: delete, restore with versions, upload and undo history, delete for 
     expect(readdirSync(trashData)).toEqual([])
     await page.keyboard.press('Escape')
     await expect(page.locator('.dialog')).toHaveCount(0)
+
+    // only something unreadable in the trash: "Papierkorb" without a number, and it can be deleted
+    mkdirSync(dirname(unreadable), { recursive: true })
+    writeFileSync(unreadable, '{"format":"diashow-trash", kaputt')
+    await state(page, `s.loadProjects()`)
+    await expect(trashButton(page)).toHaveText(/^\s*(Papierkorb|Trash)\s*$/)
+    await expect(trashButton(page)).toHaveAttribute('data-shows', '0')
+    await state(page, `s.set({ dialog: 'settings' })`)
+    await expect(size).toContainText(/Papierkorb: 1 unlesbarer Eintrag, |Trash: 1 unreadable entry, /)
+    await page.keyboard.press('Escape')
+    await expect(page.locator('.dialog')).toHaveCount(0)
+    await trashButton(page).click()
+    await expect(dialog.locator('[data-testid="trash-entry"]')).toHaveCount(0)
+    await dialog.getByTestId('trash-problem').locator('button').click()
+    await expect(confirm).toContainText(/Unlesbarer Eintrag|Unreadable entry/)
+    await page.getByTestId('trash-confirm-run').click()
+    await expect(page.getByTestId('trash-none')).toBeVisible({ timeout: 30_000 })
+    await dialog.locator('.actions .btn.primary').click()
+    await expect(trashButton(page)).toHaveCount(0)
+    expect(readdirSync(trashDocs)).toEqual([])
 
     // ---------------------------------------------------------------- kiosk, diagnostics, expiry after 30 days
     const kiosk = await emptyShow(page, dataDir, 'Tag der offenen Tür')

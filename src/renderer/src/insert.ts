@@ -1,13 +1,14 @@
 // Inserting photos and videos at a place in the show: files dropped from Explorer onto the filmstrip,
-// files or a picture pasted with Ctrl+V (behind the selected slide, else at the end), and "Insert…" in
-// a slide's menu (behind that slide). Files are imported like any import (folders expanded, Live
-// Photos and RAW+JPEG paired, sorted by capture time) and go in as one undo step; the new slides are
-// selected. Where they go is decided in insertAt.ts. What the show has already is skipped (repeats.ts).
+// files or a picture pasted with Ctrl+V (behind the selected slide, else at the end in front of closing
+// end credits), and "Insert…" in a slide's menu (behind that slide). Files are imported like any import
+// (folders expanded, Live Photos and RAW+JPEG paired, sorted by capture time) and go in as one undo
+// step; the new slides are selected. Where they go is decided in insertAt.ts. What the show has already
+// is skipped (repeats.ts).
 import { splitAudio } from '@shared/formats'
 import type { MediaItem } from '@shared/types'
 import { useStore } from './store'
 import { timelineOf } from './timeline'
-import { entriesFor } from './entryEdits'
+import { endOfShow, entriesFor } from './entryEdits'
 import { notifyError } from './errors'
 import { anchorAt, canJoin, insertEntries, insertInto } from './insertAt'
 import { againPaths, importChecked, noticeRepeats, serially, type CheckedImport } from './repeats'
@@ -89,15 +90,15 @@ function putAt(items: MediaItem[], place: InsertPlace): string[] {
   return fresh.map((e) => e.id)
 }
 
-/** The slide boundary behind the last selected slide, or the end of the show without a selection. */
+/** The slide boundary behind the last selected slide; -1 when no slide is selected. */
 export function boundaryAfterSelection(): number {
   const s = useStore.getState()
-  if (!s.project) return 0
+  if (!s.project) return -1
   const tl = timelineOf(s.project)
   const sel = new Set(s.selection)
   let last = -1
   for (const sl of tl.slides) if (sl.entries.some((e) => sel.has(e.id)) || (!!sl.captionEntryId && sel.has(sl.captionEntryId))) last = sl.index
-  return last >= 0 ? last + 1 : tl.slides.length
+  return last >= 0 ? last + 1 : -1
 }
 
 /** The entry in front of which items for slide boundary `at` of the open show go. */
@@ -107,8 +108,20 @@ export function placeAt(at: number): InsertPlace {
 }
 
 /**
+ * Where items go that come in behind the selection: behind the last selected slide, or without one at
+ * the end of the show, in front of its closing end credits (entryEdits.ts endOfShow).
+ */
+export function placeAfterSelection(): InsertPlace {
+  const p = useStore.getState().project
+  if (!p) return { before: null }
+  const at = boundaryAfterSelection()
+  return at >= 0 ? placeAt(at) : { before: p.entries[endOfShow(p.entries)]?.id ?? null }
+}
+
+/**
  * Ctrl+V: files copied in Explorer, or a copied picture without a file (a screenshot), which the
- * main process saves as a PNG first. They go behind the selected slide, or at the end.
+ * main process saves as a PNG first. They go behind the selected slide, or at the end in front of
+ * closing end credits.
  */
 export async function pasteMedia(): Promise<void> {
   const p = useStore.getState().project
@@ -120,5 +133,5 @@ export async function pasteMedia(): Promise<void> {
     notifyError(e, 'import')
     return
   }
-  if (paths.length) await insertFiles(paths, placeAt(boundaryAfterSelection()))
+  if (paths.length) await insertFiles(paths, placeAfterSelection())
 }

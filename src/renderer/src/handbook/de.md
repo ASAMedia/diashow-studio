@@ -60,9 +60,9 @@ Der Editor hat drei Bereiche: die **Vorschau** in der Mitte, rechts die Reiter *
 
 ## Fotos hinzufügen und einfügen {#add}
 
-- **Hinzufügen:** Fotos, Videos oder Ordner ins Fenster ziehen, oder der Knopf **+** am Ende des Filmstreifens mit **Fotos und Videos hinzufügen…** und **Ordner hinzufügen…**. Sie kommen hinter die ausgewählte Folie, ohne Auswahl ans Ende.
+- **Hinzufügen:** Fotos, Videos oder Ordner ins Fenster ziehen, oder der Knopf **+** am Ende des Filmstreifens mit **Fotos und Videos hinzufügen…** und **Ordner hinzufügen…**. Sie kommen hinter die ausgewählte Folie, ohne Auswahl ans Ende, aber vor einen **Abspann**.
 - **An einer Stelle einfügen:** Aus dem Explorer zwischen zwei Karten des Filmstreifens ziehen; eine blaue Linie zeigt, wo sie landen. Auf die Mitte einer Karte gezogen, kommen sie mit auf diese Folie, wenn das Thema mehrere Fotos pro Folie zeigt und Platz ist.
-- **Kopieren und einfügen:** Im Explorer kopierte Dateien ([[Strg+C]]) fügt [[Strg+V]] hinter der ausgewählten Folie ein. Ein kopiertes Bild ohne Datei, etwa ein Bildschirmfoto mit [[Win+Umschalt+S]], speichert die App in `Dokumente\Diashow Studio\Eingefügt`.
+- **Kopieren und einfügen:** Im Explorer kopierte Dateien ([[Strg+C]]) fügt [[Strg+V]] hinter der ausgewählten Folie ein, ohne Auswahl am Ende vor dem Abspann. Ein kopiertes Bild ohne Datei, etwa ein Bildschirmfoto mit [[Win+Umschalt+S]], speichert die App in `Dokumente\Diashow Studio\Eingefügt`.
 - **Einfügen…** im Menü einer Folie wählt Dateien aus und setzt sie hinter diese Folie.
 
 Live Photos und RAW+JPEG kommen als ein Foto hinein. Die neuen Folien sind danach ausgewählt; [[Strg+Z]] nimmt das ganze Einfügen in einem Schritt zurück. In Themen mit mehreren Fotos pro Folie bleiben die anderen Folien, wie sie sind (siehe **Automatisch gruppieren** unter [Themen](#themes)).
@@ -80,7 +80,9 @@ Ein Hinweis unten rechts sagt, wie viele übersprungen wurden. **Zeigen** wählt
 ## Filmstreifen: Zoom, Suche und Kapitel {#filmstrip}
 
 - **Zoom:** − und + oder der Regler über dem Filmstreifen machen die Folien kleiner oder größer, ebenso [[Strg]]+Mausrad über dem Filmstreifen. **Ganze Diashow zeigen** passt alle Folien in die Breite. Kleine Karten zeigen nur noch Bilder; eine dünne blaue Linie markiert jedes Kapitel.
+- **Übersicht:** Ist die Diashow für die kleinsten Karten zu lang (ab etwa 200 Folien), wird der Filmstreifen zur Übersicht: Jede Folie ist ein schmaler Streifen in der Farbe ihres Bildes, mit Kapitelmarken, Auswahl und Suchtreffern. Ein Klick wählt eine Folie und zeigt sie, ein Doppelklick oder [[Strg]]+Mausrad zoomt dort wieder hinein. [[←]] und [[→]] gehen auch hier von Folie zu Folie.
 - **Suche:** [[Strg+F]] oder die Lupe. Gesucht wird in Dateinamen, Kapiteln, Bildtexten, Textfolien, Textfeldern, Namen aus der Personenliste und im Aufnahmedatum („12.5.“, „12. Mai“, „Dienstag“, „Mai 2025“). „Video“ und „Live“ finden Videos und Live Photos. Bei mehreren Wörtern muss jedes passen.
+- Kommt ein Wort in der Diashow als Name oder Text vor („Jan“, „Maike“, „Freibad“), wird nur danach gesucht, nicht nach dem Datum. Das Datum findest du dann mit „Jan.“, „Januar 2026“ oder „12. Jan“.
 - Die Treffer stehen in einer Liste und sind im Filmstreifen gelb markiert. [[Enter]] / [[Umschalt+Enter]] oder [[F3]] / [[Umschalt+F3]] gehen zum nächsten / vorigen Treffer, [[Esc]] schließt die Suche.
 - **Kapitel:** Das Menü **Kapitel** listet Titel, Kapitel und Textfolien mit ihrer Zeit; ein Klick springt hin.
 
@@ -234,7 +236,8 @@ Ein [ZIP-Archiv](#projects) ist eine Kopie, die das Aufräumen nicht erreicht; l
 ![Der Papierkorb](trash.jpg)
 
 - **Papierkorb (n)** unten auf der Startseite zeigt die gelöschten Diashows: wann sie gelöscht wurden, wann sie endgültig verschwinden und wie groß sie sind.
-- **Wiederherstellen** holt eine Diashow zurück, wie sie war, auch nach einem Neustart. Eine andere Diashow wird dabei nie überschrieben.
+- **Wiederherstellen** holt eine Diashow zurück, wie sie war, auch nach einem Neustart. Eine andere Diashow wird dabei nie überschrieben. Liegt an der Stelle eines hochgeladenen Fotos inzwischen eine andere Datei, kommt es unter anderem Namen zurück; der Rückgängig-Verlauf passt dann nicht mehr und wird gelöscht.
+- Ein Absturz oder Stromausfall mitten im Löschen oder Wiederherstellen schadet nicht: Beim nächsten Start bringt die App den Schritt zu Ende oder nimmt ihn zurück.
 - **Endgültig löschen…** und **Papierkorb leeren…** löschen nach einer Rückfrage sofort. Nach 30 Tagen löscht die App eine Diashow im Papierkorb von selbst endgültig.
 - Die Löschfrist gilt auch im Papierkorb. Ist sie erreicht, bietet die Startseite **Endgültig löschen…** an.
 

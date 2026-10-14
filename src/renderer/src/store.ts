@@ -74,8 +74,9 @@ interface State {
   setSettings(patch: Partial<ProjectSettings>): void
   setTheme(theme: ThemeId): void
   /**
-   * New files go behind the selection, or (`byTime`) where their capture time belongs. What the show has
-   * already is skipped with a notice (repeats.ts; `quiet`: none, the share dialog counts them itself).
+   * New files go behind the selection (without one at the end, in front of closing end credits), or
+   * (`byTime`) where their capture time belongs. What the show has already is skipped with a notice
+   * (repeats.ts; `quiet`: none, the share dialog counts them itself).
    */
   importMedia(paths: string[], placement?: 'selection' | 'byTime', opts?: { quiet?: boolean }): Promise<{ added: MediaItem[]; skipped: MediaItem[] }>
   addMusic(paths: string[]): Promise<void>
@@ -478,7 +479,8 @@ export const useStore = create<State>((set, get) => ({
       }
       if (gone()) return { added: [], skipped: [] }
       const { selection } = get()
-      // behind entry `behind` (else at the end), or by capture time; returns the new entry ids
+      // behind entry `behind` (else at the end, in front of closing end credits), or by capture time;
+      // returns the new entry ids
       const put = (items: MediaItem[], behind = selection[selection.length - 1]): string[] => {
         const fresh = entriesFor(items)
         get().update((p) => {
@@ -493,8 +495,7 @@ export const useStore = create<State>((set, get) => ({
             return
           }
           const after = behind ? p.entries.findIndex((e) => e.id === behind) : -1
-          if (after >= 0) p.entries.splice(after + 1, 0, ...fresh)
-          else p.entries.push(...fresh)
+          p.entries.splice(after >= 0 ? after + 1 : edits.endOfShow(p.entries), 0, ...fresh)
         })
         return fresh.map((e) => e.id)
       }

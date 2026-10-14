@@ -2,6 +2,12 @@
 // checked (a damaged or foreign file is never trusted, and no path in it leads out of the projects
 // folder), and its project file: the photos and videos it uses, pointed at uploads that came back under
 // another name. Electron-free.
+//
+// Besides what went in (items), trash.json records what a step is about to do, before it does it, so a
+// crash at any moment can be finished (trash.ts recover()):
+// - restoring: `renames`, the uploads that come back under another name because their place is taken;
+// - purging: `release`, the photos and videos the show left in place (it shared them with another
+//   show), to be deleted once no show uses them (cleanup.ts releaseMedia).
 import { isAbsolute, normalize, resolve, sep } from 'node:path'
 import { validDeleteAt } from '@shared/cleanup'
 import { cleanProjectText, PROJECT_ID } from './projectSchema'
@@ -22,6 +28,12 @@ const STATES: readonly State[] = ['moving', 'trashed', 'restoring', 'purging']
 /** What went into the trash: the show, its older versions, its undo history, a file of the projects folder (relative path), an export job. */
 export type Item = { kind: 'show' } | { kind: 'backups' } | { kind: 'history' } | { kind: 'file'; path: string } | { kind: 'job'; job: string }
 
+/** An upload that comes back under another name: its path and the free one (both relative to the projects folder, in the same folder). */
+export interface Rename {
+  path: string
+  to: string
+}
+
 export interface Manifest {
   format: typeof FORMAT
   version: 1
@@ -35,6 +47,10 @@ export interface Manifest {
   versions: number
   faces: boolean
   items: Item[]
+  /** 'restoring' (and 'trashed' after a restore taken back while a file stayed busy): the renames planned or done. */
+  renames?: Rename[]
+  /** 'purging': the photos and videos it left in place, released once it is gone (their paths as the show has them). */
+  release?: TrashedMedia[]
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -70,6 +86,37 @@ function checkItem(v: unknown): Item | null {
   return null
 }
 
+function checkRename(v: unknown): Rename | null {
+  if (!isObj(v)) return null
+  const path = checkRel(v.path)
+  const to = checkRel(v.to)
+  // a free name next to the file (`a (2).jpg`): never another folder
+  if (!path || !to || path.toLowerCase() === to.toLowerCase()) return null
+  return path.slice(0, path.lastIndexOf(sep)).toLowerCase() === to.slice(0, to.lastIndexOf(sep)).toLowerCase() ? { path, to } : null
+}
+
+/** An absolute path as a show has it (trash.ts only acts on those inside the projects folder). */
+const absolute = (v: unknown): v is string => typeof v === 'string' && v.length > 0 && v.length <= 2000 && !v.includes('\0') && isAbsolute(v)
+
+function checkShared(v: unknown): TrashedMedia | null {
+  if (!isObj(v) || typeof v.id !== 'string' || !v.id || v.id.length > 200 || !absolute(v.path)) return null
+  if (v.live !== undefined && !absolute(v.live)) return null
+  return v.live !== undefined ? { id: v.id, path: v.path, live: v.live as string } : { id: v.id, path: v.path }
+}
+
+/** A list of `check`ed values, or null when it is not a list or one of them is damaged; undefined when it is missing. */
+function listOf<T>(v: unknown, check: (x: unknown) => T | null): T[] | null | undefined {
+  if (v === undefined) return undefined
+  if (!Array.isArray(v)) return null
+  const out: T[] = []
+  for (const raw of v) {
+    const x = check(raw)
+    if (!x) return null
+    out.push(x)
+  }
+  return out
+}
+
 /** trash.json read and checked; null when it is missing or damaged. */
 export function parseManifest(text: string, key: string): Manifest | null {
   let m: unknown
@@ -80,12 +127,10 @@ export function parseManifest(text: string, key: string): Manifest | null {
   }
   if (!isObj(m) || m.format !== FORMAT || m.version !== 1 || m.id !== key || typeof m.name !== 'string' || !STATES.includes(m.state as State)) return null
   if (!Number.isFinite(m.deletedAt) || !Number.isFinite(m.purgeAt) || !Array.isArray(m.items)) return null
-  const items: Item[] = []
-  for (const raw of m.items) {
-    const item = checkItem(raw)
-    if (!item) return null
-    items.push(item)
-  }
+  const items = listOf(m.items, checkItem)
+  const renames = listOf(m.renames, checkRename)
+  const release = listOf(m.release, checkShared)
+  if (!items || renames === null || release === null) return null
   return {
     format: FORMAT,
     version: 1,
@@ -98,7 +143,9 @@ export function parseManifest(text: string, key: string): Manifest | null {
     slideCount: count(m.slideCount),
     versions: count(m.versions),
     faces: m.faces === true,
-    items
+    items,
+    ...(renames?.length ? { renames } : {}),
+    ...(release?.length ? { release } : {})
   }
 }
 

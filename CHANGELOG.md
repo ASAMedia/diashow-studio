@@ -2,6 +2,28 @@
 
 All notable changes to Diashow Studio. Versions follow [Semantic Versioning](https://semver.org). The release workflow publishes the section of a version as its release notes.
 
+## [1.10.0] - 2026-10-15
+
+**Downloads**
+
+- `Diashow.Studio-Setup-1.10.0.exe`: installer (no admin rights needed); it updates an installed version and keeps your slideshows and settings.
+- `Diashow.Studio-1.10.0-portable.exe`: runs without installing, e.g. from a USB stick.
+- The installer is not code-signed. If Windows SmartScreen says "Windows protected your PC", choose "More info" and then "Run anyway".
+- `THIRD_PARTY_NOTICES.txt` lists the licences of everything bundled, including all songs. The `ffmpeg-*` archives contain the source code of the bundled FFmpeg build and of every library compiled into it (GPL), listed in `ffmpeg-deps-sources-*.txt`.
+
+**New**
+
+- Very long slideshows fit into the filmstrip: "Show the whole slideshow" turns a show too long for the smallest cards into an overview, with every slide a thin bar in the colour of its picture, chapter marks, selection and search marks. A click shows a slide, a double-click or Ctrl+mouse wheel zooms back in there, and the arrow keys still go from slide to slide.
+
+**Fixes**
+
+- Photos added without a selection (Ctrl+V, Add photos and videos…, a drop on the window or on a slideshow's card, the assistant, pupils' uploads) now go in front of the end credits instead of behind them.
+- The filmstrip search reads short words like "die", "mit" or "Sam" as words, not as Tuesdays, Wednesdays or Saturdays. A name or word the slideshow has ("Jan", "Maike", "Version 1.5") is searched as text; "Jan.", "Januar 2026" or "1.5." still mean the date. "12.Mai" works without a space, and "12/5" follows the date order of your Windows language.
+- The filmstrip of a long slideshow with theme music stays quick: the audio lane draws only the beats and waveform in view.
+- The trash survives a crash or power cut at any moment: a slideshow being deleted, restored or deleted permanently is finished or put back as it was at the next start. An upload that came back under another name stays followed by its slideshow, and pupils' uploads shared with another slideshow are deleted with the last slideshow that used them, even after a crash.
+- Deleting, restoring, deleting permanently, the automatic deletion after 30 days and the clean-up run one after another, so a photo shared between two slideshows can no longer be lost when two of them meet.
+- After a restore, the notice says when the undo history no longer fitted and was deleted. "Trash (n)" counts only slideshows; unreadable entries are named as such in Settings and when emptying the trash.
+
 ## [1.9.0] - 2026-10-14
 
 **Downloads**

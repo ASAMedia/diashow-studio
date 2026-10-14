@@ -35,9 +35,17 @@ export function openTrash(ask: string[] | 'all' | null = null): void {
   void loadTrash()
 }
 
+/** Everything in the trash: the shows and what can't be read there (a folder a crash or another program left). */
 const countOf = (c: TrashContents | null): number => (c ? c.entries.length + c.problems.length : 0)
 
-/** Home screen: "Papierkorb (n)" while it isn't empty. */
+/** "2 Diashows", "1 unlesbarer Eintrag", "2 Diashows und 1 unlesbarer Eintrag": only shows count as shows. */
+function whatOf(c: TrashContents): string {
+  const shows = c.entries.length ? count('trashShows', c.entries.length) : ''
+  const damaged = c.problems.length ? count('trashDamagedCount', c.problems.length) : ''
+  return shows && damaged ? fill('trashShowsAndDamaged', { shows, damaged }) : shows || damaged
+}
+
+/** Home screen: "Papierkorb (n)" with the number of shows, while it isn't empty ("Papierkorb" when it only holds unreadable entries). */
 export function TrashButton() {
   const contents = useTrash((s) => s.contents)
   const projects = useStore((s) => s.projects)
@@ -50,12 +58,12 @@ export function TrashButton() {
       }),
     []
   )
-  const n = countOf(contents)
-  if (!n) return null
+  if (!countOf(contents)) return null
+  const shows = contents!.entries.length
   return (
     <div className="trash-link">
-      <button className="btn ghost" data-testid="trash-open" onClick={() => openTrash()}>
-        <Trash2 size={15} aria-hidden /> {fill('trashCount', { n })}
+      <button className="btn ghost" data-testid="trash-open" data-shows={shows} onClick={() => openTrash()}>
+        <Trash2 size={15} aria-hidden /> {shows ? fill('trashCount', { n: shows }) : t('trash')}
       </button>
     </div>
   )
@@ -103,7 +111,7 @@ export function TrashSetting() {
       <p className="hint">{t('trashSettingHint')}</p>
       <div className="row wrap">
         <span className="trash-size" data-testid="trash-setting-size" data-bytes={contents?.bytes ?? 0}>
-          {n ? count('trashSettingInfo', n, { size: fmtBytes(contents!.bytes) }) : t('trashNone')}
+          {n ? fill('trashSettingInfo', { what: whatOf(contents!), size: fmtBytes(contents!.bytes) }) : t('trashNone')}
         </span>
         <button className="btn small" disabled={!n} data-testid="trash-setting-open" onClick={() => openTrash()}>
           {t('trashOpen')}
@@ -174,7 +182,11 @@ function TrashDialog({ onClose }: { onClose: () => void }) {
     try {
       const r = await window.api.trashRestore(e.id)
       if ('refused' in r) setNotice({ text: t(r.refused === 'id-taken' ? 'trashIdTaken' : 'trashNotFound'), warn: true })
-      else setNotice({ text: `${fill('trashRestored', { name: r.name })}${r.renamed ? ` ${count('trashRenamed', r.renamed)}` : ''}` })
+      else {
+        // uploads under another name, and an undo history that no longer fitted (it is gone): said, not hidden
+        const parts = [fill('trashRestored', { name: r.name }), r.renamed ? count('trashRenamed', r.renamed) : '', r.historyDropped ? t('trashHistoryDropped') : '']
+        setNotice({ text: parts.filter(Boolean).join(' ') })
+      }
       await useStore.getState().loadProjects()
     } catch (err) {
       setError(err)
@@ -276,7 +288,7 @@ function TrashDialog({ onClose }: { onClose: () => void }) {
           }
         >
           {all ? (
-            <p>{count('trashConfirmAll', n, { size: fmtBytes(askedBytes) })}</p>
+            <p>{fill('trashConfirmAll', { what: whatOf(contents!), size: fmtBytes(askedBytes) })}</p>
           ) : (
             <>
               <ul className="cleanup-confirm-list">

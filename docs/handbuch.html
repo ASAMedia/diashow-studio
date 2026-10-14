@@ -152,9 +152,9 @@
 <section class="hb-chapter" id="add" aria-labelledby="add-title">
 <h2 id="add-title">Fotos hinzufügen und einfügen</h2>
 <ul>
-  <li><strong>Hinzufügen:</strong> Fotos, Videos oder Ordner ins Fenster ziehen, oder der Knopf <strong>+</strong> am Ende des Filmstreifens mit <strong>Fotos und Videos hinzufügen…</strong> und <strong>Ordner hinzufügen…</strong>. Sie kommen hinter die ausgewählte Folie, ohne Auswahl ans Ende.</li>
+  <li><strong>Hinzufügen:</strong> Fotos, Videos oder Ordner ins Fenster ziehen, oder der Knopf <strong>+</strong> am Ende des Filmstreifens mit <strong>Fotos und Videos hinzufügen…</strong> und <strong>Ordner hinzufügen…</strong>. Sie kommen hinter die ausgewählte Folie, ohne Auswahl ans Ende, aber vor einen <strong>Abspann</strong>.</li>
   <li><strong>An einer Stelle einfügen:</strong> Aus dem Explorer zwischen zwei Karten des Filmstreifens ziehen; eine blaue Linie zeigt, wo sie landen. Auf die Mitte einer Karte gezogen, kommen sie mit auf diese Folie, wenn das Thema mehrere Fotos pro Folie zeigt und Platz ist.</li>
-  <li><strong>Kopieren und einfügen:</strong> Im Explorer kopierte Dateien (<kbd>Strg+C</kbd>) fügt <kbd>Strg+V</kbd> hinter der ausgewählten Folie ein. Ein kopiertes Bild ohne Datei, etwa ein Bildschirmfoto mit <kbd>Win+Umschalt+S</kbd>, speichert die App in <code>Dokumente\Diashow Studio\Eingefügt</code>.</li>
+  <li><strong>Kopieren und einfügen:</strong> Im Explorer kopierte Dateien (<kbd>Strg+C</kbd>) fügt <kbd>Strg+V</kbd> hinter der ausgewählten Folie ein, ohne Auswahl am Ende vor dem Abspann. Ein kopiertes Bild ohne Datei, etwa ein Bildschirmfoto mit <kbd>Win+Umschalt+S</kbd>, speichert die App in <code>Dokumente\Diashow Studio\Eingefügt</code>.</li>
   <li><strong>Einfügen…</strong> im Menü einer Folie wählt Dateien aus und setzt sie hinter diese Folie.</li>
 </ul>
 <p>Live Photos und RAW+JPEG kommen als ein Foto hinein. Die neuen Folien sind danach ausgewählt; <kbd>Strg+Z</kbd> nimmt das ganze Einfügen in einem Schritt zurück. In Themen mit mehreren Fotos pro Folie bleiben die anderen Folien, wie sie sind (siehe <strong>Automatisch gruppieren</strong> unter <a href="#themes">Themen</a>).</p>
@@ -172,7 +172,9 @@
 <h2 id="filmstrip-title">Filmstreifen: Zoom, Suche und Kapitel</h2>
 <ul>
   <li><strong>Zoom:</strong> − und + oder der Regler über dem Filmstreifen machen die Folien kleiner oder größer, ebenso <kbd>Strg</kbd>+Mausrad über dem Filmstreifen. <strong>Ganze Diashow zeigen</strong> passt alle Folien in die Breite. Kleine Karten zeigen nur noch Bilder; eine dünne blaue Linie markiert jedes Kapitel.</li>
+  <li><strong>Übersicht:</strong> Ist die Diashow für die kleinsten Karten zu lang (ab etwa 200 Folien), wird der Filmstreifen zur Übersicht: Jede Folie ist ein schmaler Streifen in der Farbe ihres Bildes, mit Kapitelmarken, Auswahl und Suchtreffern. Ein Klick wählt eine Folie und zeigt sie, ein Doppelklick oder <kbd>Strg</kbd>+Mausrad zoomt dort wieder hinein. <kbd>←</kbd> und <kbd>→</kbd> gehen auch hier von Folie zu Folie.</li>
   <li><strong>Suche:</strong> <kbd>Strg+F</kbd> oder die Lupe. Gesucht wird in Dateinamen, Kapiteln, Bildtexten, Textfolien, Textfeldern, Namen aus der Personenliste und im Aufnahmedatum („12.5.“, „12. Mai“, „Dienstag“, „Mai 2025“). „Video“ und „Live“ finden Videos und Live Photos. Bei mehreren Wörtern muss jedes passen.</li>
+  <li>Kommt ein Wort in der Diashow als Name oder Text vor („Jan“, „Maike“, „Freibad“), wird nur danach gesucht, nicht nach dem Datum. Das Datum findest du dann mit „Jan.“, „Januar 2026“ oder „12. Jan“.</li>
   <li>Die Treffer stehen in einer Liste und sind im Filmstreifen gelb markiert. <kbd>Enter</kbd> / <kbd>Umschalt+Enter</kbd> oder <kbd>F3</kbd> / <kbd>Umschalt+F3</kbd> gehen zum nächsten / vorigen Treffer, <kbd>Esc</kbd> schließt die Suche.</li>
   <li><strong>Kapitel:</strong> Das Menü <strong>Kapitel</strong> listet Titel, Kapitel und Textfolien mit ihrer Zeit; ein Klick springt hin.</li>
 </ul>
@@ -309,6 +311,7 @@
 </figure>
 <ul>
   <li>Exporte laufen im Hintergrund nacheinander; du kannst weiterarbeiten. Die Titelleiste zeigt den Fortschritt, die Liste <strong>Exporte</strong> alle Aufträge.</li>
+  <li>Auch das Symbol in der Windows-Taskleiste füllt sich mit dem Fortschritt (gelb bei Pause, kurz rot bei einem Fehler). Arbeitest du in einem anderen Programm, meldet Windows, wenn ein Export fertig ist; ein Klick zeigt das Video im Ordner. Während eine Diashow im Vollbild läuft (Präsentation, Kiosk), kommt keine Meldung.</li>
   <li>Jeder Export ist eine Momentaufnahme: Spätere Änderungen verändern ihn nicht.</li>
   <li>Nach einem Absturz oder Neustart geht es mit <strong>Fortsetzen</strong> in der Liste <strong>Exporte</strong> weiter.</li>
   <li><strong>Kapitel als Sprungmarken:</strong> Ab zwei Kapiteln springen Player wie VLC damit direkt zu „Dienstag“. <strong>Kapitel kopieren</strong> legt die Liste für eine YouTube-Beschreibung in die Zwischenablage.</li>
@@ -362,7 +365,8 @@
 </figure>
 <ul>
   <li><strong>Papierkorb (n)</strong> unten auf der Startseite zeigt die gelöschten Diashows: wann sie gelöscht wurden, wann sie endgültig verschwinden und wie groß sie sind.</li>
-  <li><strong>Wiederherstellen</strong> holt eine Diashow zurück, wie sie war, auch nach einem Neustart. Eine andere Diashow wird dabei nie überschrieben.</li>
+  <li><strong>Wiederherstellen</strong> holt eine Diashow zurück, wie sie war, auch nach einem Neustart. Eine andere Diashow wird dabei nie überschrieben. Liegt an der Stelle eines hochgeladenen Fotos inzwischen eine andere Datei, kommt es unter anderem Namen zurück; der Rückgängig-Verlauf passt dann nicht mehr und wird gelöscht.</li>
+  <li>Ein Absturz oder Stromausfall mitten im Löschen oder Wiederherstellen schadet nicht: Beim nächsten Start bringt die App den Schritt zu Ende oder nimmt ihn zurück.</li>
   <li><strong>Endgültig löschen…</strong> und <strong>Papierkorb leeren…</strong> löschen nach einer Rückfrage sofort. Nach 30 Tagen löscht die App eine Diashow im Papierkorb von selbst endgültig.</li>
   <li>Die Löschfrist gilt auch im Papierkorb. Ist sie erreicht, bietet die Startseite <strong>Endgültig löschen…</strong> an.</li>
 </ul>

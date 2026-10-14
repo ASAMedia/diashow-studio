@@ -370,20 +370,25 @@ const S = {
   trashEmpty: ['Papierkorb leeren…', 'Empty trash…'],
   trashOpen: ['Papierkorb öffnen', 'Open trash'],
   trashConfirmTitle: ['Endgültig löschen?', 'Delete permanently?'],
-  trashConfirmAll: ['Alles im Papierkorb: {n} Diashows, {size}.', 'Everything in the trash: {n} slideshows, {size}.'],
-  trashConfirmAll1: ['Alles im Papierkorb: 1 Diashow, {size}.', 'Everything in the trash: 1 slideshow, {size}.'],
+  trashConfirmAll: ['Alles im Papierkorb: {what}, {size}.', 'Everything in the trash: {what}, {size}.'],
+  // what the trash holds: "2 Diashows", "1 unlesbarer Eintrag", "2 Diashows und 1 unlesbarer Eintrag"
+  trashShows: ['{n} Diashows', '{n} slideshows'],
+  trashShows1: ['1 Diashow', '1 slideshow'],
+  trashDamagedCount: ['{n} unlesbare Einträge', '{n} unreadable entries'],
+  trashDamagedCount1: ['1 unlesbarer Eintrag', '1 unreadable entry'],
+  trashShowsAndDamaged: ['{shows} und {damaged}', '{shows} and {damaged}'],
   trashFinal: ['Mit ihnen gehen ihre älteren Versionen, der Rückgängig-Verlauf, die hochgeladenen Fotos, die Export-Aufträge und die Gesichtsdaten. Das lässt sich nicht rückgängig machen.', 'Their older versions, undo history, uploaded photos, export jobs and face data go with them. This cannot be undone.'],
   trashRestored: ['„{name}“ ist wiederhergestellt.', '“{name}” is restored.'],
   trashRenamed: ['{n} hochgeladene Dateien hatten inzwischen einen Namensvetter und heißen jetzt anders; die Diashow zeigt sie trotzdem.', '{n} uploaded files had a namesake there meanwhile and got another name; the slideshow still shows them.'],
   trashRenamed1: ['1 hochgeladene Datei hatte inzwischen einen Namensvetter und heißt jetzt anders; die Diashow zeigt sie trotzdem.', '1 uploaded file had a namesake there meanwhile and got another name; the slideshow still shows it.'],
+  trashHistoryDropped: ['Der Rückgängig-Verlauf passte nicht mehr zur Diashow und ist gelöscht; frühere Schritte lassen sich nicht mehr rückgängig machen.', 'The undo history no longer fitted the slideshow and was deleted; earlier steps can no longer be undone.'],
   trashIdTaken: ['Diese Diashow lässt sich nicht wiederherstellen: Ihre Kennung gehört inzwischen einer anderen Diashow. Es wurde nichts verändert.', 'This slideshow cannot be restored: its id belongs to another slideshow now. Nothing was changed.'],
   trashNotFound: ['Diese Diashow ist nicht mehr im Papierkorb.', 'This slideshow is no longer in the trash.'],
   trashDamaged: ['Unlesbarer Eintrag', 'Unreadable entry'],
   trashDamagedHint: ['Lässt sich nicht wiederherstellen, nur endgültig löschen.', 'Cannot be restored, only deleted permanently.'],
   trashDueBanner: ['Im Papierkorb, Löschfrist erreicht:', 'In the trash, deletion date reached:'],
   trashSettingHint: ['Gelöschte Diashows bleiben 30 Tage im Papierkorb, mit ihren Gesichtsdaten und den hochgeladenen Fotos der Klasse; danach löscht die App sie endgültig.', 'Deleted slideshows stay in the trash for 30 days, with their face data and the class’s uploaded photos; after that the app deletes them permanently.'],
-  trashSettingInfo: ['Papierkorb: {n} Diashows, {size}', 'Trash: {n} slideshows, {size}'],
-  trashSettingInfo1: ['Papierkorb: 1 Diashow, {size}', 'Trash: 1 slideshow, {size}'],
+  trashSettingInfo: ['Papierkorb: {what}, {size}', 'Trash: {what}, {size}'],
   restore: ['Wiederherstellen', 'Restore'],
   missingFiles: ['{n} Dateien wurden nicht gefunden (verschoben oder umbenannt).', '{n} files were not found (moved or renamed).'],
   missingFiles1: ['1 Datei wurde nicht gefunden (verschoben oder umbenannt).', '1 file was not found (moved or renamed).'],
@@ -939,6 +944,7 @@ const S = {
   stripZoomIn: ['Größere Folien', 'Larger slides'],
   stripZoomOut: ['Kleinere Folien', 'Smaller slides'],
   stripFit: ['Ganze Diashow zeigen', 'Show the whole slideshow'],
+  stripOverview: ['Übersicht', 'Overview'],
   searchOpen: ['Suchen', 'Search'],
   searchLabel: ['Folien suchen', 'Search slides'],
   searchPlaceholder: ['Name, Kapitel, Datum, Person…', 'Name, chapter, date, person…'],
@@ -989,9 +995,12 @@ const S = {
 export type StringKey = keyof typeof S
 
 let lang: 0 | 1 = navigator.language.toLowerCase().startsWith('de') ? 0 : 1
+/** The Windows language the UI language was chosen from (e.g. en-GB). */
+let windowsTag = navigator.language
 
 export function setLocale(locale: string): void {
   lang = locale.toLowerCase().startsWith('de') ? 0 : 1
+  windowsTag = locale
 }
 
 export function t(key: StringKey): string {
@@ -1000,6 +1009,15 @@ export function t(key: StringKey): string {
 
 export function localeTag(): string {
   return lang === 0 ? 'de-DE' : 'en-US'
+}
+
+/**
+ * How the user writes numeric dates ("12/5": the search reads it in this order): German with a German
+ * UI, else the Windows language itself, so a British or French Windows reads the day first and an
+ * American one the month.
+ */
+export function dateLocale(): string {
+  return lang === 0 ? 'de-DE' : windowsTag || 'en-US'
 }
 
 export function pick<T>(v: { de: T; en: T }): T {

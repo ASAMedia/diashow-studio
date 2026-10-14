@@ -11,6 +11,13 @@ import { followPointer } from '../pointerDrag'
 import { MediaThumb } from './EditedPicture'
 import type { StripDetail } from './stripScale'
 
+/** "Folie 12: IMG_0003.JPG" (with "missing" or "unreadable"): the name of a card, and of a bar in the overview. */
+export function slideLabel(s: TimelineSlide): string {
+  const name = s.kind === 'text' || s.kind === 'title' ? s.title?.text : s.media.map((m) => m.name).join(', ')
+  const failed = s.media.find((m) => m.status === 'error')
+  return `${t('slide')} ${s.index + 1}: ${name || (s.kind === 'title' ? t('title') : t('textSlide'))}${failed ? ` – ${failed.error === 'missing' ? t('missing') : t('errUnreadable')}` : ''}`
+}
+
 export function SlideCard(props: {
   slide: TimelineSlide
   /** How much the card shows at the filmstrip's zoom. */
@@ -64,7 +71,7 @@ export function SlideCard(props: {
       aria-pressed={props.selected}
       data-keys="app"
       data-index={s.index}
-      aria-label={`${t('slide')} ${s.index + 1}: ${name || (s.kind === 'title' ? t('title') : t('textSlide'))}${failed ? ` – ${failed.error === 'missing' ? t('missing') : t('errUnreadable')}` : ''}`}
+      aria-label={slideLabel(s)}
       data-entry={s.entries[0]?.id}
       onKeyDown={props.onKeyDown}
       draggable={s.kind !== 'title'}

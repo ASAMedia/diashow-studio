@@ -1,8 +1,16 @@
 // Searching the filmstrip (Ctrl+F): which slides match a query and what matched. A query is split
 // into terms that must all match (in any field): words in file names, titles, chapter and text slides,
 // captions, text boxes and people's names; kinds ("Video", "Live", "Text"); and capture dates, in
-// German or English ("12.5.", "12. Mai", "May 12", "Dienstag", "Mai 2026", "2026-05-12"). Pure, so
-// the parsing and matching are unit tested (tests/filmstrip.test.ts).
+// German or English ("12.5.", "12. Mai", "12.Mai", "May 12", "Dienstag", "Mai 2026", "2026-05-12").
+//
+// A month or weekday name is a date only when it is written out or abbreviated ("Mai", "Jan", "Jan.",
+// "Mo.", "Sept") or is the start of a name from four letters on ("Dien", "Octo"); shorter starts are
+// ordinary words ("die", "mit", "Sam"). Such a word, and a number like "1.5" (a date without the dot,
+// or a version), is searched as text only when the show has it as something other than a date: in a
+// person's name, or inside a name, file name, caption, chapter or text ("Jan", "Maike", "Freibad",
+// "Version 1.5"). A day title like "14. Juli 2025" doesn't count, it names the date. The date can still
+// be asked for unmistakably: "Jan.", "Januar 2026", "12. Jan", "1.5.". Pure, so the parsing and matching
+// are unit tested (tests/filmstrip.test.ts).
 import type { Timeline, TimelineSlide } from '@shared/timeline'
 import type { MediaItem, Person, Project, TextEntry } from '@shared/types'
 import { peopleKey, photoPersonFaces, videoPersonTracks } from '@shared/people'
@@ -30,7 +38,10 @@ export interface DateQuery {
   weekday?: number
 }
 
-/** One part of a query: a word (also matched as a date when it is a month, weekday or year), or a date only. */
+/**
+ * One part of a query: a word, a date, or both (a month or weekday name, a year, "1.5"). With both,
+ * the date counts only while the show doesn't have the word as text (searchSlides); a year always counts.
+ */
 export interface SearchTerm {
   raw: string
   word?: string
@@ -42,39 +53,48 @@ export function fold(s: string): string {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/ß/g, 'ss')
 }
 
-// folded names, German and English (abbreviations as the date formats of both languages write them)
-const MONTHS: readonly (readonly string[])[] = [
-  ['januar', 'janner', 'jaenner', 'january', 'jan'],
-  ['februar', 'feber', 'february', 'feb'],
-  ['marz', 'maerz', 'march', 'mar', 'mrz'],
-  ['april', 'apr'],
-  ['mai', 'may'],
-  ['juni', 'june', 'jun'],
-  ['juli', 'july', 'jul'],
-  ['august', 'aug'],
-  ['september', 'sept', 'sep'],
-  ['oktober', 'october', 'okt', 'oct'],
-  ['november', 'nov'],
-  ['dezember', 'december', 'dez', 'dec']
+/** Folded names of a month or weekday, German and English. */
+interface DateName {
+  full: readonly string[]
+  /** Abbreviations as the date formats of both languages write them; those of two letters only with their dot ("Di."). */
+  short: readonly string[]
+}
+const MONTHS: readonly DateName[] = [
+  { full: ['januar', 'janner', 'jaenner', 'january'], short: ['jan'] },
+  { full: ['februar', 'feber', 'february'], short: ['feb'] },
+  { full: ['marz', 'maerz', 'march'], short: ['mar', 'mrz'] },
+  { full: ['april'], short: ['apr'] },
+  { full: ['mai', 'may'], short: [] },
+  { full: ['juni', 'june'], short: ['jun'] },
+  { full: ['juli', 'july'], short: ['jul'] },
+  { full: ['august'], short: ['aug'] },
+  { full: ['september'], short: ['sept', 'sep'] },
+  { full: ['oktober', 'october'], short: ['okt', 'oct'] },
+  { full: ['november'], short: ['nov'] },
+  { full: ['dezember', 'december'], short: ['dez', 'dec'] }
 ]
-const WEEKDAYS: readonly (readonly string[])[] = [
-  ['sonntag', 'sunday', 'sun'],
-  ['montag', 'monday', 'mon'],
-  ['dienstag', 'tuesday', 'tue', 'tues'],
-  ['mittwoch', 'wednesday', 'wed'],
-  ['donnerstag', 'thursday', 'thu', 'thur', 'thurs'],
-  ['freitag', 'friday', 'fri'],
-  ['samstag', 'saturday', 'sat']
+const WEEKDAYS: readonly DateName[] = [
+  { full: ['sonntag', 'sunday'], short: ['so', 'sun'] },
+  { full: ['montag', 'monday'], short: ['mo', 'mon'] },
+  { full: ['dienstag', 'tuesday'], short: ['di', 'tue', 'tues'] },
+  { full: ['mittwoch', 'wednesday'], short: ['mi', 'wed'] },
+  { full: ['donnerstag', 'thursday'], short: ['do', 'thu', 'thur', 'thurs'] },
+  { full: ['freitag', 'friday'], short: ['fr', 'fri'] },
+  { full: ['samstag', 'saturday'], short: ['sa', 'sat'] }
 ]
-// German short weekdays ("Di., 12. Mai") only with their dot: "so" or "do" alone are ordinary words
-const WEEKDAYS_SHORT = ['so.', 'mo.', 'di.', 'mi.', 'do.', 'fr.', 'sa.']
 
-/** Finds a name: the whole word, or the start of a name when at least three letters are typed. */
-function nameIndex(names: readonly (readonly string[])[], word: string): number | null {
+/**
+ * Finds a name: written out or abbreviated (at least three letters, two with the dot: "Mai", "Jan",
+ * "Di."), or the start of a written-out name from four letters on ("Sept", "Dien"). Shorter starts are
+ * ordinary words ("die", "mit", "Sam").
+ */
+function nameIndex(names: readonly DateName[], word: string): number | null {
+  const dotted = word.endsWith('.')
   const w = fold(word).replace(/\.$/, '')
-  if (w.length < 3) return null
-  for (const [i, list] of names.entries()) if (list.includes(w)) return i
-  for (const [i, list] of names.entries()) if (list.some((n) => n.length > 3 && n.startsWith(w))) return i
+  if (w.length < (dotted ? 2 : 3)) return null
+  for (const [i, n] of names.entries()) if (n.full.includes(w) || n.short.includes(w)) return i
+  if (w.length < 4) return null
+  for (const [i, n] of names.entries()) if (n.full.some((x) => x.length > w.length && x.startsWith(w))) return i
   return null
 }
 
@@ -86,8 +106,7 @@ export function monthOf(word: string): number | null {
 
 /** 0 (Sunday)..6 for a German or English weekday ("Dienstag", "Di.", "tue"), else null. */
 export function weekdayOf(word: string): number | null {
-  const short = WEEKDAYS_SHORT.indexOf(fold(word))
-  return short >= 0 ? short : nameIndex(WEEKDAYS, word)
+  return nameIndex(WEEKDAYS, word)
 }
 
 const isYear = (s: string | undefined): boolean => !!s && /^(19|20)\d{2}$/.test(s)
@@ -100,13 +119,39 @@ function dayOf(s: string | undefined): number | null {
   return m && validDay(Number(m[1])) ? Number(m[1]) : null
 }
 
+const monthFirstCache = new Map<string, boolean>()
+/**
+ * Whether `locale` writes the month in front of the day in numeric dates: "5/12/2026" in en-US,
+ * "12/05/2026" in en-GB and German. Asked from Intl, so every Windows language gets its own order.
+ */
+export function monthBeforeDay(locale: string): boolean {
+  let first = monthFirstCache.get(locale)
+  if (first === undefined) {
+    try {
+      const parts = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'numeric' }).formatToParts(new Date(2026, 4, 12)).map((p) => p.type)
+      first = parts.indexOf('month') < parts.indexOf('day')
+    } catch {
+      first = false
+    }
+    monthFirstCache.set(locale, first)
+  }
+  return first
+}
+
+/** "12.Mai" and "12.Mai2026" written without spaces: day, month (and year) as tokens of their own. */
+function splitGlued(token: string): string[] {
+  const m = /^(\d{1,2}\.)(\p{L}+\.?)(\d{4})?$/u.exec(token)
+  return m && monthOf(m[2]) != null ? [m[1], m[2], ...(m[3] ? [m[3]] : [])] : [token]
+}
+
 /**
  * Splits a query into terms. Numeric dates: "12.5.", "12.5.2026", "12.05.26" (day first),
- * "2026-05-12" and "5/12" (month first in English, day first in German, as `locale` writes them).
+ * "2026-05-12" and "5/12" (in the order `locale` writes them: month first in en-US, day first in
+ * German and British English). "1.5" without the date's dot is a word too.
  */
 export function parseQuery(query: string, locale = 'de-DE'): SearchTerm[] {
-  const tokens = query.trim().split(/[\s,;]+/).filter(Boolean)
-  const monthFirst = !locale.toLowerCase().startsWith('de')
+  const tokens = query.trim().split(/[\s,;]+/).filter(Boolean).flatMap(splitGlued)
+  const monthFirst = monthBeforeDay(locale)
   const terms: SearchTerm[] = []
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i]
@@ -117,9 +162,11 @@ export function parseQuery(query: string, locale = 'de-DE'): SearchTerm[] {
       terms.push({ raw: t, date: { year: Number(m[1]), month: Number(m[2]), ...(m[3] ? { day: Number(m[3]) } : {}) } })
       continue
     }
-    m = /^(\d{1,2})\.(\d{1,2})\.?(\d{4}|\d{2})?$/.exec(t)
+    m = /^(\d{1,2})\.(\d{1,2})(\.(\d{4}|\d{2})?)?$/.exec(t)
     if (m && validDay(Number(m[1])) && validMonth(Number(m[2]))) {
-      terms.push({ raw: t, date: { day: Number(m[1]), month: Number(m[2]), ...(m[3] ? { year: fullYear(m[3]) } : {}) } })
+      const date = { day: Number(m[1]), month: Number(m[2]), ...(m[4] ? { year: fullYear(m[4]) } : {}) }
+      // without the date's last dot it may be a number as well ("Version 1.5")
+      terms.push(m[3] ? { raw: t, date } : { raw: t, word: fold(t), date })
       continue
     }
     m = /^(\d{1,2})\/(\d{1,2})(?:\/(\d{4}|\d{2}))?$/.exec(t)
@@ -139,6 +186,8 @@ export function parseQuery(query: string, locale = 'de-DE'): SearchTerm[] {
       i += withYear ? 2 : 1
       continue
     }
+    // a name with its dot ("Jan.", "Mo.") is a date only; written out or without the dot, a word too
+    const named = (date: DateQuery): SearchTerm => (t.endsWith('.') ? { raw: t, date } : { raw: t, word: fold(t), date })
     const month = monthOf(t)
     if (month != null) {
       // "May 12", "May 12 2026", "Mai 2026"
@@ -151,13 +200,13 @@ export function parseQuery(query: string, locale = 'de-DE'): SearchTerm[] {
         terms.push({ raw: `${t} ${next}`, date: { month, year: Number(next) } })
         i += 1
       } else {
-        terms.push({ raw: t, word: fold(t).replace(/\.$/, ''), date: { month } })
+        terms.push(named({ month }))
       }
       continue
     }
     const weekday = weekdayOf(t)
     if (weekday != null) {
-      terms.push({ raw: t, word: fold(t).replace(/\.$/, ''), date: { weekday } })
+      terms.push(named({ weekday }))
       continue
     }
     if (isYear(t)) {
@@ -167,6 +216,32 @@ export function parseQuery(query: string, locale = 'de-DE'): SearchTerm[] {
     terms.push({ raw: t, word: fold(t) })
   }
   return terms
+}
+
+// Dates written in a text (folded): numeric ones, a day with a month, a month with a year, a month or
+// weekday written out, an abbreviation with its dot. They name a date, so a date word found in them
+// stays a date (withoutDates).
+const alternatives = (names: readonly string[]): string => [...new Set(names)].sort((a, b) => b.length - a.length).join('|')
+const MONTH_WORD = `(?:${alternatives(MONTHS.flatMap((n) => [...n.full, ...n.short]))})\\.?`
+const DAY_WORD = '\\d{1,2}(?:\\.|st|nd|rd|th)?'
+const DATE_IN_TEXT = new RegExp(
+  '(?<![\\p{L}\\d])(?:' +
+    ['\\d{1,2}\\.\\d{1,2}\\.(?:\\d{4}|\\d{2})?', '\\d{4}-\\d{1,2}(?:-\\d{1,2})?', '\\d{1,2}/\\d{1,2}(?:/(?:\\d{4}|\\d{2}))?',
+      `${DAY_WORD}\\s*${MONTH_WORD}(?:,?\\s*\\d{4})?`, `${MONTH_WORD}\\s*${DAY_WORD}(?:,?\\s*\\d{4})?`, `${MONTH_WORD}\\s*\\d{4}`,
+      `(?:${alternatives([...MONTHS, ...WEEKDAYS].flatMap((n) => n.full))})`, `(?:${alternatives([...MONTHS, ...WEEKDAYS].flatMap((n) => n.short))})\\.`].join('|') +
+    ')(?![\\p{L}\\d])',
+  'gu'
+)
+
+const undated = new Map<string, string>()
+/** A text folded and without the dates written in it. */
+function withoutDates(text: string): string {
+  let s = undated.get(text)
+  if (s === undefined) {
+    if (undated.size > 5000) undated.clear()
+    undated.set(text, (s = fold(text).replace(DATE_IN_TEXT, ' ')))
+  }
+  return s
 }
 
 /** True when a capture time (ms, local time) has every part of the date query. 0 = unknown date. */
@@ -285,17 +360,36 @@ function matchTerm(term: SearchTerm, s: TimelineSlide, texts: TextField[], times
 }
 
 /**
+ * Whether the show has `word` as something other than a date: in the name of a person who is in a
+ * photo or video, or in a text where it is not part of a date ("Jan" in "Jan am Strand", "mai" in
+ * "Maike", "frei" in "Freibad", "1.5" in "Version 1.5"; not "Juli" in a day title "14. Juli 2025").
+ */
+function foundAsText(word: string, tl: Timeline, textsAt: (s: TimelineSlide) => TextField[], people: readonly Person[], all: readonly Person[]): boolean {
+  const named = word.length >= 2 ? people.filter((p) => fold(p.name ?? '').includes(word)) : []
+  return tl.slides.some((s) => textsAt(s).some((f) => withoutDates(f.text).includes(word)) || named.some((p) => s.media.some((m) => shows(m, p, all))))
+}
+
+/** A year alone stays a date also when it is in a text: phones put it into file names ("IMG_20250714"). */
+const yearOnly = (q: DateQuery): boolean => q.year != null && q.month == null && q.day == null && q.weekday == null
+
+/**
  * The slides matching every term of `query`, in show order, each with what matched (of all terms,
- * the most telling: a file name or title before a person, a kind or a date).
+ * the most telling: a file name or title before a person, a kind or a date). `locale`: the Windows
+ * language the UI follows (the order of day and month in "12/5").
  */
 export function searchSlides(tl: Timeline, project: Pick<Project, 'people'>, query: string, locale = 'de-DE'): SearchHit[] {
-  const terms = parseQuery(query, locale)
-  if (!terms.length) return []
   const all = project.people ?? []
   const people = all.filter((p) => !!p.name?.trim())
+  const textCache: (TextField[] | undefined)[] = []
+  const textsAt = (s: TimelineSlide): TextField[] => (textCache[s.index] ??= textsOf(s))
+  // a word that may be a date or something else ("Jan", "Mai", "1.5") is text only where the show has it as text
+  const terms = parseQuery(query, locale).map((term) =>
+    term.word && term.date && !yearOnly(term.date) && foundAsText(term.word, tl, textsAt, people, all) ? { raw: term.raw, word: term.word } : term
+  )
+  if (!terms.length) return []
   const out: SearchHit[] = []
   for (const s of tl.slides) {
-    const texts = textsOf(s)
+    const texts = textsAt(s)
     let cached: number[] | null = null
     const times = (): number[] => (cached ??= timesOf(tl, s))
     let best: Omit<SearchHit, 'index'> | null = null

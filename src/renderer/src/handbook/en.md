@@ -60,9 +60,9 @@ The editor has three areas: the **preview** in the middle, the tabs **Themes**, 
 
 ## Adding and inserting photos {#add}
 
-- **Adding:** drag photos, videos or folders into the window, or use the **+** button at the end of the filmstrip with **Add photos and videos…** and **Add folder…**. They go in behind the selected slide, or at the end when nothing is selected.
+- **Adding:** drag photos, videos or folders into the window, or use the **+** button at the end of the filmstrip with **Add photos and videos…** and **Add folder…**. They go in behind the selected slide, or at the end when nothing is selected, but in front of **End credits**.
 - **Inserting at a place:** drag them from Explorer between two cards of the filmstrip; a blue line shows where they go. Dropped on the middle of a card, they join that slide when the theme shows several photos per slide and there is room.
-- **Copy and paste:** files copied in Explorer ([[Ctrl+C]]) go in behind the selected slide with [[Ctrl+V]]. A copied picture without a file, such as a screenshot taken with [[Win+Shift+S]], is saved in `Documents\Diashow Studio\Pasted`.
+- **Copy and paste:** files copied in Explorer ([[Ctrl+C]]) go in behind the selected slide with [[Ctrl+V]], or without a selection at the end in front of the end credits. A copied picture without a file, such as a screenshot taken with [[Win+Shift+S]], is saved in `Documents\Diashow Studio\Pasted`.
 - **Insert…** in a slide's menu picks files and puts them behind that slide.
 
 Live Photos and RAW+JPEG go in as one photo. The new slides are selected afterwards; [[Ctrl+Z]] takes back the whole insert in one step. In themes with several photos per slide, the other slides stay as they are (see **Group automatically** under [Themes](#themes)).
@@ -80,7 +80,9 @@ A notice at the bottom right says how many were skipped. **Show** selects the ex
 ## Filmstrip: zoom, search and chapters {#filmstrip}
 
 - **Zoom:** − and + or the slider above the filmstrip make the slides smaller or larger, and so does [[Ctrl]]+mouse wheel over the filmstrip. **Show the whole slideshow** fits every slide into the width. Small cards show only pictures; a thin blue line marks each chapter.
-- **Search:** [[Ctrl+F]] or the magnifier. It looks in file names, chapters, captions, text slides, text boxes, names from the people list and the capture date (“5/12”, “May 12”, “Tuesday”, “May 2025”). “Video” and “Live” find videos and Live Photos. With several words, each must match.
+- **Overview:** when the slideshow is too long for the smallest cards (from about 200 slides), the filmstrip becomes an overview: each slide is a thin bar in the colour of its picture, with chapter marks, the selection and the search matches. A click selects a slide and shows it, a double-click or [[Ctrl]]+mouse wheel zooms back in there. [[←]] and [[→]] still go from slide to slide.
+- **Search:** [[Ctrl+F]] or the magnifier. It looks in file names, chapters, captions, text slides, text boxes, names from the people list and the capture date (“12 May”, “May 12”, “Tuesday”, “May 2025”; “12/5” in the order your Windows language writes dates). “Video” and “Live” find videos and Live Photos. With several words, each must match.
+- When a word is in the slideshow as a name or text (“Jan”, “Sunset.jpg”, “Version 1.5”), only that is searched, not the date. Then “Jan.”, “January 2026” or “12 Jan” find the date.
 - The matches are listed and marked yellow in the filmstrip. [[Enter]] / [[Shift+Enter]] or [[F3]] / [[Shift+F3]] go to the next / previous match, [[Esc]] closes the search.
 - **Chapters:** the **Chapters** menu lists the title, chapters and text slides with their time; a click jumps there.
 
@@ -234,7 +236,8 @@ A [ZIP archive](#projects) is a copy that the clean-up cannot reach; delete it y
 ![The trash](trash.jpg)
 
 - **Trash (n)** at the bottom of the home screen lists the deleted slideshows: when they were deleted, when they are deleted permanently, and their size.
-- **Restore** brings a slideshow back as it was, also after a restart. Another slideshow is never overwritten.
+- **Restore** brings a slideshow back as it was, also after a restart. Another slideshow is never overwritten. If another file now sits where an uploaded photo was, the photo comes back under another name; the undo history then no longer fits and is deleted.
+- A crash or power cut in the middle of deleting or restoring does no harm: at the next start the app finishes the step or takes it back.
 - **Delete permanently…** and **Empty trash…** delete at once, after asking. After 30 days the app deletes a slideshow in the trash permanently by itself.
 - The deletion date still counts in the trash. When it has come, the home screen offers **Delete permanently…**.
 
