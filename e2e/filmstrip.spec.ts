@@ -554,7 +554,9 @@ test('filmstrip: a 1000-slide show as an overview of bars', async () => {
       g.fillRect(0, 0, 1, 1)
       return [...g.getImageData(0, 0, 1, 1).data]
     })
-    expect((await pixel(plain, 50))[3]).toBe(255)
+    // the bar is there: at fractional widths (about 1.4 px, depending on the window) the sampled pixel can be
+    // an antialiased edge, so not fully opaque (240 on GitHub's runner)
+    expect((await pixel(plain, 50))[3]).toBeGreaterThan(200)
     await expect.poll(async () => (await pixel(plain, 50)).slice(0, 3)).not.toEqual(empty.slice(0, 3))
 
     // ---- a click on a bar selects that slide and shows it
