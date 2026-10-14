@@ -8,7 +8,7 @@ import { audibleClips } from '@shared/audioPlan'
 import { showsWhole } from '../engine/draw'
 import { useStore } from '../store'
 import { timelineOf, useTimeline } from '../timeline'
-import { fmtTime, localeTag, t } from '../i18n'
+import { count, fmtTime, localeTag, t } from '../i18n'
 import { Check, Field, Section, Slider, TITLE_STYLES } from './ui'
 import { BatchAdjust, EditSection, LivePhotoControls, PanoramaControls, panoramaEntries, PrivacySection, SpeedSelect } from './SlideTools'
 import { BatchPanel } from './BatchPanel'
@@ -269,7 +269,7 @@ export function SlidePanel() {
     const videos = entries.filter((x) => x.type === 'video' && media(x)?.hasAudio).length
     return (
       <>
-        <Section title={t('itemsOnSlide').replace('{n}', String(entries.length))}>
+        <Section title={count('itemsOnSlide', entries.length)}>
           <div className="items">
             {entries.map((e) => {
               const m = media(e)

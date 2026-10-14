@@ -147,10 +147,10 @@ describe('share server', () => {
       expect(page.headers['x-content-type-options']).toBe('nosniff')
       expect(page.headers['referrer-policy']).toBe('no-referrer')
       const html = page.body.toString()
-      expect(html).toContain('Fotos &amp; Videos teilen')
+      expect(html).toContain('Fotos und Videos teilen')
       expect(html).toContain('Klassenfahrt &lt;Berlin&gt;')
       expect(html).not.toContain('<Berlin>')
-      expect((await req(port, 'GET', `/${up}/`, { headers: { 'Accept-Language': 'en-GB' } })).body.toString()).toContain('Share photos &amp; videos')
+      expect((await req(port, 'GET', `/${up}/`, { headers: { 'Accept-Language': 'en-GB' } })).body.toString()).toContain('Share photos and videos')
       expect((await req(port, 'GET', `/${dl}/`)).status).toBe(200)
       for (const path of [
         '/',

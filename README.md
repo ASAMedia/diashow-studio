@@ -6,7 +6,7 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
 
 ## Features
 
-- **Getting started:** on the first start a three-step assistant makes a first show (photos or a folder, theme and music, then play or export). It can be skipped and is also on the home screen ("New slideshow with assistant").
+- **Getting started:** on the first start a three-step assistant makes a first show (photos or a folder, theme and music, then play or export). It can be skipped and is also on the home screen ("New slideshow with assistant…").
 - **Handbook:** F1 (or Handbook in Settings and the "⋯" menu) opens a short handbook in German or English, with screenshots and a searchable table of contents. It is bundled with the app and works offline.
 - **Light or dark:** Settings → Appearance offers System (follows Windows), Light and Dark. The preview, fullscreen player and presentation stay dark, because photos look best there.
 - **Keyboard and screen readers:**
@@ -83,7 +83,7 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
   - "Check faces…" before the export (optional) lists the slides whose detected faces are not pixelated.
   - The pixelation sits on the picture itself, so it follows crops and Ken Burns moves and appears in the preview and the export.
   - Faces are analysed in the background in Web Workers (photos first, then a frame every 0.5 s of each video), paused while the show plays, exports or presents.
-  - **Clean up after the project** ("⋯" menu, the eraser on a slideshow on the home screen, or Settings → Privacy) lists with their sizes what the app keeps for a slideshow and deletes what you pick, for good:
+  - **Clean up after the project** ("⋯" menu, the eraser on a slideshow on the home screen, or Settings → Privacy) lists with their sizes what the app keeps for a slideshow and deletes what you pick, permanently:
     - face data;
     - photos and videos pupils uploaded (all, or only those not in the show), and pictures pasted with Ctrl+V;
     - the cache, older versions, the undo history and finished export jobs.
@@ -91,7 +91,7 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
     Face data leaves the project, its older versions and the cache. Everything that is pixelated stays pixelated, because marked people become fixed areas, but new photos are no longer recognised automatically. Your own photos, videos, music and exported videos are never touched.
   - **Deletion date:** in 1, 3, 6 or 12 months or on a date (also offered after an export). When it comes, the slideshow on the home screen gets a hint and a banner says "Deletion date reached: clean up?", with "Remind me in a month".
   - **Trash:** deleting a slideshow moves it to the trash for 30 days, with its older versions, undo history, the pupils' uploads and finished export jobs; its cache is deleted (made again on restore).
-    - "Trash (n)" on the home screen restores a show as it was (never over another one), deletes it permanently or empties the trash; after 30 days the app deletes it for good.
+    - "Trash (n)" on the home screen restores a show as it was (never over another one), deletes it permanently or empties the trash; after 30 days the app does that by itself.
     - It lives in `Documents\Diashow Studio\.trash` (show, versions, uploads) and `%APPDATA%\Diashow Studio\trash` (undo history, export jobs), so every move is a rename on the same drive (`src/main/trash.ts`).
     - A show in the trash keeps its face data and deletion date (the home screen then offers "Delete permanently"); Settings → Privacy shows the trash's size and empties it. Shows in the trash are not listed, saved, opened by kiosk mode or named in the diagnostics package. A show with an unfinished export can't be deleted until the export is done or removed.
 - **Automatic help:**
@@ -128,12 +128,12 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
 - **Projects:**
   - Home screen: drop photos, videos or folders onto a show's card to add them to that show: it opens, they are sorted into their day by capture time (a new day title if the show has day titles), repeats are skipped with the notice, one undo step. The drop box and the rest of the home screen make a new show.
   - Duplicate (a show's card, or "⋯" in the editor): an independent copy "Name (Kopie)" / "(Copy)", "(Kopie 2)" …, with everything the show holds (slides, settings, music, edits, captions, pixelation, people and face data, deletion date); its title slide keeps the original name. It opens in the editor; older versions, undo history and export jobs stay with the original.
-    - Pupils' uploads and pasted pictures stay in place and belong to both: the clean-up and the trash of one leave what the other uses, also while that one lies in the trash, and the last one deleted for good takes them along (`src/shared/duplicate.ts`, `src/main/duplicate.ts`, `releaseShared` in `src/main/cleanup.ts`).
+    - Pupils' uploads and pasted pictures stay in place and belong to both: the clean-up and the trash of one leave what the other uses, also while that one lies in the trash, and the last one deleted permanently takes them along (`src/shared/duplicate.ts`, `src/main/duplicate.ts`, `releaseShared` in `src/main/cleanup.ts`).
   - While a dialog is open, files dragged into the window are refused (no overlay, the "no" cursor) with a short "Close the dialog first"; only the assistant takes them (`dialogRefusesFiles` in `keys.ts`).
   - Automatic backups: before a save, the previous version is kept (at most every 10 minutes, the last 20). Restore them with "Restore an older version…" in the "⋯" menu.
   - Missing originals (moved folder, new drive letter) are found again with "Search a folder…" in the banner.
   - A project made elsewhere that points to network shares (`\\host\share`) doesn't open those files until you allow it in a banner, because Windows would sign in to that host with your account. Shares you import from yourself are trusted automatically.
-  - Settings show how much cache each part uses, with buttons to remove unused files, 4K versions or video proxies.
+  - Settings show how much cache each part uses, with buttons to remove unused files, 4K versions or video copies (proxies).
   - Damaged files: every project is checked when it opens (also packed ones). Broken or unknown parts are dropped or repaired, and a notice says what changed; the file as it was stays as a backup. A file that can't be read at all (e.g. cut off by a power loss) is listed on the home screen with "Repair…": rescue what is readable, or take one of its backups. The damaged file is kept.
   - The project format has a version and a migration chain (`src/main/projectSchema.ts`); a project saved by a newer version is refused with a hint to update instead of being opened half.
 - **Share over Wi-Fi** ("⋯" menu), local network only, no internet:
@@ -239,7 +239,40 @@ npm run release-check   # before tagging: what the CI and the release workflow w
 
 `DIASHOW_GPU=integrated` makes a laptop with two graphics chips behave like a PC with only integrated graphics (rendering, Quick Sync, the integrated Vulkan device, no NVENC or CUDA); `DIASHOW_GPU=discrete` renders on the high-performance GPU. `e2e/exportspeed.spec.ts` (with `DIASHOW_ORIGINALS_DIR`) prints which chip WebGL uses, the encoders, and speed and quality of an export.
 
-The handbook lives in `src/renderer/src/handbook/de.md` and `en.md` (a small Markdown subset, see `handbook/markdown.tsx`). Its screenshots in `src/renderer/public/handbook/<de|en>/` are made from the sample trip (`npm run samples`) by `npx electron-vite build && DIASHOW_HANDBOOK_SHOTS=1 npx playwright test e2e/handbook-shots.spec.ts`; without the samples they fall back to the generated test media. `DIASHOW_DEMO_VIDEO=1 npx playwright test e2e/demo-video.spec.ts` makes the website's demo video (`docs/media/demo.mp4`) with the app from the same trip.
+The handbook lives in `src/renderer/src/handbook/de.md` and `en.md` (a small Markdown subset, see `handbook/markdown.tsx`). Its screenshots in `src/renderer/public/handbook/<de|en>/` are made from the sample trip (`npm run samples`) by `npx electron-vite build && DIASHOW_HANDBOOK_SHOTS=1 npx playwright test e2e/handbook-shots.spec.ts`; without the samples the generated test media make the basic ones, and those that need the trip (panorama, Live Photo, edit view, clean-up, archive, duplicate, trash) stay as they are. `DIASHOW_DEMO_VIDEO=1 npx playwright test e2e/demo-video.spec.ts` makes the website's demo video (`docs/media/demo.mp4`) with the app from the same trip.
+
+**UI wording.** The texts are in `src/renderer/src/i18n.ts` (German and English side by side), `src/main/dialogText.ts` (Windows file dialogs), `src/main/share/pages.ts` (the phones' pages), `src/main/archive/readme.ts` (`LIESMICH.txt` / `README.txt`) and the handbook. German says "du", uses „…“ quotes, the dash – and no "Bitte"; English uses British spelling (colour, licence, recognise, stabilise) and sentence case. A menu item or button that opens a dialog or a file picker where something is still chosen or confirmed ends with "…" (*Archivieren…*, *Einfügen…*, *Diashow löschen…*); commands that act at once (*Duplizieren*) or only show a view (*Einstellungen*, *Handbuch*, *Sichten*) have none. Counts use a real singular: `count('key', n)` takes `key1` ("1 Folie") when there is one, so no "Folie(n)". One term per thing:
+
+| German | English | Where |
+|---|---|---|
+| Diashow | slideshow | everywhere; *Projekt* only for the `.dshow` file (*Projekt öffnen…*, *Projekt packen…*, *Projektdatei*) |
+| Startseite, Karte | home screen, card | the list of slideshows |
+| Assistent | assistant | *Neue Diashow mit Assistent…* |
+| Folie, Textfolie | slide, text slide | filmstrip, *Folie* tab, *Textfolie hinzufügen* |
+| Filmstreifen | filmstrip | the strip of slides at the bottom |
+| Vorschau / Vorschaubilder | preview / thumbnails | the big picture in the editor / small pictures in the cache |
+| Reiter *Themen*, *Musik*, *Dauer*, *Folie* | *Themes*, *Music*, *Duration*, *Slide* tab | the inspector on the right |
+| Thema, Look, Layout | theme, look, layout | *Themen* tab, *Folie* tab |
+| Bildausschnitt | framing | dragging in the preview, Ken Burns |
+| Bildfüllend / Ganzes Bild / Schwenk | Crop to fill / Whole picture / Pan | per photo, panoramas |
+| Bildtext, Textfeld | caption, text box | text on a photo |
+| Kapitel, Tagestitel | chapters, day titles | text slides, *Kapitel* menu |
+| Themenmusik / Song der Themenmusik | theme music / theme song | music that comes with a theme |
+| Videoton | video sound | *Musik* tab, *Folie* tab |
+| Live Photos und Bewegte Fotos | Live Photos and Motion Photos | *Bewegung*: *Aus (Standbild)*, *Live (einmal)*, *Endlosschleife*, *Abpraller* / *Off (still)*, *Live (once)*, *Loop*, *Bounce* |
+| Sichten; herausnehmen, herausgenommen | Review; leave out, left out | the review grid, key X |
+| Ausschuss prüfen… | Find rejects… | blurry photos and doubles |
+| verpixeln, Gesichtsdaten, Personenliste | pixelate, face data, people list | *Gesichter verpixeln…* |
+| Hochgeladene Fotos, hochladen | uploaded photos, upload | *Im WLAN teilen…* |
+| Eingefügte Bilder | pasted pictures | Ctrl+V, folder *Eingefügt* / *Pasted* |
+| Zwischenspeicher, Videokopien, 4K-Fassungen | cache, video copies, 4K versions | Settings → *Speicher*, clean-up |
+| Ältere Versionen, Rückgängig-Verlauf | older versions, undo history | backups, Ctrl+Z after a restart |
+| Exporte, Export-Aufträge | Exports, export jobs | the export queue |
+| Nach dem Projekt aufräumen…, Aufräumen | Clean up after the project…, clean-up | the clean-up dialog |
+| Löschfrist | deletion date | clean-up, trash, archive |
+| Papierkorb; Wiederherstellen; endgültig löschen | trash; Restore; delete permanently | deleted slideshows |
+| Duplizieren, Kopie | Duplicate, copy | a slideshow's card, *⋯* menu |
+| Grafikkarte, Prozessor, Hardware-Encoder | graphics card, processor, hardware encoder | export, system check |
 
 The end-to-end tests run in parallel: each test starts its own app with its own data folder (`DIASHOW_DATA_DIR`), the longest first. `DIASHOW_E2E_WORKERS` sets how many run at once (default: half the logical processors, at most 6; one at a time where the processor draws everything, as on GitHub's runner). The specs that use the Windows clipboard take Playwright's test lock `clipboard` and never run at the same time; a new spec that copies or pastes declares it too: `test('…', { lock: 'clipboard' }, …)`. `e2e/launch.ts` starts the app with Chromium switches that keep a covered window as fast as one in front. `DIASHOW_E2E_ARGS` adds switches: `DIASHOW_SOFTWARE_GL=1 DIASHOW_E2E_ARGS=--disable-gpu` draws with SwiftShader as the runner does (with only `DIASHOW_SOFTWARE_GL=1`, a graphics card still draws). `DIASHOW_E2E_SHARD=1/2` runs one runner's part of the CI's specs.
 

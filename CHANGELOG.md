@@ -2,6 +2,20 @@
 
 All notable changes to Diashow Studio. Versions follow [Semantic Versioning](https://semver.org). The release workflow publishes the section of a version as its release notes.
 
+## [1.8.1] - 2026-10-14
+
+**Downloads**
+
+- `Diashow.Studio-Setup-1.8.1.exe`: installer (no admin rights needed); it updates an installed version and keeps your slideshows and settings.
+- `Diashow.Studio-1.8.1-portable.exe`: runs without installing, e.g. from a USB stick.
+- The installer is not code-signed. If Windows SmartScreen says "Windows protected your PC", choose "More info" and then "Run anyway".
+- `THIRD_PARTY_NOTICES.txt` lists the licences of everything bundled, including all songs. The `ffmpeg-*` archives contain the source code of the bundled FFmpeg build and of every library compiled into it (GPL), listed in `ffmpeg-deps-sources-*.txt`.
+
+**Changes**
+
+- Wording: one term per thing in German and English (Diashow/slideshow, Vorschau/preview, Videokopien/video copies, Themenmusik/theme music, herausgenommen/left out, Textfolie/text slide, Bildtext/caption, endgültig löschen/delete permanently). "…" on every command that opens a dialog or a file picker. "1 Folie" / "3 Folien" instead of "Folie(n)". British spelling throughout. The phones' upload page and the archive's read-me use the same words. A glossary is in the README.
+- Handbook: new chapters for the home screen, adding and inserting photos, the filmstrip, editing photos, panoramas, videos and Live Photos, and the trash; touch screens are covered. New pictures of a panorama, a Live Photo loop, a copy made with Duplicate, and the trash.
+
 ## [1.8.0] - 2026-10-14
 
 **Downloads**

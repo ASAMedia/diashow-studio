@@ -82,8 +82,8 @@ test('duplicates: a folder twice, a renamed copy, drop, Ctrl+V, two pupils uploa
     // ---- the same folder again through "Add folder": nothing is added, and the notice says so
     const updatedAt = await store(page, 'return s.project.updatedAt')
     await answerOpenDialog(app, [trip])
-    await page.getByRole('button', { name: /^(Fotos, Videos oder Text hinzufügen|Add photos, videos or text)$/ }).click()
-    await page.getByRole('menuitem', { name: /^(Ordner hinzufügen|Add folder)$/ }).click()
+    await page.getByRole('button', { name: /^(Fotos, Videos oder Textfolie hinzufügen|Add photos, videos or a text slide)$/ }).click()
+    await page.getByRole('menuitem', { name: /^(Ordner hinzufügen…|Add folder…)$/ }).click()
     const all4 = de ? 'Alle 4 Fotos sind schon in der Diashow – es wurde nichts hinzugefügt.' : 'All 4 photos are already in the slideshow – nothing was added.'
     await expect(noticeText).toHaveText(all4)
     await expect(announce).toHaveText(all4)
@@ -106,7 +106,7 @@ test('duplicates: a folder twice, a renamed copy, drop, Ctrl+V, two pupils uploa
     await expect(notice).toBeVisible()
 
     // "Add anyway": they come in where they would have gone (the end), in one undo step
-    await notice.getByRole('button', { name: /^(Trotzdem einfügen|Add anyway)$/ }).focus()
+    await notice.getByRole('button', { name: /^(Trotzdem hinzufügen|Add anyway)$/ }).focus()
     await page.keyboard.press('Enter')
     await expect.poll(async () => (await entryIds(page)).length).toBe(8)
     await expect(notice).toHaveCount(0)

@@ -7,7 +7,7 @@ import { faceSearchProgress, peopleMatches, type PersonMatch } from '@shared/peo
 import { faceCropUrl, useAsyncUrl } from '../faceCrops'
 import { notThisPerson, openPrivacyEditor, personLabel, removePerson, renamePerson } from '../personActions'
 import { useStore } from '../store'
-import { t } from '../i18n'
+import { count, t } from '../i18n'
 import './people.css'
 
 /** First entry of the show that uses a media item. */
@@ -74,7 +74,7 @@ export function PeopleList() {
               <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <input type="text" value={p.name ?? ''} aria-label={`${personLabel(p, people)} – ${t('peopleName')}`} placeholder={`${personLabel(p, people)} – ${t('peopleName')}`} onChange={(e) => renamePerson(p.id, e.target.value)} />
                 <span className="people-meta">
-                  {t('peopleMatches').replace('{p}', String(nPhotos)).replace('{v}', String(list.length - nPhotos))} · {t('peopleSamples').replace('{n}', String(p.desc.length))}
+                  {t('peopleMatches').replace('{p}', String(nPhotos)).replace('{v}', String(list.length - nPhotos))} · {count('peopleSamples', p.desc.length)}
                 </span>
               </div>
               <button className="btn small ghost" disabled={!list.length} aria-expanded={shown} onClick={() => setOpen(shown ? null : p.id)}>

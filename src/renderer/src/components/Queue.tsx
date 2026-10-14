@@ -4,7 +4,7 @@ import { AlertTriangle, Check, FolderOpen, ListOrdered, Loader2, Play, Trash2, X
 import type { ExportJobInfo } from '@shared/exportQueue'
 import { chapterText, type Chapter } from '@shared/chapters'
 import { useStore } from '../store'
-import { fmtTime, t } from '../i18n'
+import { count, fmtTime, t } from '../i18n'
 import { friendly } from '../errors'
 import { Modal } from './Modal'
 
@@ -141,7 +141,7 @@ export function QueueChip() {
   }
   return (
     <button className="chip queue-chip warn" onClick={open}>
-      <AlertTriangle size={13} aria-hidden /> {t('queueInterrupted').replace('{n}', String(stuck))}
+      <AlertTriangle size={13} aria-hidden /> {count('queueInterrupted', stuck)}
     </button>
   )
 }

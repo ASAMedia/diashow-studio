@@ -10,7 +10,7 @@ import type { Rect } from '@shared/types'
 import { frameUrl, useAsyncUrl } from '../faceCrops'
 import { openPrivacyEditor } from '../personActions'
 import { useStore } from '../store'
-import { t } from '../i18n'
+import { count, t } from '../i18n'
 import { PeopleList } from './PeopleList'
 import { useEditedUrl } from './EditedPicture'
 import { rectToEdit, shownAspect, sourceAspect } from '@shared/mediaEdit'
@@ -26,7 +26,7 @@ function Tile({ item }: { item: OpenFaces }) {
   // the picture as it is shown, with the faces where they sit on it (they are kept for the original)
   const shown = useEditedUrl(src, m.edit, sourceAspect(m), 480)
   const faces: Rect[] = (m.kind === 'video' ? sample.faces : item.faces).map((f) => rectToEdit(f, m.edit, sourceAspect(m)))
-  const count = m.kind === 'video' ? Math.max(...item.samples.map((s) => s.faces.length)) : item.faces.length
+  const nFaces = m.kind === 'video' ? Math.max(...item.samples.map((s) => s.faces.length)) : item.faces.length
   return (
     <button className="review-tile" onClick={() => openPrivacyEditor(entry.id, m.kind === 'video' ? sample.t : undefined)} title={m.name}>
       <div className="review-pic" style={{ aspectRatio: String(shownAspect(m)), overflow: 'hidden' }}>
@@ -40,7 +40,7 @@ function Tile({ item }: { item: OpenFaces }) {
           {m.kind === 'video' && <Film size={11} style={{ verticalAlign: -1, marginRight: 3 }} aria-hidden />}
           {m.name}
         </span>
-        <span className="n">{t('reviewFaces').replace('{n}', String(count))}</span>
+        <span className="n">{count('reviewFaces', nFaces)}</span>
       </div>
     </button>
   )
@@ -65,7 +65,7 @@ export function PrivacyReview({ onDone, doneLabel }: { onDone: () => void; doneL
       ) : (
         <p className="review-ok">{t('reviewNone')}</p>
       )}
-      {pending > 0 && <p className="callout warn">{t('reviewPending').replace('{n}', String(pending))}</p>}
+      {pending > 0 && <p className="callout warn">{count('reviewPending', pending)}</p>}
       {items.length > 0 && (
         <div className="review-grid">
           {items.map((it) => (

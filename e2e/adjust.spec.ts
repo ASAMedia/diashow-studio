@@ -270,7 +270,7 @@ test('light and colour: sliders, live preview, undo, several slides, pixelation 
     await page.keyboard.press('Control+a')
     await expect(page.locator('.inspector').getByText(/Ein Regler setzt seinen Wert|A slider sets its value/)).toBeVisible()
     const batchBright = slider(inspector, BRIGHTNESS)
-    await expect(batchBright).toHaveAttribute('aria-valuetext', /gemischt|mixed/)
+    await expect(batchBright).toHaveAttribute('aria-valuetext', /unterschiedlich|mixed/)
     const batchContrast = slider(inspector, CONTRAST)
     await batchContrast.focus()
     await page.keyboard.press('Shift+ArrowRight')

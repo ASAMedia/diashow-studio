@@ -501,8 +501,8 @@ describe('the read-me', () => {
     }
     const de = readmeText(info, 'de')
     expect(de).toContain('media\\: 120 Fotos und Videos')
-    expect(de).toContain('music\\kenburns.m4a: die Titelmusik „Morgenlicht“')
-    expect(de).toContain('Aussortierte Fotos und Videos (nicht in der Diashow) sind nicht enthalten.')
+    expect(de).toContain('music\\kenburns.m4a: die Themenmusik „Morgenlicht“')
+    expect(de).toContain('Herausgenommene Fotos und Videos (nicht in der Diashow) sind nicht enthalten.')
     expect(de).toContain('Gesichtsdaten (erkannte Gesichter, Personenliste) sind nicht enthalten')
     expect(de).toContain('Alle extrahieren')
     expect(de).toContain('nach den Fristen deiner Schule')

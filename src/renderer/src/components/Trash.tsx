@@ -7,7 +7,7 @@ import { AlertTriangle, CalendarClock, Loader2, RotateCcw, ScanFace, Trash2, X }
 import { deletionDue } from '@shared/cleanup'
 import type { TrashContents, TrashEntry } from '@shared/trash'
 import { useStore } from '../store'
-import { fill, fmtBytes, fmtDate, t } from '../i18n'
+import { count, fill, fmtBytes, fmtDate, t } from '../i18n'
 import { ErrorText } from '../errors'
 import { Modal } from './Modal'
 
@@ -103,7 +103,7 @@ export function TrashSetting() {
       <p className="hint">{t('trashSettingHint')}</p>
       <div className="row wrap">
         <span className="trash-size" data-testid="trash-setting-size" data-bytes={contents?.bytes ?? 0}>
-          {n ? fill('trashSettingInfo', { n, size: fmtBytes(contents!.bytes) }) : t('trashNone')}
+          {n ? count('trashSettingInfo', n, { size: fmtBytes(contents!.bytes) }) : t('trashNone')}
         </span>
         <button className="btn small" disabled={!n} data-testid="trash-setting-open" onClick={() => openTrash()}>
           {t('trashOpen')}
@@ -131,7 +131,7 @@ function TrashRow({ entry, busy, onRestore, onPurge }: { entry: TrashEntry; busy
           {fill('trashDeletedOn', { date: fmtDate(entry.deletedAt) })} · {fill('trashPurgeOn', { date: fmtDate(entry.purgeAt) })}
         </span>
         <span className="hint">
-          {entry.slideCount} {t('slides')} · {fmtBytes(entry.bytes)}
+          {count('slideCount', entry.slideCount)} · {fmtBytes(entry.bytes)}
           {deletionDue(entry.deleteAt) && (
             <span className="chip due" title={t('deleteAtOn').replace('{date}', fmtDate(entry.deleteAt!))}>
               <CalendarClock size={12} aria-hidden /> {t('deleteAtDue')}
@@ -148,7 +148,7 @@ function TrashRow({ entry, busy, onRestore, onPurge }: { entry: TrashEntry; busy
         <RotateCcw size={13} aria-hidden /> {t('restore')}
       </button>
       <button className="btn small" data-testid="trash-purge" disabled={busy} onClick={onPurge}>
-        {t('trashPurge')}
+        {t('trashPurgeDots')}
       </button>
     </div>
   )
@@ -174,7 +174,7 @@ function TrashDialog({ onClose }: { onClose: () => void }) {
     try {
       const r = await window.api.trashRestore(e.id)
       if ('refused' in r) setNotice({ text: t(r.refused === 'id-taken' ? 'trashIdTaken' : 'trashNotFound'), warn: true })
-      else setNotice({ text: `${fill('trashRestored', { name: r.name })}${r.renamed ? ` ${fill('trashRenamed', { n: r.renamed })}` : ''}` })
+      else setNotice({ text: `${fill('trashRestored', { name: r.name })}${r.renamed ? ` ${count('trashRenamed', r.renamed)}` : ''}` })
       await useStore.getState().loadProjects()
     } catch (err) {
       setError(err)
@@ -192,7 +192,7 @@ function TrashDialog({ onClose }: { onClose: () => void }) {
       let failed = 0
       if (all) failed = (await window.api.trashEmpty()).failed.length
       else for (const key of keys) failed += (await window.api.trashPurge(key)).failed.length
-      if (failed) setNotice({ text: fill('cleanupFailed', { n: failed }), warn: true })
+      if (failed) setNotice({ text: count('cleanupFailed', failed), warn: true })
     } catch (err) {
       setError(err)
     } finally {
@@ -248,7 +248,7 @@ function TrashDialog({ onClose }: { onClose: () => void }) {
                 </span>
               </div>
               <button className="btn small" disabled={busy} onClick={() => askFor([p.key])}>
-                {t('trashPurge')}
+                {t('trashPurgeDots')}
               </button>
             </div>
           ))}
@@ -276,7 +276,7 @@ function TrashDialog({ onClose }: { onClose: () => void }) {
           }
         >
           {all ? (
-            <p>{fill('trashConfirmAll', { n, size: fmtBytes(askedBytes) })}</p>
+            <p>{count('trashConfirmAll', n, { size: fmtBytes(askedBytes) })}</p>
           ) : (
             <>
               <ul className="cleanup-confirm-list">

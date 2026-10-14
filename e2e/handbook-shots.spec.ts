@@ -8,13 +8,16 @@
 // With the sample trip in samples/media (DIASHOW_SAMPLES=1 fetches it when it is missing) the pictures
 // show a real class trip: free photos and videos in day folders, chapters from the folder names, the
 // theme music, faces of paintings pixelated. The English pictures rename the show and its day titles.
-// The sample trip also makes edit.jpg, cleanup.jpg and archive.jpg (light and colour in the edit view,
-// the clean-up and the ZIP archive dialogs). Without the samples (or with DIASHOW_SAMPLES=0) they are made from the generated test media, never
-// from real photos. Either way the pictures show the dark theme, whatever Windows uses.
+// Only the sample trip makes edit.jpg, panorama.jpg, livephoto.jpg, cleanup.jpg, archive.jpg,
+// duplicate.jpg and trash.jpg (light and colour in the edit view, the 2.5:1 station panorama, a Live
+// Photo made from the trip's waves clip as a loop, the clean-up and ZIP archive dialogs, a copy of the
+// show in the editor, that copy in the trash). Without the samples (or with DIASHOW_SAMPLES=0) the
+// other pictures are made from the generated test media, never from real photos. Either way the
+// pictures show the dark theme, whatever Windows uses.
 // DIASHOW_SHOTS_DIR=<folder> writes the pictures there instead (to try something out first).
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import sharp from 'sharp'
@@ -22,6 +25,7 @@ import { launchOptions } from './launch'
 
 const root = resolve(__dirname, '..')
 const mediaDir = join(root, 'test-media')
+const ffmpeg = join(root, 'vendor', 'ffmpeg', 'bin', 'ffmpeg.exe')
 const outRoot = process.env.DIASHOW_SHOTS_DIR ? resolve(process.env.DIASHOW_SHOTS_DIR) : join(root, 'src', 'renderer', 'public', 'handbook')
 const WIDTH = 1280
 const HEIGHT = 800
@@ -134,6 +138,28 @@ async function setTheme(page: Page, theme: string): Promise<void> {
   await page.waitForTimeout(800)
 }
 
+/** Scrolls the inspector so that the section holding the control `testId` starts at its top. */
+async function showSection(page: Page, testId: string): Promise<void> {
+  await expect(page.getByTestId(testId)).toBeVisible()
+  await page.getByTestId(testId).evaluate((el) => el.closest('section')?.scrollIntoView({ block: 'start' }))
+}
+
+/**
+ * A Live Photo made from a clip of the trip (CC0 like the clip): a 4:3 still and a 3-second MOV with
+ * the same name, dated `at` (file time: the capture time of a JPEG without EXIF), in `dir`.
+ */
+function makeLivePhoto(clip: string, dir: string, name: string, at: Date): string[] {
+  mkdirSync(dir, { recursive: true })
+  const still = join(dir, `${name}.JPG`)
+  const motion = join(dir, `${name}.MOV`)
+  const vf = 'crop=ih*4/3:ih,scale=1440:1080'
+  // the motion runs from 1.5 s before the still to 1.5 s after it, like on an iPhone
+  execFileSync(ffmpeg, ['-v', 'error', '-y', '-ss', '8.5', '-i', clip, '-frames:v', '1', '-vf', vf, '-q:v', '2', still])
+  execFileSync(ffmpeg, ['-v', 'error', '-y', '-ss', '7', '-t', '3', '-i', clip, '-vf', vf, '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p', '-an', '-f', 'mov', motion])
+  for (const f of [still, motion]) utimesSync(f, at, at)
+  return [still, motion]
+}
+
 /** A short export in the queue, waited for until it is done. */
 async function queueShortExport(page: Page, dataDir: string, name: string, lang: Lang): Promise<void> {
   await page.evaluate(
@@ -195,7 +221,7 @@ async function sampleScenes(app: ElectronApplication, page: Page, lang: Lang, da
   }
 
   // ---- assistant: the trip's folder, Ken Burns and its theme song
-  await page.locator('.home .hero button').filter({ hasText: /Neue Diashow mit Assistent|New slideshow with assistant/ }).click()
+  await page.locator('.home .hero button').filter({ hasText: /Neue Diashow mit Assistent…|New slideshow with assistant…/ }).click()
   await expect(wizard).toBeVisible()
   await stubOpenDialog(app, [dir])
   await wizard.locator('.wizard-pick button').nth(1).click()
@@ -241,6 +267,28 @@ async function sampleScenes(app: ElectronApplication, page: Page, lang: Lang, da
   await expect(page.getByTestId('song-chooser')).toBeVisible()
   await page.waitForTimeout(1500)
   await shot(page, lang, 'music')
+
+  // ---- panorama: the station at dawn (2.5:1) in Ken Burns, halfway through its pan, with the Slide tab's Panorama section
+  await showSlide(page, await slideOf(page, item('tuebingen-station').file), 0.5)
+  await state(page, `s.set({ tab: 'slide' })`)
+  await showSection(page, 'pano-mode')
+  await page.waitForTimeout(1500)
+  await shot(page, lang, 'panorama')
+
+  // ---- a Live Photo as a loop: made from the waves clip, dated just after it (Friday), with the Slide tab's Live Photo section
+  const liveName = 'IMG_20260508_143200'
+  const live = makeLivePhoto(pathOf('waves'), join(dataDir, 'live'), liveName, new Date(2026, 4, 8, 14, 32))
+  await state(page, `await s.importMedia(${JSON.stringify(live)}, 'byTime')`)
+  await waitProcessed(page)
+  const livePhoto = await slideOf(page, `${liveName}.JPG`)
+  await state(page, `s.updateEntries([${JSON.stringify(livePhoto.id)}], (x) => { x.playLive = true; x.liveEffect = 'loop' })`)
+  await page.waitForTimeout(800)
+  await showSlide(page, await slideOf(page, `${liveName}.JPG`), 0.4)
+  await state(page, `s.set({ tab: 'slide' })`)
+  await showSection(page, 'live-mode')
+  await expect(page.getByTestId('live-mode')).toHaveValue('loop')
+  await page.waitForTimeout(2500)
+  await shot(page, lang, 'livephoto')
 
   // ---- light and colour in the edit view: the floodlit chapel, cooler and a little brighter
   const chapel = await slideOf(page, item('chapel-night').file)
@@ -314,6 +362,37 @@ async function sampleScenes(app: ElectronApplication, page: Page, lang: Lang, da
   await shot(page, lang, 'archive')
   await archive.locator('.actions button').filter({ hasText: /Abbrechen|Cancel/ }).click()
   await expect(archive).toHaveCount(0)
+
+  // ---- duplicate: the copy opens in the editor with its notice, on the moonlit Acropolis
+  const original = await state<string>(page, `return s.project.id`)
+  await menu(page, /^(Duplizieren|Duplicate)$/)
+  await expect(page.getByTestId('duplicate-notice')).toBeVisible({ timeout: 60_000 })
+  const copy = await state<string>(page, `return s.project.id`)
+  expect(copy).not.toBe(original)
+  await page.waitForFunction(() => ((window as any).__diashow.player.current?.tl?.slides.length ?? 0) > 1, null, { timeout: 60_000 })
+  await page.waitForTimeout(1500)
+  await showSlide(page, await slideOf(page, item('acropolis-moon').file), 0.5)
+  await state(page, `s.set({ tab: 'themes' })`)
+  await page.waitForTimeout(1500)
+  await shot(page, lang, 'duplicate')
+
+  // ---- the copy goes into the trash; the trash dialog lists it
+  await state(page, `s.closeProject()`)
+  const copyCard = page.locator(`.home .project[data-id="${copy}"]`)
+  await copyCard.hover()
+  await copyCard.locator('button.del').click()
+  await expect(page.getByTestId('delete-dialog')).toBeVisible()
+  await expect(page.getByTestId('delete-run')).toBeEnabled({ timeout: 30_000 })
+  await page.getByTestId('delete-run').click()
+  await expect(page.getByTestId('delete-dialog')).toHaveCount(0, { timeout: 60_000 })
+  await page.getByTestId('trash-open').click()
+  const trash = page.getByTestId('trash-dialog')
+  await expect(trash.getByTestId('trash-entry')).toHaveCount(1, { timeout: 30_000 })
+  await page.mouse.move(0, 0)
+  await page.waitForTimeout(800)
+  await shot(page, lang, 'trash')
+  await trash.locator('.actions .btn.primary').click()
+  await expect(trash).toHaveCount(0)
 
   // ---- home with the trip and the older shows
   await state(page, `s.closeProject()`)

@@ -9,7 +9,7 @@ import { liveEffectOf } from '@shared/livePhoto'
 import { aspectValue, MAX_SPEED, MIN_SPEED, speedHasSound } from '@shared/timeline'
 import { panoMode, panoramaOf, type PanAxis, type PanoMode } from '@shared/panorama'
 import { useStore } from '../store'
-import { t } from '../i18n'
+import { count, t } from '../i18n'
 import { requestStabilize, useStabilizeRequest } from '../stabilize'
 import { allVideoTracks, faceArea, photoPersonFaces, videoPersonTracks } from '@shared/people'
 import { Check, Field, Section } from './ui'
@@ -50,9 +50,9 @@ export function PrivacySection({ entry, media }: { entry: PhotoEntry | VideoEntr
           </button>
         )}
       </div>
-      {n > 0 && <p className="hint">{t('privacyCount').replace('{n}', String(n))}</p>}
-      {nTracks > 0 && <p className="hint">{t('privacyTracks').replace('{n}', String(nTracks))}</p>}
-      {nPeople > 0 && <p className="hint">{t('privacyPeople').replace('{n}', String(nPeople))}</p>}
+      {n > 0 && <p className="hint">{count('privacyCount', n)}</p>}
+      {nTracks > 0 && <p className="hint">{count('privacyTracks', nTracks)}</p>}
+      {nPeople > 0 && <p className="hint">{count('privacyPeople', nPeople)}</p>}
       {!!people?.length && (
         <details className="people-details">
           <summary>

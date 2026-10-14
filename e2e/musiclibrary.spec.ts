@@ -1,5 +1,5 @@
 // The music library end to end: more bundled songs per theme and songs by mood. The assistant keeps
-// the theme's song and offers "More music…"; the Music tab chooses another song of the theme (mouse
+// the theme's song and offers "More music"; the Music tab chooses another song of the theme (mouse
 // and keyboard), filters by mood and chooses a song of no theme; "Add to my music" makes a bundled
 // song an own song of the playlist (trimmed like any other), which the export plays and "Pack
 // project" copies. Works in German and English (DIASHOW_LOCALE).
@@ -43,8 +43,8 @@ test('music library: songs per theme, by mood, in the assistant, added to the ow
     expect(catalogue.find((s) => s.song === 'festive-1')).toMatchObject({ themes: [], moods: expect.arrayContaining(['festive']) })
     const row = (song: string) => page.locator(`[data-testid="song-row"][data-song="${song}"]`)
 
-    // ---- the assistant: the theme's song is the default, "More music…" opens the chooser
-    await page.getByRole('button', { name: /^(Neue Diashow mit Assistent|New slideshow with assistant)$/ }).click()
+    // ---- the assistant: the theme's song is the default, "More music" opens the chooser
+    await page.getByRole('button', { name: /^(Neue Diashow mit Assistent…|New slideshow with assistant…)$/ }).click()
     const wizard = page.getByTestId('wizard')
     await expect(wizard).toBeVisible()
     await answerOpenDialog(app, [folder])

@@ -151,7 +151,7 @@ test('trash: delete, restore with versions, upload and undo history, delete for 
     const entry = dialog.locator(`[data-testid="trash-entry"][data-id="${id}"]`)
     await expect(entry).toContainText(NAME)
     await expect(entry).toContainText(/Gelöscht am|Deleted on/)
-    await expect(entry).toContainText(/endgültig gelöscht|deleted for good/)
+    await expect(entry).toContainText(/endgültig gelöscht|deleted permanently/)
     const deletedAt = Number(await entry.getAttribute('data-deleted-at'))
     const purgeAt = Number(await entry.getAttribute('data-purge-at'))
     expect(Math.abs(deletedAt - Date.now())).toBeLessThan(10 * 60_000)

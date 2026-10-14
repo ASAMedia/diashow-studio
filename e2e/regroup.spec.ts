@@ -53,7 +53,7 @@ test('group automatically: per slide from its menu, all from the filmstrip bar, 
 
     // a slide that isn't fixed: no "Group automatically" in its menu
     await page.locator('.cards .card[data-index="1"]').click({ button: 'right' })
-    await expect(page.getByRole('menuitem', { name: /^(Text hinzufügen|Add text)$/ })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: /^(Textfolie hinzufügen|Add text slide)$/ })).toBeVisible()
     await expect(page.getByRole('menuitem', { name: /^(Automatisch gruppieren|Group automatically)$/ })).toHaveCount(0)
     await page.keyboard.press('Escape')
 

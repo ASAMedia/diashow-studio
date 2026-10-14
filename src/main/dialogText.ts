@@ -14,7 +14,7 @@ const TEXT = {
   music: ['Musik', 'Music'],
   exportShow: ['Diashow exportieren', 'Export slideshow'],
   mp4: ['MPEG-4-Video', 'MPEG-4 video'],
-  packTarget: ['Projekt mit allen Medien packen – Zielordner', 'Pack project with all media – target folder'],
+  packTarget: ['Projekt packen: Zielordner wählen', 'Pack project: choose a target folder'],
   openProject: ['Projekt öffnen', 'Open project'],
   project: ['Diashow-Projekt', 'Slideshow project'],
   archiveShow: ['Diashow als ZIP archivieren', 'Archive slideshow as ZIP'],

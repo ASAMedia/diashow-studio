@@ -7,7 +7,7 @@ import { themeMeta } from '@shared/themes'
 import type { TimelineSlide } from '@shared/timeline'
 import { allVideoTracks, faceArea } from '@shared/people'
 import { useStore } from '../store'
-import { t } from '../i18n'
+import { count, t } from '../i18n'
 import { firstInShow, showOrder } from '../entryEdits'
 import { rotateSelection } from '../photoEdit'
 import { Section } from './ui'
@@ -178,7 +178,7 @@ export function BatchPanel({ entries, slides }: { entries: Entry[]; slides: Time
           {pixelated > 0 && (
             <p className="hint">
               {/* drawn areas, and in videos the faces followed through the clip */}
-              {t('privacyCount').replace('{n}', String(visual.reduce((n, x) => n + (x.privacy?.length ?? 0) + (x.type === 'video' ? (x.privacyTracks?.length ?? 0) : 0), 0)))}
+              {count('privacyCount', visual.reduce((n, x) => n + (x.privacy?.length ?? 0) + (x.type === 'video' ? (x.privacyTracks?.length ?? 0) : 0), 0))}
             </p>
           )}
         </Section>

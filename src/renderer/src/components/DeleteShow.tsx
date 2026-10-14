@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { AlertTriangle, Loader2 } from 'lucide-react'
 import type { CleanupInventory } from '@shared/cleanup'
 import { holdSaves, useStore } from '../store'
-import { fill, fmtBytes, t } from '../i18n'
+import { count, fill, fmtBytes, t } from '../i18n'
 import { ErrorText } from '../errors'
 import { Modal } from './Modal'
 import { loadTrash } from './Trash'
@@ -37,10 +37,10 @@ export function DeleteDialog({ projectId, onClose }: { projectId: string; onClos
   // what goes into the trash with it (the uploads another show uses stay with that one)
   const parts = inv
     ? [
-        { id: 'backups', title: t('backupsTitle'), n: inv.backups.files ? fill('cleanupVersions', { n: inv.backups.files }) : '', bytes: inv.backups.bytes },
+        { id: 'backups', title: t('backupsTitle'), n: inv.backups.files ? count('cleanupVersions', inv.backups.files) : '', bytes: inv.backups.bytes },
         { id: 'history', title: t('cleanupHistory'), n: '', bytes: inv.history.files ? inv.history.bytes : 0 },
-        { id: 'uploads', title: t('cleanupUploads'), n: inv.uploads.files ? fill('cleanupFiles', { n: inv.uploads.files }) : '', bytes: inv.uploads.bytes },
-        { id: 'exports', title: t('cleanupExports'), n: inv.exports.jobs ? fill('cleanupJobs', { n: inv.exports.jobs }) : '', bytes: inv.exports.bytes }
+        { id: 'uploads', title: t('cleanupUploads'), n: inv.uploads.files ? count('cleanupFiles', inv.uploads.files) : '', bytes: inv.uploads.bytes },
+        { id: 'exports', title: t('cleanupExports'), n: inv.exports.jobs ? count('cleanupJobs', inv.exports.jobs) : '', bytes: inv.exports.bytes }
       ].filter((x) => x.bytes > 0 || x.n)
     : []
   const remove = async (): Promise<void> => {
@@ -99,7 +99,7 @@ export function DeleteDialog({ projectId, onClose }: { projectId: string; onClos
               </ul>
             </>
           )}
-          {inv.uploads.shared > 0 && <p className="hint">{fill('cleanupUploadsShared', { n: inv.uploads.shared })}</p>}
+          {inv.uploads.shared > 0 && <p className="hint">{count('cleanupUploadsShared', inv.uploads.shared)}</p>}
           {inv.caches.folders > 0 && <p className="hint">{fill('deleteCache', { size: fmtBytes(inv.caches.bytes) })}</p>}
         </>
       )}

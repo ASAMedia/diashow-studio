@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { FolderSearch } from 'lucide-react'
 import { useStore } from '../store'
-import { t } from '../i18n'
+import { count, t } from '../i18n'
 
 /** Banner while originals are missing (moved or renamed folders). */
 export function MissingBanner() {
@@ -16,7 +16,7 @@ export function MissingBanner() {
     <div className="banner" role="status">
       <FolderSearch size={16} aria-hidden />
       <span>
-        {t('missingFiles').replace('{n}', String(missing.length))} {result}
+        {count('missingFiles', missing.length)} {result}
       </span>
       <button
         className="btn small"

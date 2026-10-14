@@ -8,7 +8,7 @@ import type { ShareAddress, ShareStatus } from '@shared/share'
 import { aspectValue } from '@shared/timeline'
 import { queueExport } from '../engine/exporter'
 import { useStore } from '../store'
-import { localeTag, t } from '../i18n'
+import { count, localeTag, t } from '../i18n'
 import { ErrorText } from '../errors'
 import { Modal } from './Modal'
 import { Check as CheckBox, Field, Seg } from './ui'
@@ -283,7 +283,7 @@ export function ShareDialog() {
                 </h3>
                 {!!status?.uploading && (
                   <span className="val" role="status">
-                    <Upload size={12} aria-hidden /> {t('shareUploading').replace('{n}', String(status.uploading))}
+                    <Upload size={12} aria-hidden /> {count('shareUploading', status.uploading)}
                   </span>
                 )}
                 {status?.folder && (
@@ -325,7 +325,7 @@ export function ShareDialog() {
                       {o.name}
                     </span>
                     <span className="val">{size(o.size)}</span>
-                    <span className="val">{t('shareDownloads').replace('{n}', String(o.downloads))}</span>
+                    <span className="val">{count('shareDownloads', o.downloads)}</span>
                     <button className="btn small ghost icon" title={t('shareUnoffer')} aria-label={`${t('shareUnoffer')}: ${o.name}`} onClick={() => void control({ type: 'unoffer', id: o.id })}>
                       <Trash2 size={14} />
                     </button>

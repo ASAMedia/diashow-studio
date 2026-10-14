@@ -97,46 +97,46 @@ interface UploadTexts {
 
 const UPLOAD_TEXT: Record<PageLang, UploadTexts> = {
   de: {
-    title: 'Fotos & Videos teilen',
+    title: 'Fotos und Videos teilen',
     forProject: 'für „{p}“',
     name: 'Dein Name (freiwillig)',
     namePlaceholder: 'z. B. Mia',
-    pick: 'Fotos & Videos auswählen',
+    pick: 'Fotos und Videos auswählen',
     keepOn: 'Lass den Bildschirm an und die Seite offen, bis alles hochgeladen ist.',
     limits: 'Höchstens {p} pro Foto und {v} pro Video.',
     summary: '{d} von {t} hochgeladen',
-    waiting: 'wartet …',
-    uploading: 'wird hochgeladen … {p} %',
+    waiting: 'wartet…',
+    uploading: 'wird hochgeladen… {p} %',
     done: 'angekommen',
     allDone: 'Danke! Alles ist angekommen.',
     tooBig: 'zu groß',
     badType: 'Dateityp wird nicht unterstützt',
-    closed: 'Uploads sind gerade geschlossen',
+    closed: 'Hochladen ist gerade pausiert',
     full: 'Kein Platz mehr auf dem Laptop',
     failed: 'fehlgeschlagen',
-    retry: 'Fehlgeschlagene nochmal senden',
-    busy: 'Viele senden gleichzeitig – gleich geht es weiter …'
+    retry: 'Fehlgeschlagene noch einmal senden',
+    busy: 'Viele senden gleichzeitig – gleich geht es weiter…'
   },
   en: {
-    title: 'Share photos & videos',
+    title: 'Share photos and videos',
     forProject: 'for “{p}”',
     name: 'Your name (optional)',
     namePlaceholder: 'e.g. Mia',
-    pick: 'Choose photos & videos',
+    pick: 'Choose photos and videos',
     keepOn: 'Keep the screen on and this page open until everything is uploaded.',
     limits: 'At most {p} per photo and {v} per video.',
     summary: '{d} of {t} uploaded',
-    waiting: 'waiting …',
-    uploading: 'uploading … {p} %',
+    waiting: 'waiting…',
+    uploading: 'uploading… {p} %',
     done: 'arrived',
     allDone: 'Thanks! Everything arrived.',
     tooBig: 'too large',
     badType: 'file type not supported',
-    closed: 'Uploads are closed right now',
+    closed: 'Uploading is paused right now',
     full: 'The laptop is out of space',
     failed: 'failed',
     retry: 'Send failed ones again',
-    busy: 'Many people are sending – continuing in a moment …'
+    busy: 'Many people are sending – continuing in a moment…'
   }
 }
 
@@ -312,7 +312,7 @@ const DOWNLOAD_TEXT: Record<PageLang, { title: string; forProject: string; none:
   de: {
     title: 'Video herunterladen',
     forProject: 'Diashow „{p}“',
-    none: 'Noch nichts freigegeben. Lade die Seite gleich noch einmal.',
+    none: 'Noch nichts angeboten. Lade die Seite gleich noch einmal.',
     view: 'Ansehen',
     save: 'Speichern',
     iphone: 'iPhone: „Ansehen“ tippen, dann über das Teilen-Symbol „Video sichern“ wählen.',
@@ -322,7 +322,7 @@ const DOWNLOAD_TEXT: Record<PageLang, { title: string; forProject: string; none:
   en: {
     title: 'Download the video',
     forProject: 'Slideshow “{p}”',
-    none: 'Nothing shared yet. Reload this page in a moment.',
+    none: 'Nothing offered yet. Reload this page in a moment.',
     view: 'Watch',
     save: 'Save',
     iphone: 'iPhone: tap “Watch”, then choose “Save Video” from the share button.',

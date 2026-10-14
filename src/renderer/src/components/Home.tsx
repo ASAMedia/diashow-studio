@@ -11,7 +11,7 @@ import { CleanupBanner, DeadlineBadge, openCleanup } from './Cleanup'
 import { openArchive } from './Archive'
 import { TrashButton } from './Trash'
 import { duplicateShow } from './Duplicate'
-import { localeTag, t } from '../i18n'
+import { count, localeTag, t } from '../i18n'
 
 const FORMATS = 'JPEG · HEIC · HIF · ARW · DNG · PNG · WebP · AVIF — MOV · MP4 · XAVC S/HS/S-I · AVCHD (MTS) · MKV · WebM'
 
@@ -126,7 +126,7 @@ export function Home() {
                     <span className="meta">
                       <b>{p.name}</b>
                       <span>
-                        {p.slideCount} {t('slides')} · {new Date(p.updatedAt).toLocaleDateString(localeTag())}
+                        {count('slideCount', p.slideCount)} · {new Date(p.updatedAt).toLocaleDateString(localeTag())}
                       </span>
                     </span>
                   </button>
@@ -142,8 +142,8 @@ export function Home() {
                   </button>
                   <button
                     className="btn small icon del"
-                    title={t('deleteShow')}
-                    aria-label={`${t('deleteShow')}: ${p.name}`}
+                    title={t('deleteShowDots')}
+                    aria-label={`${t('deleteShowDots')}: ${p.name}`}
                     onClick={(e) => {
                       e.stopPropagation()
                       // lists what goes into the trash with it (Trash.tsx restores it for 30 days)

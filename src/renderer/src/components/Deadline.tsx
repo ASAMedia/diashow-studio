@@ -1,4 +1,4 @@
-// The deletion date of a show ("Löschdatum"): the picker (in the clean-up dialog, and offered after an
+// The deletion date of a show ("Löschfrist"): the picker (in the clean-up dialog, and offered after an
 // export) and setting it, also for a show that is not open. When the date has come, the home screen's
 // badge and banner open the clean-up (Cleanup.tsx).
 import { useEffect, useState } from 'react'

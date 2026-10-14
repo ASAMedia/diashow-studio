@@ -11,7 +11,7 @@ import type { ProjectSummary } from '@shared/types'
 import { forgetUndoHistory, holdSaves, saveOpenProject, useStore } from '../store'
 import { holdFaceAnalysis } from '../faces'
 import { forgetFaceCrops } from '../faceCrops'
-import { fill, fmtBytes, fmtDate, t, type StringKey } from '../i18n'
+import { count, fill, fmtBytes, fmtDate, t, type StringKey } from '../i18n'
 import { ErrorText } from '../errors'
 import { Modal } from './Modal'
 import { Section } from './ui'
@@ -243,7 +243,7 @@ function UploadsInfo({ inv }: { inv: CleanupInventory }) {
   return (
     <>
       {sent > 0 && <p className="hint">{fill('cleanupUploadsInfo', { files: sent, people: inv.uploads.uploaders })}</p>}
-      {pasted > 0 && <p className="hint">{fill('cleanupPasted', { n: pasted })}</p>}
+      {pasted > 0 && <p className="hint">{count('cleanupPasted', pasted)}</p>}
     </>
   )
 }
@@ -268,15 +268,15 @@ function Summary({ result }: { result: CleanupResult }) {
         {result.faces && <li>{fill('cleanupDoneFaces', { media: result.faces.media, people: result.faces.people })}</li>}
         {rows.map((c) => (
           <li key={c} data-category={c}>
-            {t(TITLES[c])}: {fill('cleanupFiles', { n: result.removed[c].files })}, {fmtBytes(result.removed[c].bytes)}
+            {t(TITLES[c])}: {count('cleanupFiles', result.removed[c].files)}, {fmtBytes(result.removed[c].bytes)}
           </li>
         ))}
       </ul>
       <p>
         <b>{fill('cleanupFreed', { size: fmtBytes(result.freed) })}</b>
       </p>
-      {result.failed.length > 0 && <p className="callout warn">{fill('cleanupFailed', { n: result.failed.length })}</p>}
-      {result.busy > 0 && <p className="hint">{fill('cleanupBusy', { n: result.busy })}</p>}
+      {result.failed.length > 0 && <p className="callout warn">{count('cleanupFailed', result.failed.length)}</p>}
+      {result.busy > 0 && <p className="hint">{count('cleanupBusy', result.busy)}</p>}
     </div>
   )
 }
@@ -392,19 +392,19 @@ export function CleanupDialog({ projectId, onClose }: { projectId: string; onClo
                       <AlertTriangle size={14} aria-hidden /> <span>{fill('cleanupUploadsWarn', { n: inv.uploads.inShow.slides })}</span>
                     </p>
                   )}
-                  {inv.uploads.shared > 0 && <p className="hint">{fill('cleanupUploadsShared', { n: inv.uploads.shared })}</p>}
+                  {inv.uploads.shared > 0 && <p className="hint">{count('cleanupUploadsShared', inv.uploads.shared)}</p>}
                 </>
               )}
             </Category>
             <Category id="caches" title={t('cleanupCaches')} size={fmtBytes(inv.caches.bytes)} checked={choice.caches} disabled={busy || !inv.caches.folders || blocked} onChange={(v) => set({ caches: v })}>
               <p className="hint">
-                {fill('cleanupFolders', { n: inv.caches.folders })} · {t('cleanupCachesHint')}
+                {count('cleanupFolders', inv.caches.folders)} · {t('cleanupCachesHint')}
               </p>
-              {inv.caches.shared > 0 && <p className="hint">{fill('cleanupCachesShared', { n: inv.caches.shared })}</p>}
+              {inv.caches.shared > 0 && <p className="hint">{count('cleanupCachesShared', inv.caches.shared)}</p>}
             </Category>
             <Category id="backups" title={t('backupsTitle')} size={fmtBytes(inv.backups.bytes)} checked={choice.backups} disabled={busy || !inv.backups.files} onChange={(v) => set({ backups: v })}>
               <p className="hint">
-                {fill('cleanupVersions', { n: inv.backups.files })} · {t('cleanupBackupsHint')}
+                {count('cleanupVersions', inv.backups.files)} · {t('cleanupBackupsHint')}
               </p>
               {choice.faces && !choice.backups && inv.backups.files > 0 && <p className="hint">{t('cleanupBackupsScrub')}</p>}
             </Category>
@@ -421,7 +421,7 @@ export function CleanupDialog({ projectId, onClose }: { projectId: string; onClo
             </Category>
             <Category id="exports" title={t('cleanupExports')} size={fmtBytes(inv.exports.bytes)} checked={choice.exports} disabled={busy || !inv.exports.jobs} onChange={(v) => set({ exports: v })}>
               <p className="hint">
-                {fill('cleanupJobs', { n: inv.exports.jobs })} · {t('cleanupExportsHint')}
+                {count('cleanupJobs', inv.exports.jobs)} · {t('cleanupExportsHint')}
               </p>
             </Category>
           </div>

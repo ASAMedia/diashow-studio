@@ -10,7 +10,7 @@ import { Check, Download, Film, FolderOpen, Images, Loader2, Music, Pencil, Play
 import { THEMES, themeMeta } from '@shared/themes'
 import { useStore } from '../store'
 import { useTimeline } from '../timeline'
-import { fmtTime, pick, t } from '../i18n'
+import { count, fmtTime, pick, t } from '../i18n'
 import { ThemeThumb } from './ThemesPanel'
 import { WizardThemeSong } from './ThemeMusic'
 import { Modal, useDialogTitleId } from './Modal'
@@ -120,7 +120,7 @@ function StepPhotos() {
       {(busy || !!mine?.media.length) && (
         <div className="wizard-status" role="status">
           {busy ? <Loader2 size={14} className="spin" aria-hidden /> : <Film size={14} aria-hidden />}
-          {mine?.media.length ? t('wizardImported').replace('{n}', String(mine.media.length)) : '…'}
+          {mine?.media.length ? count('wizardImported', mine.media.length) : '…'}
         </div>
       )}
     </>
@@ -190,7 +190,7 @@ function StepFinish() {
   if (!project) return null
   const slides = tl?.slides.length ?? 0
   const music = project.music.length
-    ? t('wizardSongs').replace('{n}', String(project.music.length))
+    ? count('wizardSongs', project.music.length)
     : tl?.themeSong
       ? t('wizardThemeSong').replace('{t}', tl.themeSong.title)
       : t('wizardSilent')

@@ -58,7 +58,7 @@ test('share dialog: phones upload into the project, download an offered video', 
     // the phone's page; anything without the token is not found
     const pageRes = await fetch(uploadUrl, { headers: { 'Accept-Language': 'de-DE,de;q=0.9' } })
     expect(pageRes.status).toBe(200)
-    expect(await pageRes.text()).toContain('Fotos &amp; Videos auswählen')
+    expect(await pageRes.text()).toContain('Fotos und Videos auswählen')
     const origin = new URL(uploadUrl).origin
     for (const path of ['/', '/upload', `/${'a'.repeat(32)}/`]) expect((await fetch(origin + path)).status).toBe(404)
 

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import type { BackupInfo } from '@shared/types'
 import { useStore } from '../store'
-import { localeTag, t } from '../i18n'
+import { count, localeTag, t } from '../i18n'
 import { Modal } from './Modal'
 
 export function BackupsDialog() {
@@ -36,7 +36,7 @@ export function BackupsDialog() {
             <div key={b.file} className="row backup">
               <span className="when">{fmt.format(b.savedAt)}</span>
               <span className="val">
-                {b.slideCount} {t('entries')}
+                {count('slideCount', b.slideCount)}
               </span>
               <button
                 className="btn small"

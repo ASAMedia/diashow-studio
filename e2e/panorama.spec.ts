@@ -330,7 +330,7 @@ test('panoramas pan in the preview and the export, per photo and in every theme'
     const dir = page.locator('[data-testid="pano-dir"]')
     await expect(mode).toBeVisible()
     const labels = async (sel: typeof mode): Promise<string[]> => sel.locator('option').allInnerTexts()
-    expect(await labels(mode)).toEqual(EN ? ['Pan', 'Whole picture', 'Crop to fill'] : ['Schwenk', 'Ganzes Bild', 'Zuschneiden'])
+    expect(await labels(mode)).toEqual(EN ? ['Pan', 'Whole picture', 'Crop to fill'] : ['Schwenk', 'Ganzes Bild', 'Bildfüllend'])
     expect(await labels(dir)).toEqual(EN ? ['Left → right', 'Right → left'] : ['Links → rechts', 'Rechts → links'])
     const wideEntry = (): Promise<any> => state(page, `const m = s.project.media.find((x) => x.name === 'wide-pano.jpg'); return s.project.entries.find((x) => x.mediaId === m.id)`)
     await mode.selectOption('whole')

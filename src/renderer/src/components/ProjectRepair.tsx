@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react'
 import { AlertTriangle, Info, Loader2, Wrench, X } from 'lucide-react'
 import type { DamagedProject, ProjectRef, ProjectReportEvent, RepairPlan, RepairReport } from '@shared/diagnostics'
 import { useStore } from '../store'
-import { localeTag, t, type StringKey } from '../i18n'
+import { count, localeTag, t, type StringKey } from '../i18n'
 import { ErrorNotices, ErrorText, notifyError, openRepair, useNotices } from '../errors'
 import { logEvent } from '../diagnostics'
 import { Modal } from './Modal'
@@ -31,11 +31,7 @@ const REPORT_TEXT: Record<RepairReport['changes'][number]['code'], StringKey> = 
 
 /** One line per change of a repair report. */
 export function reportLines(report: RepairReport): string[] {
-  return report.changes.map((c) =>
-    t(REPORT_TEXT[c.code])
-      .replace('{n}', String(c.count))
-      .replace('{v}', String(report.fromVersion ?? '?'))
-  )
+  return report.changes.map((c) => count(REPORT_TEXT[c.code], c.count, { v: report.fromVersion ?? '?' }))
 }
 
 const fmtDate = (ms: number): string => new Intl.DateTimeFormat(localeTag(), { dateStyle: 'medium', timeStyle: 'short' }).format(ms)
@@ -170,7 +166,7 @@ export function RepairDialog({ target }: { target: ProjectRef }) {
                   {plan.backups.map((b) => (
                     <div key={b.file} className="row backup">
                       <span className="when">{fmtDate(b.savedAt)}</span>
-                      <span className="val">{b.damaged ? t('repairBackupDamaged') : `${b.slideCount} ${t('entries')}`}</span>
+                      <span className="val">{b.damaged ? t('repairBackupDamaged') : count('slideCount', b.slideCount)}</span>
                       <button className="btn small" disabled={busy || !!b.damaged} onClick={() => void run({ kind: 'backup', file: b.file })}>
                         {t('restore')}
                       </button>

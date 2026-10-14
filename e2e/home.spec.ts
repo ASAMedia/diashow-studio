@@ -257,7 +257,7 @@ test('files dropped on the home screen: onto a show, the drop box; refused while
     await hikeCard.locator('.open').click()
     await expect.poll(async () => (await project(page))?.id, { timeout: 30_000 }).toBe(hikeId)
     await waitProcessed(page)
-    await menu(page, /^(Im WLAN teilen|Share over Wi-Fi)/)
+    await menu(page, /^(Im WLAN teilen…|Share over Wi-Fi…)$/)
     const share = page.getByRole('dialog', { name: /Im WLAN teilen|Share over Wi-Fi/ })
     await refusedWhile(page, share, fresh3)
     await page.keyboard.press('Escape')

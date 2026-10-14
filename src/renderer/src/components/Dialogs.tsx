@@ -3,7 +3,7 @@ import { sameClipGroups } from '@shared/duplicates'
 import type { MediaItem, Project } from '@shared/types'
 import { Loader2 } from 'lucide-react'
 import { useStore } from '../store'
-import { t } from '../i18n'
+import { count, t } from '../i18n'
 import { ErrorText } from '../errors'
 import { Modal } from './Modal'
 import { Slider } from './ui'
@@ -116,7 +116,7 @@ export function RejectsDialog() {
     >
       <p className="hint lead">{t('rejectsIntro')}</p>
       <Slider label={t('blurThreshold')} value={threshold} min={0.05} max={0.6} step={0.01} display={`${Math.round(threshold * 100)} %`} onChange={setThreshold} />
-      {pending > 0 && <p className="hint">{t('notAnalysedMedia').replace('{n}', String(pending))}</p>}
+      {pending > 0 && <p className="hint">{count('notAnalysedMedia', pending)}</p>}
       {rejects.length === 0 ? (
         <p className="empty-note">{t('noRejectsMedia')}</p>
       ) : (

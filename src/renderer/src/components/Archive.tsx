@@ -9,7 +9,7 @@ import { AlertTriangle, Film, Loader2, Plus } from 'lucide-react'
 import { archiveSize, type ArchiveInventory, type ArchiveProgress, type ArchiveResult, type ArchiveTarget, type ArchiveVideo } from '@shared/archive'
 import { errorMessage } from '@shared/friendlyError'
 import { saveOpenProject } from '../store'
-import { fill, fmtBytes, fmtDate, localeTag, t } from '../i18n'
+import { count, fill, fmtBytes, fmtDate, localeTag, t } from '../i18n'
 import { ErrorText } from '../errors'
 import { Modal } from './Modal'
 import './archive.css'
@@ -179,7 +179,7 @@ export function ArchiveDialog({ projectId, onClose }: { projectId: string; onClo
         <>
           <p className="hint lead">{t('arIntro')}</p>
           <div className="archive-parts">
-            <Part title={t('arMedia')} size={`${fill('arFiles', { n: inv.media.files })} · ${fmtBytes(inv.media.bytes)}`} testId="archive-media">
+            <Part title={t('arMedia')} size={`${count('arFiles', inv.media.files)} · ${fmtBytes(inv.media.bytes)}`} testId="archive-media">
               {inv.leftOut.items > 0 && (
                 <label className="check">
                   <input type="checkbox" data-testid="archive-leftout" checked={leftOut} onChange={(e) => setLeftOut(e.target.checked)} />
@@ -194,7 +194,7 @@ export function ArchiveDialog({ projectId, onClose }: { projectId: string; onClo
                 <p className="hint">{t('arThemeHint')}</p>
               </Part>
             ) : (
-              <Part title={t('arMusic')} size={inv.music.files ? `${fill('arFiles', { n: inv.music.files })} · ${fmtBytes(inv.music.bytes)}` : undefined} testId="archive-music">
+              <Part title={t('arMusic')} size={inv.music.files ? `${count('arFiles', inv.music.files)} · ${fmtBytes(inv.music.bytes)}` : undefined} testId="archive-music">
                 {!inv.music.files && <p className="hint">{t('arNoMusic')}</p>}
               </Part>
             )}
@@ -229,7 +229,7 @@ export function ArchiveDialog({ projectId, onClose }: { projectId: string; onClo
             return (
               missing.length > 0 && (
                 <p className="callout warn" data-testid="archive-missing">
-                  <AlertTriangle size={14} aria-hidden /> <span>{fill('arMissing', { n: missing.length, names: someNames(missing.map((m) => m.name)) })}</span>
+                  <AlertTriangle size={14} aria-hidden /> <span>{count('arMissing', missing.length, { names: someNames(missing.map((m) => m.name)) })}</span>
                 </p>
               )
             )
@@ -285,8 +285,8 @@ export function ArchiveDialog({ projectId, onClose }: { projectId: string; onClo
           </p>
           <p className="hint path">{result.path}</p>
           <ul>
-            <li>{fill('arDoneMedia', { n: result.media })}</li>
-            {result.music > 0 && <li>{fill('arDoneMusic', { n: result.music })}</li>}
+            <li>{count('arDoneMedia', result.media)}</li>
+            {result.music > 0 && <li>{count('arDoneMusic', result.music)}</li>}
             {result.theme && <li>{t('arDoneTheme')}</li>}
             {result.videos > 0 && <li>{fill('arDoneVideos', { n: result.videos })}</li>}
             <li>{fill('arDoneSize', { files: result.files, size: fmtBytes(result.bytes) })}</li>

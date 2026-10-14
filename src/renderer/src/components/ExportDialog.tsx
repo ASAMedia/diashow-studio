@@ -5,7 +5,7 @@ import { buildChapters } from '@shared/chapters'
 import { queueExport } from '../engine/exporter'
 import { useStore } from '../store'
 import { timelineOf } from '../timeline'
-import { localeTag, pick, t } from '../i18n'
+import { count, localeTag, pick, t } from '../i18n'
 import { CopyChaptersButton, JobRow } from './Queue'
 import { openFacesInShow } from '@shared/people'
 import { PrivacyReview } from './PrivacyReview'
@@ -36,7 +36,7 @@ const PRESETS: Preset[] = [
   { id: 'youtube1080', name: { de: 'YouTube 1080p', en: 'YouTube 1080p' }, aspect: '16:9', short: 1080, fps: 30, codec: 'h264', quality: 'high' },
   { id: 'youtube4k', name: { de: 'YouTube 4K', en: 'YouTube 4K' }, aspect: '16:9', short: 2160, fps: 30, codec: 'h264', quality: 'high' },
   { id: 'reel', name: { de: 'Instagram Reel / TikTok (9:16)', en: 'Instagram Reel / TikTok (9:16)' }, aspect: '9:16', short: 1080, fps: 30, codec: 'h264', quality: 'high' },
-  { id: 'square', name: { de: 'Instagram Beitrag (1:1)', en: 'Instagram post (1:1)' }, aspect: '1:1', short: 1080, fps: 30, codec: 'h264', quality: 'high' },
+  { id: 'square', name: { de: 'Instagram-Beitrag (1:1)', en: 'Instagram post (1:1)' }, aspect: '1:1', short: 1080, fps: 30, codec: 'h264', quality: 'high' },
   { id: 'whatsapp', name: { de: 'WhatsApp / E-Mail (klein)', en: 'WhatsApp / e-mail (small)' }, aspect: '16:9', short: 720, fps: 30, codec: 'h264', quality: 'standard' },
   { id: 'tv', name: { de: 'Fernseher / Beamer 1080p', en: 'TV / projector 1080p' }, aspect: '16:9', short: 1080, fps: 25, codec: 'h264', quality: 'max' }
 ]
@@ -251,7 +251,7 @@ export function ExportDialog() {
           </div>
           {chapters.length >= 2 && (
             <p className="callout info">
-              <span>{t('exportChaptersHint').replace('{n}', String(chapters.length))}</span>
+              <span>{count('exportChaptersHint', chapters.length)}</span>
               <CopyChaptersButton chapters={chapters} />
             </p>
           )}
@@ -264,7 +264,7 @@ export function ExportDialog() {
           )}
           {openFaces > 0 && (
             <p className="callout warn">
-              <span>{t('reviewExportHint').replace('{n}', String(openFaces))}</span>
+              <span>{count('reviewExportHint', openFaces)}</span>
               <button className="btn small" onClick={() => setReview(true)}>
                 {t('reviewCheck')}
               </button>

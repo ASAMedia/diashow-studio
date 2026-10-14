@@ -52,19 +52,26 @@
 <p class="toc-title" id="toc-title">Inhalt</p>
 <ol>
   <li><a href="#start">Erste Schritte</a></li>
+  <li><a href="#home">Die Startseite</a></li>
   <li><a href="#edit">Bearbeiten</a></li>
+  <li><a href="#add">Fotos hinzufügen und einfügen</a></li>
+  <li><a href="#filmstrip">Filmstreifen: Zoom, Suche und Kapitel</a></li>
+  <li><a href="#photoedit">Fotos bearbeiten</a></li>
   <li><a href="#themes">Themen und Looks</a></li>
+  <li><a href="#panorama">Panoramen</a></li>
+  <li><a href="#video">Videos und Live Photos</a></li>
   <li><a href="#music">Musik</a></li>
   <li><a href="#cull">Sichten</a></li>
   <li><a href="#privacy">Datenschutz: Gesichter verpixeln</a></li>
-  <li><a href="#export">Exportieren und Warteschlange</a></li>
+  <li><a href="#export">Exportieren</a></li>
   <li><a href="#share">Im WLAN teilen</a></li>
   <li><a href="#cleanup">Nach dem Projekt aufräumen</a></li>
+  <li><a href="#trash">Papierkorb</a></li>
   <li><a href="#present">Vorführen</a></li>
   <li><a href="#projects">Projekte sichern und mitnehmen</a></li>
   <li><a href="#settings">Einstellungen und Systemcheck</a></li>
   <li><a href="#shortcuts">Tastenkürzel</a></li>
-  <li><a href="#keyboard">Mit der Tastatur bedienen</a></li>
+  <li><a href="#keyboard">Tastatur und Touchscreen</a></li>
   <li><a href="#trouble">Wenn etwas nicht klappt</a></li>
   <li><a href="#about">Über, Lizenzen und Updates</a></li>
 </ol>
@@ -77,10 +84,10 @@
 <section class="hb-chapter" id="start" aria-labelledby="start-title">
 <h2 id="start-title">Erste Schritte</h2>
 <p>Diashow Studio macht aus Fotos, Videos und Musik eine Diashow und speichert sie als MP4-Video. Alles läuft auf deinem PC, ohne Internet.</p>
-<p>Am schnellsten geht es mit dem <strong>Assistenten</strong>: Er öffnet sich beim ersten Start, später über <strong>Neue Diashow mit Assistent</strong> auf der Startseite.</p>
+<p>Am schnellsten geht es mit dem <strong>Assistenten</strong>. Er öffnet sich beim ersten Start, später über <strong>Neue Diashow mit Assistent…</strong> auf der Startseite.</p>
 <ol>
-  <li><strong>Fotos und Videos:</strong> einzelne Dateien oder einen ganzen Ordner wählen. Unterordner werden mitgenommen.</li>
-  <li><strong>Thema und Musik:</strong> ein Thema anklicken und, wenn du magst, eigene Musik hinzufügen.</li>
+  <li><strong>Fotos und Videos:</strong> einzelne Dateien oder einen ganzen Ordner wählen. Unterordner kommen mit.</li>
+  <li><strong>Thema und Musik:</strong> ein Thema anklicken. Jedes Thema bringt Musik mit; eigene Songs ersetzen sie.</li>
   <li><strong>Zeigen oder exportieren:</strong> die Diashow abspielen oder als Video speichern.</li>
 </ol>
 <figure>
@@ -89,132 +96,171 @@
 </figure>
 <p>Andere Wege zur neuen Diashow:</p>
 <ul>
-  <li>Fotos, Videos oder Ordner einfach ins Fenster ziehen.</li>
-  <li><strong>Neue Diashow</strong> wählt Dateien aus; <strong>Ordner abspielen</strong> zeigt einen Ordner sofort als Diashow.</li>
+  <li>Fotos, Videos oder Ordner ins Fenster ziehen.</li>
+  <li><strong>Neue Diashow…</strong> wählt Dateien aus. <strong>Ordner abspielen…</strong> zeigt einen Ordner sofort als Diashow.</li>
   <li><strong>Projekt öffnen…</strong> lädt eine <code>.dshow</code>-Datei, z. B. ein gepacktes Projekt von einem anderen PC.</li>
 </ul>
-<p>Projekte werden automatisch gespeichert, in <code>Dokumente\Diashow Studio</code>. Neue Fotos werden im Hintergrund vorbereitet; du kannst sofort weiterarbeiten.</p>
+<p>Diashows werden automatisch gespeichert, in <code>Dokumente\Diashow Studio</code>. Neue Fotos werden im Hintergrund vorbereitet; du kannst sofort weiterarbeiten.</p>
+</section>
+
+<section class="hb-chapter" id="home" aria-labelledby="home-title">
+<h2 id="home-title">Die Startseite</h2>
+<p>Jede Diashow hat auf der Startseite eine Karte; ein Klick öffnet sie. Zeigst du auf die Karte, erscheinen ihre Knöpfe: <strong>Duplizieren</strong>, <strong>Als ZIP archivieren…</strong>, <strong>Nach dem Projekt aufräumen…</strong> und <strong>Diashow löschen…</strong>.</p>
 <figure>
   <img src="img/de/home.jpg" width="1100" height="688" alt="Die Startseite mit deinen Diashows" loading="lazy" decoding="async">
   <figcaption>Die Startseite mit deinen Diashows</figcaption>
 </figure>
-<h3>Die Startseite</h3>
-<p>Jede Diashow hat auf der Startseite eine Karte; ein Klick öffnet sie. Zeigst du auf die Karte, erscheinen ihre Knöpfe: <strong>Duplizieren</strong>, <strong>Als ZIP archivieren…</strong>, <strong>Nach dem Projekt aufräumen…</strong> und <strong>Diashow löschen</strong>.</p>
 <ul>
-  <li><strong>Fotos zu einer Diashow hinzufügen:</strong> Fotos, Videos oder Ordner aus dem Explorer auf ihre Karte ziehen. Die Karte zeigt <strong>Zu dieser Diashow hinzufügen</strong>. Beim Loslassen öffnet sich die Diashow, und die Fotos werden wie mit <strong>Fotos und Videos hinzufügen</strong> eingelesen und nach Aufnahmezeit in ihren Tag einsortiert, mit einem neuen Tagestitel, wenn die Diashow Tagestitel hat. Was schon drin ist, wird übersprungen; <kbd>Strg+Z</kbd> nimmt alles in einem Schritt zurück.</li>
+  <li><strong>Fotos zu einer Diashow hinzufügen:</strong> Fotos, Videos oder Ordner aus dem Explorer auf ihre Karte ziehen; die Karte zeigt <strong>Zu dieser Diashow hinzufügen</strong>. Beim Loslassen öffnet sich die Diashow, und die Fotos kommen nach Aufnahmezeit in ihren Tag (mit neuem Tagestitel, wenn die Diashow Tagestitel hat). Was schon drin ist, wird übersprungen; <kbd>Strg+Z</kbd> nimmt alles in einem Schritt zurück.</li>
   <li>Auf das Feld <strong>Fotos, Videos oder Ordner hier ablegen</strong> oder woanders auf der Startseite gezogen, entsteht eine neue Diashow.</li>
-  <li>Solange ein Dialog offen ist (z. B. die Einstellungen oder der Papierkorb), nimmt das Fenster keine Dateien an, und ein Hinweis sagt <strong>Erst den Dialog schließen</strong>. Nur der Assistent nimmt Fotos auch dann.</li>
+  <li>Solange ein Dialog offen ist (z. B. die Einstellungen), nimmt das Fenster keine Dateien an. Ein Hinweis sagt dann <strong>Erst den Dialog schließen</strong>. Nur der Assistent nimmt Fotos auch dann.</li>
+  <li><strong>Papierkorb (n)</strong> unten auf der Startseite öffnet den <a href="#trash">Papierkorb</a>.</li>
 </ul>
-<h3>Diashows duplizieren</h3>
-<p><strong>Duplizieren</strong> (an der Karte oder im Menü <strong>⋯</strong>) legt eine unabhängige Kopie an, z. B. eine Fassung für die Eltern mit mehr verpixelten Gesichtern neben der Fassung für die Klasse. Die Kopie heißt „Klassenfahrt (Kopie)“, „Klassenfahrt (Kopie 2)“ usw. und öffnet sich gleich im Editor; was du dort änderst, ändert das Original nicht.</p>
+<h3>Duplizieren</h3>
+<p><strong>Duplizieren</strong> (an der Karte oder im Menü <strong>⋯</strong>) legt eine unabhängige Kopie an, z. B. eine Fassung für den Elternabend mit mehr verpixelten Gesichtern neben der Fassung für die Klasse. Die Kopie heißt „Klassenfahrt (Kopie)“, „Klassenfahrt (Kopie 2)“ usw. und öffnet sich gleich im Editor. Was du dort änderst, ändert das Original nicht.</p>
+<figure>
+  <img src="img/de/duplicate.jpg" width="1100" height="688" alt="Die Kopie ist im Editor geöffnet" loading="lazy" decoding="async">
+  <figcaption>Die Kopie ist im Editor geöffnet</figcaption>
+</figure>
 <ul>
-  <li>Sie enthält alles, was die Diashow hat: Folien, Einstellungen, Musik, Bearbeitungen, Bildtexte, Verpixelungen, die Personenliste mit den Gesichtsdaten und die Löschfrist (es sind ja dieselben Fotos der Klasse). Der Titel im Video bleibt „Klassenfahrt“.</li>
-  <li>Ältere Versionen, Rückgängig-Verlauf und Export-Aufträge gehören zum Original; die Kopie beginnt ohne.</li>
-  <li>Hochgeladene Fotos der Klasse und eingefügte Bilder bleiben, wo sie sind, und gehören beiden Diashows. <a href="#cleanup">Aufräumen</a> und Löschen lassen sie stehen, solange die andere Diashow sie noch nutzt, auch aus dem Papierkorb heraus; erst mit der letzten der beiden werden sie endgültig gelöscht.</li>
+  <li>Die Kopie enthält alles, was die Diashow hat: Folien, Einstellungen, Musik, Bearbeitungen, Bildtexte, Verpixelungen, die Personenliste mit den Gesichtsdaten und die Löschfrist. Der Titel im Video bleibt „Klassenfahrt“.</li>
+  <li>Ältere Versionen, Rückgängig-Verlauf und Export-Aufträge bleiben beim Original.</li>
+  <li>Hochgeladene Fotos der Klasse und eingefügte Bilder gehören beiden Diashows. <a href="#cleanup">Aufräumen</a> und Löschen lassen sie stehen, solange die andere Diashow sie nutzt, auch aus dem Papierkorb heraus.</li>
 </ul>
 </section>
 
 <section class="hb-chapter" id="edit" aria-labelledby="edit-title">
 <h2 id="edit-title">Bearbeiten</h2>
-<p>Der Editor hat drei Bereiche: die <strong>Vorschau</strong> in der Mitte, rechts die Reiter <strong>Themen</strong>, <strong>Musik</strong>, <strong>Dauer</strong> und <strong>Folie</strong>, und unten den <strong>Filmstreifen</strong> mit allen Folien.</p>
+<p>Der Editor hat drei Bereiche: die <strong>Vorschau</strong> in der Mitte, rechts die Reiter <strong>Themen</strong>, <strong>Musik</strong>, <strong>Dauer</strong> und <strong>Folie</strong>, unten den <strong>Filmstreifen</strong> mit allen Folien.</p>
 <figure>
   <img src="img/de/editor.jpg" width="1100" height="688" alt="Der Editor" loading="lazy" decoding="async">
   <figcaption>Der Editor</figcaption>
 </figure>
 <ul>
   <li><strong>Reihenfolge:</strong> Folien im Filmstreifen ziehen. Eine Folie auf die Mitte einer anderen ziehen fasst beide zu einer Folie zusammen.</li>
-  <li><strong>Mehrere Folien:</strong> <kbd>Strg</kbd>+Klick, <kbd>Umschalt</kbd>+Klick oder <kbd>Strg+A</kbd>. Der Reiter <strong>Folie</strong> ändert dann alle zusammen.</li>
-  <li><strong>Anzeigedauer:</strong> am rechten Rand einer Karte ziehen; Doppelklick dort stellt wieder „automatisch“ ein.</li>
-  <li><strong>Ausschnitt:</strong> im Vorschaubild ziehen verschiebt das Foto, das Mausrad zoomt, Doppelklick setzt zurück.</li>
-  <li><strong>Texte:</strong> <strong>Text hinzufügen</strong> erzeugt eine Textfolie. Im Reiter <strong>Folie</strong> fügst du Textfelder auf ein Foto ein.</li>
-  <li><strong>Kapitel:</strong> im Menü <strong>⋯</strong> gibt es <strong>Tagestitel aus Aufnahmedatum</strong> und <strong>Kapitel aus Ordnernamen</strong>, außerdem <strong>Nach Aufnahmedatum sortieren</strong> und <strong>Abspann hinzufügen</strong>.</li>
-  <li><strong>Videos:</strong> im Reiter <strong>Folie</strong> kürzen, Tempo ändern (Zeitlupe/Zeitraffer) und <strong>Verwacklung beruhigen</strong>.</li>
-  <li><strong>Live Photos und Bewegte Fotos:</strong> im Reiter <strong>Folie</strong> unter <strong>Live Photo</strong> wählen, wie die Bewegung läuft (auch für mehrere Fotos zugleich): <strong>Aus (Standbild)</strong>, <strong>Live (einmal)</strong> am Anfang der Folie, <strong>Endlosschleife</strong> (das Ende blendet weich in den Anfang über) oder <strong>Abpraller</strong> (vorwärts und rückwärts). Endlosschleife und Abpraller laufen die ganze Folie lang, mindestens einen Durchlauf; das Foto steht dann allein auf seiner Folie, verpixelte Gesichter bleiben verpixelt. <strong>Standard</strong> folgt <strong>Live Photos / Bewegte Fotos abspielen</strong> im Reiter <strong>Dauer</strong>. Im Filmstreifen steht das Zeichen der Endlosschleife oder des Abprallers neben <strong>LIVE</strong>.</li>
+  <li><strong>Mehrere Folien:</strong> <kbd>Strg</kbd>+Klick, <kbd>Umschalt</kbd>+Klick oder <kbd>Strg+A</kbd>. Der Reiter <strong>Folie</strong> ändert dann alle zusammen: Dauer, Bildausschnitt, Tempo, Videoton, Bewegung von Live Photos, Verpixeln oder <strong>Aus der Diashow nehmen</strong>.</li>
+  <li><strong>Anzeigedauer:</strong> am rechten Rand einer Karte ziehen; ein Doppelklick dort stellt wieder „automatisch“ ein. Für die ausgewählte Folie geht es auch mit <strong>Eigene Anzeigedauer</strong> im Reiter <strong>Folie</strong>.</li>
+  <li><strong>Bildausschnitt:</strong> in der Vorschau ziehen verschiebt das Foto, das Mausrad zoomt, ein Doppelklick setzt zurück.</li>
+  <li><strong>Fotos auf einer Folie:</strong> In Themen mit mehreren Fotos pro Folie nimmt die Folie mit + und − im Reiter <strong>Folie</strong> Fotos auf oder gibt sie ab. <strong>In einzelne Folien teilen</strong> und <strong>Zu einer Folie zusammenfassen</strong> (im Menü der Folie, Rechtsklick) ändern die Gruppen.</li>
+  <li><strong>Texte:</strong> <strong>Textfolie hinzufügen</strong> (Knopf <strong>+</strong> am Ende des Filmstreifens oder Menü einer Folie) erzeugt eine Textfolie. <strong>Textfeld hinzufügen</strong> im Reiter <strong>Folie</strong> setzt Text auf ein Foto; in der Vorschau verschiebst du ihn, ein Doppelklick öffnet ihn zum Schreiben.</li>
+  <li><strong>Kapitel:</strong> Im Menü <strong>⋯</strong> stehen <strong>Tagestitel aus Aufnahmedatum</strong>, <strong>Kapitel aus Ordnernamen</strong>, <strong>Nach Aufnahmedatum sortieren</strong> und <strong>Abspann hinzufügen</strong>.</li>
   <li><strong>Rückgängig:</strong> <kbd>Strg+Z</kbd>, wiederholen mit <kbd>Strg+Y</kbd>. Das geht auch nach einem Neustart: Jede Diashow behält ihre letzten 100 Schritte.</li>
 </ul>
-<p class="tip">Tipp: Mit <kbd>Leertaste</kbd> spielst du die Vorschau ab, mit <kbd>←</kbd> und <kbd>→</kbd> springst du von Folie zu Folie.</p>
-<h3>Filmstreifen: Zoom, Suche und Kapitel</h3>
+<p class="tip">Tipp: <kbd>Leertaste</kbd> spielt die Vorschau ab, <kbd>←</kbd> und <kbd>→</kbd> springen von Folie zu Folie.</p>
+</section>
+
+<section class="hb-chapter" id="add" aria-labelledby="add-title">
+<h2 id="add-title">Fotos hinzufügen und einfügen</h2>
 <ul>
-  <li><strong>Zoom:</strong> Mit − und + oder dem Regler rechts über dem Filmstreifen werden die Folien kleiner oder größer, ebenso mit <kbd>Strg</kbd>+Mausrad über dem Filmstreifen (dann bleibt die Stelle unter der Maus stehen). <strong>Ganze Diashow zeigen</strong> passt alle Folien in die Breite. Kleine Karten zeigen nur noch Bilder; eine dünne blaue Linie markiert jedes Kapitel. Die Tonspur darunter passt bei jeder Größe.</li>
-  <li><strong>Suche:</strong> <kbd>Strg+F</kbd> oder die Lupe. Gesucht wird in Dateinamen, Kapiteln und Tagestiteln, Bildtexten, Textfolien, Textfeldern, Namen aus der Personenliste und im Aufnahmedatum: „12.5.“, „12. Mai“, „Dienstag“, „Mai 2025“, auch englisch („May 12“, „Tuesday“). „Video“ und „Live“ finden Videos und Live Photos. Bei mehreren Wörtern muss jedes passen.</li>
-  <li>Die Treffer stehen in einer Liste über dem Suchfeld und sind im Filmstreifen gelb markiert. <kbd>↑</kbd> / <kbd>↓</kbd> und <kbd>Enter</kbd> springen zu einem Treffer: Die Folie wird ausgewählt und in der Vorschau gezeigt. <kbd>Enter</kbd> / <kbd>Umschalt+Enter</kbd> oder <kbd>F3</kbd> / <kbd>Umschalt+F3</kbd> gehen zum nächsten / vorigen Treffer, <kbd>Esc</kbd> schließt die Suche.</li>
-  <li><strong>Kapitel:</strong> Das Menü <strong>Kapitel</strong> listet Titel, Kapitel und Textfolien mit ihrer Zeit; ein Klick springt hin.</li>
-</ul>
-<h3>Fotos an einer Stelle einfügen</h3>
-<ul>
-  <li><strong>Aus dem Explorer ziehen:</strong> Fotos, Videos oder Ordner zwischen zwei Karten des Filmstreifens ziehen; eine blaue Linie zeigt, wo sie landen. Sie werden wie beim Hinzufügen eingelesen (Live Photos und RAW+JPEG als ein Foto) und nach Aufnahmezeit geordnet. Auf die Mitte einer Karte gezogen, kommen sie mit auf diese Folie, wenn das Thema mehrere Fotos pro Folie zeigt und Platz ist. Woanders im Fenster abgelegt, landen sie wie bisher hinter der Auswahl.</li>
-  <li><strong>Kopieren und einfügen:</strong> Im Explorer kopierte Dateien (<kbd>Strg+C</kbd>) fügt <kbd>Strg+V</kbd> hinter der ausgewählten Folie ein, ohne Auswahl am Ende. Ein kopiertes Bild ohne Datei, etwa ein Bildschirmfoto mit <kbd>Win+Umschalt+S</kbd>, speichert die App als PNG in <code>Dokumente\Diashow Studio\Eingefügt\&lt;Diashow&gt;</code> und fügt es ein. <strong>Nach dem Projekt aufräumen</strong> kann diese Bilder wieder löschen.</li>
+  <li><strong>Hinzufügen:</strong> Fotos, Videos oder Ordner ins Fenster ziehen, oder der Knopf <strong>+</strong> am Ende des Filmstreifens mit <strong>Fotos und Videos hinzufügen…</strong> und <strong>Ordner hinzufügen…</strong>. Sie kommen hinter die ausgewählte Folie, ohne Auswahl ans Ende.</li>
+  <li><strong>An einer Stelle einfügen:</strong> Aus dem Explorer zwischen zwei Karten des Filmstreifens ziehen; eine blaue Linie zeigt, wo sie landen. Auf die Mitte einer Karte gezogen, kommen sie mit auf diese Folie, wenn das Thema mehrere Fotos pro Folie zeigt und Platz ist.</li>
+  <li><strong>Kopieren und einfügen:</strong> Im Explorer kopierte Dateien (<kbd>Strg+C</kbd>) fügt <kbd>Strg+V</kbd> hinter der ausgewählten Folie ein. Ein kopiertes Bild ohne Datei, etwa ein Bildschirmfoto mit <kbd>Win+Umschalt+S</kbd>, speichert die App in <code>Dokumente\Diashow Studio\Eingefügt</code>.</li>
   <li><strong>Einfügen…</strong> im Menü einer Folie wählt Dateien aus und setzt sie hinter diese Folie.</li>
 </ul>
-<p>Die eingefügten Folien sind danach ausgewählt; <kbd>Strg+Z</kbd> nimmt das ganze Einfügen in einem Schritt zurück. In Themen mit mehreren Fotos pro Folie (Magazin, Origami, …) bleiben alle anderen Folien, wie sie sind: Die neuen Fotos bilden eigene Folien. Sollen die Folien wieder nach dem Muster des Themas gemischt werden, klicke über dem Filmstreifen auf <strong>Automatisch gruppieren</strong> (siehe <a href="#themes">Themen</a>).</p>
-<h3>Fotos, die schon in der Diashow sind</h3>
-<p>Was schon in der Diashow ist, kommt nicht noch einmal hinein – beim Hinzufügen von Fotos oder Ordnern, beim Ziehen ins Fenster, in den Filmstreifen oder auf ihre Karte auf der Startseite, mit <kbd>Strg+V</kbd>, <strong>Einfügen…</strong>, im Assistenten und bei Uploads aus dem WLAN. Als „schon da“ zählt:</p>
+<p>Live Photos und RAW+JPEG kommen als ein Foto hinein. Die neuen Folien sind danach ausgewählt; <kbd>Strg+Z</kbd> nimmt das ganze Einfügen in einem Schritt zurück. In Themen mit mehreren Fotos pro Folie bleiben die anderen Folien, wie sie sind (siehe <strong>Automatisch gruppieren</strong> unter <a href="#themes">Themen</a>).</p>
+<h3>Was schon in der Diashow ist</h3>
+<p>Fotos und Videos, die schon in der Diashow sind, kommen nicht noch einmal hinein, egal auf welchem Weg, auch mit dem Assistenten oder beim Hochladen über das WLAN. Als „schon da“ zählt:</p>
 <ul>
   <li>dieselbe Datei, auch wenn ihre Folie herausgenommen ist;</li>
-  <li>eine Kopie unter anderem Namen oder in einem anderen Ordner, die Byte für Byte gleich ist;</li>
-  <li>dieselbe Datei zweimal in einer Auswahl: nur die erste kommt hinein;</li>
-  <li>dasselbe Foto als HEIC und als JPEG vom selben Handy (gleiche Kamera, Bildgröße und Aufnahmezeit auf die Millisekunde). Serienbilder sind verschiedene Fotos und kommen alle hinein.</li>
+  <li>eine Kopie unter anderem Namen, die Byte für Byte gleich ist;</li>
+  <li>dasselbe Foto als HEIC und als JPEG vom selben Handy. Serienbilder kommen alle hinein.</li>
 </ul>
-<p>Ein Hinweis unten rechts sagt, wie viele übersprungen wurden. <strong>Zeigen</strong> wählt die vorhandenen Folien im Filmstreifen aus, <strong>Trotzdem einfügen</strong> fügt sie doch hinzu (<kbd>Strg+Z</kbd> nimmt das in einem Schritt zurück). Verkleinerte Kopien, etwa aus WhatsApp, findet <strong>Ausschuss prüfen…</strong> (siehe <a href="#cull">Sichten</a>).</p>
-<h3>Fotos bearbeiten</h3>
-<p>Schiefe oder liegende Handyfotos richtest du wie in Fotos auf dem Mac: Foto auswählen und im Reiter <strong>Folie</strong> unter <strong>Bild</strong> auf <strong>Bearbeiten</strong> klicken (oder <strong>Bearbeiten</strong> im Menü der Folie). Über der Vorschau erscheint das Werkzeug <strong>Zuschneiden</strong>:</p>
+<p>Ein Hinweis unten rechts sagt, wie viele übersprungen wurden. <strong>Zeigen</strong> wählt die vorhandenen Folien aus, <strong>Trotzdem hinzufügen</strong> fügt sie doch hinzu. Verkleinerte Kopien, etwa aus WhatsApp, findet <strong>Ausschuss prüfen…</strong> (siehe <a href="#cull">Sichten</a>).</p>
+</section>
+
+<section class="hb-chapter" id="filmstrip" aria-labelledby="filmstrip-title">
+<h2 id="filmstrip-title">Filmstreifen: Zoom, Suche und Kapitel</h2>
 <ul>
-  <li><strong>Drehen:</strong> Die Pfeile drehen um 90° nach links oder rechts. <kbd>Strg+R</kbd> dreht alle ausgewählten Fotos nach links, auch auf mehreren Folien.</li>
-  <li><strong>Begradigen:</strong> Der Regler neigt das Bild um bis zu 45°. Es wird dabei so weit vergrößert, dass keine leeren Ecken entstehen.</li>
-  <li><strong>Zuschneiden:</strong> Ecken und Kanten des Rahmens ziehen oder den Rahmen verschieben. <strong>Format</strong> hält ein Seitenverhältnis fest (Frei, Original, 1:1, 4:3, 3:2, 16:9, 9:16); der Knopf daneben tauscht Hoch- und Querformat.</li>
-  <li><strong>Zurücksetzen</strong> nimmt Drehen, Begradigen und Zuschnitt zurück, <strong>Abbrechen</strong> (<kbd>Esc</kbd>) verwirft die Änderungen, <strong>Fertig</strong> (<kbd>Enter</kbd>) übernimmt sie. Jeder Schritt lässt sich mit <kbd>Strg+Z</kbd> rückgängig machen.</li>
+  <li><strong>Zoom:</strong> − und + oder der Regler über dem Filmstreifen machen die Folien kleiner oder größer, ebenso <kbd>Strg</kbd>+Mausrad über dem Filmstreifen. <strong>Ganze Diashow zeigen</strong> passt alle Folien in die Breite. Kleine Karten zeigen nur noch Bilder; eine dünne blaue Linie markiert jedes Kapitel.</li>
+  <li><strong>Suche:</strong> <kbd>Strg+F</kbd> oder die Lupe. Gesucht wird in Dateinamen, Kapiteln, Bildtexten, Textfolien, Textfeldern, Namen aus der Personenliste und im Aufnahmedatum („12.5.“, „12. Mai“, „Dienstag“, „Mai 2025“). „Video“ und „Live“ finden Videos und Live Photos. Bei mehreren Wörtern muss jedes passen.</li>
+  <li>Die Treffer stehen in einer Liste und sind im Filmstreifen gelb markiert. <kbd>Enter</kbd> / <kbd>Umschalt+Enter</kbd> oder <kbd>F3</kbd> / <kbd>Umschalt+F3</kbd> gehen zum nächsten / vorigen Treffer, <kbd>Esc</kbd> schließt die Suche.</li>
+  <li><strong>Kapitel:</strong> Das Menü <strong>Kapitel</strong> listet Titel, Kapitel und Textfolien mit ihrer Zeit; ein Klick springt hin.</li>
 </ul>
-<p>Das zweite Werkzeug, <strong>Licht und Farbe</strong>, hilft bei dunklen Handyfotos, orangem Kunstlicht und flauen Bildern. Dieselben Regler stehen auch im Reiter <strong>Folie</strong> unter <strong>Bild</strong>:</p>
+<p>Zeichen auf den Karten: ein Doppelpfeil für <a href="#panorama">Panoramen</a>, <strong>LIVE</strong> für Live Photos (mit dem Zeichen von Endlosschleife oder Abpraller), ein Regler-Zeichen für bearbeitete Fotos.</p>
+</section>
+
+<section class="hb-chapter" id="photoedit" aria-labelledby="photoedit-title">
+<h2 id="photoedit-title">Fotos bearbeiten</h2>
+<p>Schiefe oder liegende Handyfotos richtest du wie in Fotos auf dem Mac: Foto auswählen und im Reiter <strong>Folie</strong> auf <strong>Bearbeiten</strong> klicken (oder <strong>Bearbeiten</strong> im Menü der Folie). Videos bearbeitest du genauso.</p>
 <ul>
-  <li><strong>Helligkeit</strong> hellt Schatten und Mitteltöne auf, ohne helle Stellen abzuschneiden.</li>
-  <li><strong>Kontrast</strong> setzt Schatten und Lichter weiter auseinander oder näher zusammen.</li>
-  <li><strong>Wärme</strong> macht das Bild wärmer oder kühler, ohne seine Helligkeit zu ändern. Gegen orangefarbenes Kunstlicht ziehst du sie nach links.</li>
-  <li><strong>Sättigung</strong> macht die Farben kräftiger oder blasser.</li>
+  <li><strong>Drehen:</strong> Die Pfeile drehen um 90°. <kbd>Strg+R</kbd> dreht alle ausgewählten Fotos nach links.</li>
+  <li><strong>Begradigen:</strong> Der Regler neigt das Bild um bis zu 45°, ohne leere Ecken.</li>
+  <li><strong>Zuschneiden:</strong> Ecken und Kanten des Rahmens ziehen. <strong>Format</strong> hält ein Seitenverhältnis fest (Frei, Original, 1:1, 4:3, 3:2, 16:9, 9:16).</li>
+  <li><strong>Licht und Farbe:</strong> <strong>Helligkeit</strong>, <strong>Kontrast</strong>, <strong>Wärme</strong> und <strong>Sättigung</strong>, jeweils von −100 bis +100. Gegen orangefarbenes Kunstlicht ziehst du <strong>Wärme</strong> nach links. Ein Doppelklick setzt einen Regler auf 0.</li>
+  <li><strong>Zurücksetzen</strong> nimmt alles zurück, <strong>Abbrechen</strong> (<kbd>Esc</kbd>) verwirft die Änderungen, <strong>Fertig</strong> (<kbd>Enter</kbd>) übernimmt sie.</li>
 </ul>
-<p>Jeder Regler reicht von −100 bis +100; der Pfeil daneben oder ein Doppelklick setzt ihn auf 0. Sind mehrere Folien ausgewählt, gilt ein Regler für alle ihre Fotos und Videos. Der Look der Diashow kommt danach obendrauf und wirkt so auf alle Fotos gleich. Bearbeitete Folien zeigen im Filmstreifen ein kleines Regler-Zeichen.</p>
 <figure>
   <img src="img/de/edit.jpg" width="1100" height="688" alt="Licht und Farbe in der Bearbeitungsansicht" loading="lazy" decoding="async">
   <figcaption>Licht und Farbe in der Bearbeitungsansicht</figcaption>
 </figure>
-<p>Das bearbeitete Foto erscheint überall: in jeder Folie, beim Ken-Burns-Effekt, im Filmstreifen, beim Sichten und im Export. Den Ausschnitt in der Folie verschiebst du danach wie gewohnt. Verpixelte Gesichter bleiben auf denselben Gesichtern und bleiben verpixelt, auch wenn du das Bild aufhellst. Videos bearbeitest du genauso.</p>
-<p class="tip">Mit der Tastatur: Die Pfeiltasten verschieben den Rahmen, mit <kbd>Umschalt</kbd> ändern sie seine Größe. Die Regler für Licht und Farbe bewegst du mit den Pfeiltasten, mit <kbd>Umschalt</kbd> in Zehnerschritten.</p>
+<p>Das bearbeitete Foto erscheint überall: in jeder Folie, im Filmstreifen, beim Sichten und im Export. Verpixelte Gesichter bleiben verpixelt. Die Regler für Licht und Farbe stehen auch im Reiter <strong>Folie</strong>; dort gelten sie für alle ausgewählten Fotos.</p>
 </section>
 
 <section class="hb-chapter" id="themes" aria-labelledby="themes-title">
 <h2 id="themes-title">Themen und Looks</h2>
 <p>Das <strong>Thema</strong> bestimmt, wie die Folien aussehen und wechseln. Es gibt 11 Themen, z. B. <strong>Ken Burns</strong> (langsame Fahrten über das Foto), <strong>Magazin</strong> (mehrere Fotos im Raster) oder <strong>Schnappschüsse</strong> (Sofortbilder auf einem Tisch).</p>
 <ul>
-  <li>Themen mit mehreren Fotos pro Folie ordnen die Fotos selbst an. Im Reiter <strong>Folie</strong> wählst du ein anderes Layout oder <strong>Frei</strong> für eine eigene Collage.</li>
-  <li><strong>Automatisch gruppieren:</strong> Folien, die du zusammengefasst oder geteilt hast, und Folien, die beim Einfügen festgehalten wurden, behalten ihre Fotos, auch nach einem Themenwechsel. Über dem Filmstreifen steht dann, wie viele es sind, z. B. <strong>3 feste Folien · Automatisch gruppieren</strong>; ein Klick darauf lässt das Thema alle Fotos wieder nach seinem Muster verteilen. Für einzelne Folien steht <strong>Automatisch gruppieren</strong> im Menü der Folie. <strong>Nach Aufnahmedatum sortieren</strong> gruppiert immer neu. <kbd>Strg+Z</kbd> macht es rückgängig.</li>
+  <li>Themen mit mehreren Fotos pro Folie ordnen die Fotos selbst an. Im Reiter <strong>Folie</strong> wählst du ein anderes <strong>Layout</strong> oder <strong>Frei</strong> für eine eigene Collage: Fotos ziehen, an der Ecke die Größe ändern, mit dem Knopf oben drehen.</li>
+  <li><strong>Automatisch gruppieren:</strong> Folien, die du zusammengefasst oder geteilt hast, behalten ihre Fotos, auch nach einem Themenwechsel. Über dem Filmstreifen steht dann z. B. <strong>3 feste Folien · Automatisch gruppieren</strong>; ein Klick verteilt alle Fotos wieder nach dem Muster des Themas. Für einzelne Folien steht <strong>Automatisch gruppieren</strong> im Menü der Folie.</li>
   <li>Der <strong>Look</strong> (Natürlich, Lebendig, Warm, Kühl, Dramatisch, Verblasst, Schwarzweiß, Noir) färbt nur die Fotos und Videos, nicht den Hintergrund.</li>
-  <li><strong>Fotos bildfüllend zuschneiden</strong> gilt für die ganze Show; jedes Foto kann mit <strong>Ganzes Bild</strong> eine Ausnahme sein.</li>
-  <li><strong>Titel:</strong> Titeltext, Schrift, Größe, Farbe und eine Animation (Handschrift, Schreibmaschine, großes Datum) stellst du im Reiter <strong>Themen</strong> ein.</li>
+  <li><strong>Fotos bildfüllend zuschneiden</strong> (Reiter <strong>Dauer</strong>) gilt für die ganze Diashow; jedes Foto kann im Reiter <strong>Folie</strong> mit <strong>Ganzes Bild</strong> eine Ausnahme sein.</li>
+  <li><strong>Titel:</strong> Titeltext, Schrift, Größe, Farbe und <strong>Titelanimation</strong> (Handschrift, Schreibmaschine, großes Wort mit Linie) stellst du im Reiter <strong>Themen</strong> ein. Jede Textfolie kann im Reiter <strong>Folie</strong> eine eigene Animation haben, auch einen rollenden <strong>Abspann</strong>.</li>
+  <li><strong>Ken Burns:</strong> Start- und Endausschnitt eines Fotos legst du im Reiter <strong>Folie</strong> unter <strong>Ken-Burns-Effekt</strong> fest.</li>
   <li>Im Thema <strong>Klassisch</strong> wählst du den Übergang (Überblenden, Schieben, Würfel …) im Reiter <strong>Dauer</strong>.</li>
 </ul>
-<h3>Panoramen</h3>
-<p>Sehr breite Fotos, z. B. Panoramen vom Handy, zeigt die Diashow wie Fotos auf dem Mac: Sie bekommen eine eigene Folie, füllen deren Höhe, und die Ansicht fährt in ruhigem, gleichmäßigem Tempo von einem Ende zum anderen. Sehr hohe Fotos fahren von oben nach unten. Als Panorama gilt ein Foto ab doppelt so breit wie hoch, das deutlich breiter als die Diashow ist (bei 16:9 ab etwa 2,5:1). Seine Folie dauert länger, je breiter es ist, höchstens zweieinhalbmal so lange wie ein Foto; eine eigene Dauer gilt trotzdem. Im Filmstreifen tragen solche Folien einen Doppelpfeil.</p>
+</section>
+
+<section class="hb-chapter" id="panorama" aria-labelledby="panorama-title">
+<h2 id="panorama-title">Panoramen</h2>
+<p>Sehr breite Fotos, z. B. Panoramen vom Handy, zeigt die Diashow wie Fotos auf dem Mac: Sie bekommen eine eigene Folie, füllen deren Höhe, und die Ansicht fährt ruhig von einem Ende zum anderen. Sehr hohe Fotos fahren von oben nach unten.</p>
+<figure>
+  <img src="img/de/panorama.jpg" width="1100" height="688" alt="Ein Panorama im Editor" loading="lazy" decoding="async">
+  <figcaption>Ein Panorama im Editor</figcaption>
+</figure>
 <ul>
-  <li>Im Reiter <strong>Folie</strong> wählst du unter <strong>Panorama</strong> für ein oder mehrere Panoramen <strong>Schwenk</strong>, <strong>Ganzes Bild</strong> oder <strong>Zuschneiden</strong> und die <strong>Richtung</strong> (links → rechts oder rechts → links, oben → unten oder unten → oben).</li>
-  <li>In <strong>Ken Burns</strong> ist der Schwenk der Start- und Endausschnitt; einen eigenen Ausschnitt legst du wie gewohnt fest.</li>
-  <li><strong>Magazin</strong> zeigt das Panorama auf der ganzen Seite, <strong>Reflexionen</strong> als breite Karte, <strong>Vintage-Abzüge</strong>, <strong>Sammelalbum</strong> und <strong>Schnappschüsse</strong> als breiten Abzug, in dem das Bild wandert.</li>
+  <li>Als Panorama gilt ein Foto ab doppelt so breit wie hoch, das deutlich breiter als die Diashow ist (bei 16:9 ab etwa 2,5:1). Im Filmstreifen trägt seine Folie einen Doppelpfeil.</li>
+  <li>Seine Folie dauert länger, je breiter es ist, höchstens zweieinhalbmal so lange wie ein Foto. Eine eigene Anzeigedauer gilt trotzdem.</li>
+  <li>Im Reiter <strong>Folie</strong> wählst du unter <strong>Panorama</strong>, ob es als <strong>Schwenk</strong>, <strong>Ganzes Bild</strong> oder <strong>Bildfüllend</strong> erscheint, und die <strong>Richtung</strong>, auch für mehrere Panoramen zugleich.</li>
   <li>Verpixelte Gesichter bleiben beim Schwenken verpixelt.</li>
 </ul>
 </section>
 
+<section class="hb-chapter" id="video" aria-labelledby="video-title">
+<h2 id="video-title">Videos und Live Photos</h2>
+<p>Videos stellst du im Reiter <strong>Folie</strong> ein:</p>
+<ul>
+  <li><strong>Kürzen:</strong> die Griffe über dem Streifen mit Bildern aus dem Clip ziehen, <strong>Gekürzt abspielen</strong> spielt das Ergebnis. <strong>Videos höchstens</strong> (Reiter <strong>Dauer</strong>) kürzt lange Clips automatisch.</li>
+  <li><strong>Tempo:</strong> Zeitlupe und Zeitraffer von 0,25× bis 8×. Zwischen 0,5× und 2× spielt der Ton mit, sonst bleibt der Clip stumm.</li>
+  <li><strong>Verwacklung beruhigen</strong> macht wacklige Handyvideos ruhiger. Das Bild wird dafür leicht vergrößert.</li>
+  <li><strong>Videoton:</strong> Lautstärke, <strong>Stumm</strong> und <strong>Musik absenken</strong>. Während ein Video mit Ton läuft, wird die Musik automatisch leiser (Reiter <strong>Musik</strong>).</li>
+</ul>
+<p><strong>Live Photos</strong> (iPhone) und <strong>Bewegte Fotos</strong> (Android) können sich bewegen. Unter <strong>Live Photo</strong> wählst du bei <strong>Bewegung</strong>, wie, auch für mehrere Fotos zugleich:</p>
+<ul>
+  <li><strong>Aus (Standbild)</strong> oder <strong>Live (einmal)</strong> am Anfang der Folie;</li>
+  <li><strong>Endlosschleife:</strong> Die Bewegung wiederholt sich die ganze Folie lang, das Ende blendet weich in den Anfang über;</li>
+  <li><strong>Abpraller:</strong> Die Bewegung läuft vorwärts und rückwärts.</li>
+</ul>
+<figure>
+  <img src="img/de/livephoto.jpg" width="1100" height="688" alt="Live Photo als Endlosschleife" loading="lazy" decoding="async">
+  <figcaption>Live Photo als Endlosschleife</figcaption>
+</figure>
+<p>Endlosschleife und Abpraller laufen mindestens einmal ganz durch; das Foto steht dann allein auf seiner Folie, verpixelte Gesichter bleiben verpixelt. <strong>Standard</strong> folgt <strong>Live Photos / Bewegte Fotos abspielen</strong> im Reiter <strong>Dauer</strong>. Im Filmstreifen steht das Zeichen von Endlosschleife oder Abpraller neben <strong>LIVE</strong>.</p>
+</section>
+
 <section class="hb-chapter" id="music" aria-labelledby="music-title">
 <h2 id="music-title">Musik</h2>
-<p>Im Reiter <strong>Musik</strong> fügst du eigene Musikdateien hinzu (MP3, M4A, WAV, FLAC und mehr). Mehrere Songs bilden eine Wiedergabeliste, die du per Ziehen ordnest.</p>
-<p>Jedes Thema hat eigene Musik (CC0 oder gemeinfrei, frei nutzbar, auch in geteilten Videos); deine eigene Musik ersetzt sie. Unter <strong>Themenmusik</strong> wählst du einen anderen Song des Themas, eines anderen Themas oder aus der <strong>Musikbibliothek</strong>, die du nach <strong>Stimmung</strong> filterst (z. B. <strong>Feierlich</strong> für eine Zeugnisausgabe oder <strong>Weihnachtlich</strong>). <strong>Zur eigenen Musik hinzufügen</strong> übernimmt den gewählten Song in die Wiedergabeliste, wo du ihn kürzen oder einem Kapitel geben kannst.</p>
+<p>Jedes Thema hat eigene Musik (CC0 oder gemeinfrei, frei nutzbar, auch in geteilten Videos). Im Reiter <strong>Musik</strong> fügst du mit <strong>Musik hinzufügen…</strong> eigene Songs hinzu (MP3, M4A, WAV, FLAC und mehr); sie ersetzen die Themenmusik. Mehrere Songs bilden eine Wiedergabeliste, die du per Ziehen ordnest.</p>
 <figure>
   <img src="img/de/music.jpg" width="1100" height="688" alt="Musik mit Wellenform und Taktmarken" loading="lazy" decoding="async">
   <figcaption>Musik mit Wellenform und Taktmarken</figcaption>
 </figure>
 <ul>
-  <li><strong>An Musik anpassen</strong> (Reiter <strong>Dauer</strong>): Die Diashow dauert genau so lange wie die Musik. Alternativ legst du eine eigene Gesamtdauer fest.</li>
+  <li><strong>Themenmusik:</strong> Hier wählst du einen anderen Song des Themas, eines anderen Themas oder aus der <strong>Musikbibliothek</strong>, gefiltert nach <strong>Stimmung</strong> (z. B. <strong>Feierlich</strong> für eine Zeugnisausgabe oder <strong>Weihnachtlich</strong>). <strong>Zur eigenen Musik hinzufügen</strong> übernimmt ihn in die Wiedergabeliste.</li>
+  <li><strong>An Musik anpassen</strong> (Reiter <strong>Dauer</strong>): Die Diashow dauert genau so lange wie die Musik. Oder du legst eine <strong>Eigene Dauer</strong> fest.</li>
   <li><strong>Folienwechsel im Takt der Musik</strong> legt jeden Wechsel auf einen Schlag.</li>
   <li>Die <strong>Schere</strong> neben einem Song wählt Anfang und Ende, z. B. um ein langes Intro zu überspringen.</li>
-  <li><strong>Musik ab hier:</strong> Ein Song kann ab einer Kapitel-Folie spielen, etwa eigene Musik für jeden Tag einer Klassenfahrt.</li>
-  <li>Bei Videos mit Ton wird die Musik automatisch leiser. <strong>Lautstärke angleichen</strong> bringt Songs und Videoton auf denselben Pegel.</li>
+  <li><strong>Musik ab hier:</strong> Ein Song kann ab einer Kapitelfolie spielen, etwa eigene Musik für jeden Tag einer Klassenfahrt.</li>
+  <li><strong>Lautstärke angleichen</strong> bringt Songs und Videoton auf denselben Pegel.</li>
 </ul>
 </section>
 
@@ -222,8 +268,8 @@
 <h2 id="cull-title">Sichten</h2>
 <p><strong>Sichten</strong> (oben rechts) zeigt alle Fotos und Videos als Raster. So gehst du einen großen Import schnell mit der Tastatur durch.</p>
 <figure>
-  <img src="img/de/cull.jpg" width="1100" height="688" alt="Sichten: aussortieren und bewerten" loading="lazy" decoding="async">
-  <figcaption>Sichten: aussortieren und bewerten</figcaption>
+  <img src="img/de/cull.jpg" width="1100" height="688" alt="Sichten: herausnehmen und bewerten" loading="lazy" decoding="async">
+  <figcaption>Sichten: herausnehmen und bewerten</figcaption>
 </figure>
 <ul>
   <li><kbd>X</kbd> nimmt ein Bild aus der Diashow (es bleibt im Projekt) und holt es zurück.</li>
@@ -236,36 +282,37 @@
 
 <section class="hb-chapter" id="privacy" aria-labelledby="privacy-title">
 <h2 id="privacy-title">Datenschutz: Gesichter verpixeln</h2>
-<p>Für Schülerinnen und Schüler ohne Fotoerlaubnis kannst du Gesichter verpixeln. Die Gesichtserkennung läuft offline auf deinem PC; kein Bild verlässt ihn.</p>
+<p>Für Schülerinnen und Schüler ohne Fotoerlaubnis verpixelst du Gesichter. Die Gesichtserkennung läuft offline auf deinem PC; kein Bild verlässt ihn.</p>
 <figure>
   <img src="img/de/privacy.jpg" width="1100" height="688" alt="Gesichter verpixeln" loading="lazy" decoding="async">
   <figcaption>Gesichter verpixeln</figcaption>
 </figure>
 <ol>
   <li>Folie auswählen, im Reiter <strong>Folie</strong> auf <strong>Gesichter verpixeln…</strong> klicken.</li>
-  <li>Ein erkanntes Gesicht anklicken, oder mit der Maus einen Bereich aufziehen.</li>
-  <li>Mit dem Personen-Knopf (<strong>Diese Person überall verpixeln</strong>) an einem Gesicht wird diese Person in <strong>allen</strong> Fotos und Videos der Show gesucht und verpixelt. Die Personenliste zeigt die Treffer; einen falschen Treffer entfernst du mit ✕.</li>
+  <li>Ein erkanntes Gesicht anklicken oder mit der Maus einen Bereich aufziehen.</li>
+  <li>Mit dem Personen-Knopf an einem Gesicht (<strong>Diese Person überall verpixeln</strong>) wird die Person in <strong>allen</strong> Fotos und Videos der Diashow gesucht und verpixelt. Die Personenliste zeigt die Treffer; einen falschen Treffer entfernst du mit ✕.</li>
 </ol>
 <ul>
-  <li>In Videos wird ein angeklicktes Gesicht durch den ganzen Clip verfolgt.</li>
-  <li>Vor dem Export zeigt <strong>Gesichter prüfen …</strong> (Menü <strong>⋯</strong> oder im Export-Dialog) alle Folien mit Gesichtern, die noch nicht verpixelt sind.</li>
-  <li>Die Gesichtsdaten bleiben bei der Diashow, bis du <a href="#cleanup">aufräumst</a>. Eine gelöschte Diashow nimmt sie mit in den Papierkorb, bis sie dort endgültig gelöscht wird (spätestens nach 30 Tagen).</li>
+  <li>In Videos wird ein angeklicktes Gesicht durch den ganzen Clip verfolgt; ein Regler wählt das Bild aus dem Clip.</li>
+  <li>Vor dem Export zeigt <strong>Gesichter prüfen…</strong> (Menü <strong>⋯</strong> oder Export-Dialog) alle Folien mit Gesichtern, die noch nicht verpixelt sind.</li>
+  <li>Die Gesichtsdaten bleiben bei der Diashow, bis du <a href="#cleanup">aufräumst</a>.</li>
 </ul>
 <p class="tip">Prüfe das Ergebnis immer selbst: Die Erkennung findet nicht jedes Gesicht, z. B. im Profil oder sehr klein.</p>
 </section>
 
 <section class="hb-chapter" id="export" aria-labelledby="export-title">
-<h2 id="export-title">Exportieren und Warteschlange</h2>
-<p><strong>Exportieren</strong> (oben rechts) speichert die Diashow als MP4-Video. Wähle eine Vorgabe wie <strong>YouTube 1080p</strong>, <strong>WhatsApp / E-Mail (klein)</strong> oder <strong>Fernseher / Beamer</strong> – oder stelle Auflösung, Bildrate und Qualität selbst ein.</p>
+<h2 id="export-title">Exportieren</h2>
+<p><strong>Exportieren</strong> (oben rechts) speichert die Diashow als MP4-Video. Wähle eine Vorlage wie <strong>YouTube 1080p</strong>, <strong>WhatsApp / E-Mail (klein)</strong> oder <strong>Fernseher / Beamer 1080p</strong> oder stelle Auflösung, Bildrate und Qualität selbst ein.</p>
 <figure>
   <img src="img/de/export.jpg" width="1100" height="688" alt="Der Export-Dialog" loading="lazy" decoding="async">
   <figcaption>Der Export-Dialog</figcaption>
 </figure>
 <ul>
-  <li>Exporte laufen im Hintergrund, nacheinander. Du kannst währenddessen weiterarbeiten; die Titelleiste zeigt den Fortschritt.</li>
-  <li>Jeder Export ist eine Momentaufnahme: spätere Änderungen verändern ihn nicht.</li>
+  <li>Exporte laufen im Hintergrund nacheinander; du kannst weiterarbeiten. Die Titelleiste zeigt den Fortschritt, die Liste <strong>Exporte</strong> alle Aufträge.</li>
+  <li>Jeder Export ist eine Momentaufnahme: Spätere Änderungen verändern ihn nicht.</li>
   <li>Nach einem Absturz oder Neustart geht es mit <strong>Fortsetzen</strong> in der Liste <strong>Exporte</strong> weiter.</li>
-  <li>Grafikkarten (NVIDIA, Intel, AMD) machen den Export deutlich schneller. Der PC geht währenddessen nicht in den Ruhezustand.</li>
+  <li><strong>Kapitel als Sprungmarken:</strong> Ab zwei Kapiteln springen Player wie VLC damit direkt zu „Dienstag“. <strong>Kapitel kopieren</strong> legt die Liste für eine YouTube-Beschreibung in die Zwischenablage.</li>
+  <li>Mit <strong>Grafikkarte zum Kodieren nutzen</strong> (NVIDIA, Intel, AMD) geht der Export deutlich schneller. Der PC geht währenddessen nicht in den Ruhezustand.</li>
 </ul>
 <figure>
   <img src="img/de/queue.jpg" width="1100" height="688" alt="Die Liste der Exporte" loading="lazy" decoding="async">
@@ -275,53 +322,59 @@
 
 <section class="hb-chapter" id="share" aria-labelledby="share-title">
 <h2 id="share-title">Im WLAN teilen</h2>
-<p>Über <strong>⋯ → Im WLAN teilen</strong> tauschst du Fotos und Videos mit Handys aus – nur im lokalen Netz, ohne Internet und ohne App.</p>
+<p>Über <strong>⋯ → Im WLAN teilen…</strong> tauschst du Fotos und Videos mit Handys aus, nur im lokalen Netz, ohne Internet und ohne App.</p>
 <figure>
   <img src="img/de/share.jpg" width="1100" height="688" alt="Fotos von Handys einsammeln" loading="lazy" decoding="async">
   <figcaption>Fotos von Handys einsammeln</figcaption>
 </figure>
 <ul>
-  <li><strong>Fotos einsammeln:</strong> Der Laptop zeigt einen QR-Code. Die Schülerinnen und Schüler öffnen damit eine Seite und laden Fotos und Videos hoch. Sie landen in <code>Dokumente\Diashow Studio\Uploads</code> und direkt in der Show. Schicken zwei dasselbe Foto, kommt es nur einmal in die Show; die Liste zählt das zweite als „schon vorhanden“.</li>
-  <li><strong>Video verteilen:</strong> Ein fertiger Export kann auf den Handys angesehen und gespeichert werden. Für Handys gibt es eine kleine 720p-Fassung.</li>
+  <li><strong>Fotos einsammeln:</strong> Nach <strong>Starten</strong> zeigt der Laptop einen QR-Code. Die Schülerinnen und Schüler öffnen damit eine Seite und laden Fotos und Videos hoch. Sie landen in <code>Dokumente\Diashow Studio\Uploads</code> und gleich in der Diashow, nach Aufnahmezeit in ihrem Tag oder hinter der ausgewählten Folie. Was schon da ist, kommt nicht doppelt hinein.</li>
+  <li><strong>Video verteilen:</strong> Ein fertiger Export lässt sich auf den Handys ansehen und speichern. Für Handys gibt es eine kleine 720p-Version.</li>
   <li>Der Server läuft nur, solange der Dialog offen ist, und antwortet nur auf Links mit einem Zufallsschlüssel.</li>
 </ul>
-<p class="tip">Beim ersten Mal fragt Windows, ob die App ins Netzwerk darf: <strong>Zulassen</strong> (privates Netzwerk). In Gäste-WLANs, die Geräte voneinander trennen, hilft der mobile Hotspot von Windows.</p>
+<p class="tip">Beim ersten Mal fragt Windows, ob die App ins Netzwerk darf: <strong>Zulassen</strong> wählen. In Gäste-WLANs, die Geräte voneinander trennen, hilft der mobile Hotspot von Windows. Zeigt der Dialog eine <strong>öffentliche</strong> Adresse (z. B. im Uni-WLAN), gib den Link nur an die Klasse und beende den Server danach.</p>
 </section>
 
 <section class="hb-chapter" id="cleanup" aria-labelledby="cleanup-title">
 <h2 id="cleanup-title">Nach dem Projekt aufräumen</h2>
-<p>Ist die Diashow fertig, entfernst du an einer Stelle, was die App zu ihr gespeichert hat: <strong>⋯ → Nach dem Projekt aufräumen…</strong>, der Radiergummi an der Diashow auf der Startseite oder <strong>Einstellungen → Datenschutz</strong>. Der Dialog zeigt jeden Teil mit seiner Größe:</p>
+<p>Ist die Diashow fertig, löschst du an einer Stelle, was die App zu ihr gespeichert hat: <strong>⋯ → Nach dem Projekt aufräumen…</strong>, der Radiergummi an ihrer Karte auf der Startseite oder <strong>Einstellungen → Datenschutz</strong>. Der Dialog zeigt jeden Teil mit seiner Größe:</p>
 <ul>
-  <li><strong>Gesichtsdaten:</strong> erkannte Gesichter, Gesichtsmerkmale und die Personenliste mit den Namen, auch in älteren Versionen und im Zwischenspeicher. Was verpixelt ist, bleibt verpixelt, in der Vorschau und in jedem späteren Export. Neue Fotos werden danach aber nicht mehr automatisch erkannt.</li>
-  <li><strong>Hochgeladene Fotos und Videos</strong> der Klasse (<code>Dokumente\Diashow Studio\Uploads</code>) und mit <kbd>Strg+V</kbd> eingefügte Bilder (<code>Dokumente\Diashow Studio\Eingefügt</code>): alle oder nur die, die nicht in der Show sind. Folien mit gelöschten Fotos verschwinden aus der Show; exportiere vorher.</li>
+  <li><strong>Gesichtsdaten:</strong> erkannte Gesichter und die Personenliste mit den Namen, auch in älteren Versionen. Was verpixelt ist, bleibt verpixelt. Neue Fotos werden danach aber nicht mehr automatisch erkannt.</li>
+  <li><strong>Hochgeladene Fotos und Videos</strong> der Klasse und mit <kbd>Strg+V</kbd> eingefügte Bilder: alle oder nur die, die nicht in der Diashow sind. Folien mit gelöschten Fotos verschwinden aus der Diashow; exportiere vorher.</li>
   <li><strong>Zwischenspeicher</strong> (Vorschaubilder, Videokopien, Ton): entsteht bei Bedarf neu.</li>
-  <li><strong>Ältere Versionen</strong> und <strong>Export-Aufträge</strong> (Momentaufnahmen in der Warteschlange).</li>
-  <li><strong>Rückgängig-Verlauf:</strong> frühere Stände der Diashow, damit <kbd>Strg+Z</kbd> auch nach einem Neustart geht. Löschst du Gesichtsdaten oder hochgeladene Fotos, wird er immer mitgelöscht, weil die früheren Stände sie noch enthalten. In <strong>Einstellungen → Datenschutz</strong> löschst du ihn auch für eine oder alle Diashows.</li>
+  <li><strong>Ältere Versionen</strong>, <strong>Rückgängig-Verlauf</strong> und <strong>Export-Aufträge</strong>. Der Rückgängig-Verlauf geht immer mit, wenn Gesichtsdaten oder hochgeladene Fotos gelöscht werden.</li>
 </ul>
 <figure>
   <img src="img/de/cleanup.jpg" width="1100" height="688" alt="Nach dem Projekt aufräumen" loading="lazy" decoding="async">
   <figcaption>Nach dem Projekt aufräumen</figcaption>
 </figure>
-<p>Deine eigenen Fotos, Videos und Musik und die exportierten Videos bleiben unberührt. Was das Aufräumen entfernt, ist sofort endgültig gelöscht, ohne Papierkorb.</p>
+<p>Deine eigenen Fotos, Videos und Musik und die exportierten Videos bleiben unberührt. Was das Aufräumen löscht, ist sofort endgültig gelöscht, ohne Papierkorb.</p>
 <p><strong>Löschfrist:</strong> Im selben Dialog (oder nach dem Export) legst du fest, wann aufgeräumt werden soll: in 1, 3, 6 oder 12 Monaten oder an einem Datum. Ist der Tag da, zeigt die Startseite einen Hinweis an der Diashow und <strong>Löschfrist erreicht: aufräumen?</strong>; <strong>In einem Monat erinnern</strong> verschiebt sie.</p>
-<h3>Diashows löschen und der Papierkorb</h3>
-<p><strong>Löschen</strong> (das Papierkorb-Symbol an der Diashow auf der Startseite) legt die Diashow für 30 Tage in den <strong>Papierkorb</strong>, mit ihren älteren Versionen, dem Rückgängig-Verlauf, den hochgeladenen Fotos und den fertigen Export-Aufträgen. Ihr Zwischenspeicher wird gleich gelöscht; er entsteht neu, wenn du sie wiederherstellst und öffnest. Solange ein Export der Diashow noch wartet oder läuft, lässt sie sich nicht löschen.</p>
+<p>Ein <a href="#projects">ZIP-Archiv</a> ist eine Kopie, die das Aufräumen nicht erreicht; lösche es selbst.</p>
+</section>
+
+<section class="hb-chapter" id="trash" aria-labelledby="trash-title">
+<h2 id="trash-title">Papierkorb</h2>
+<p><strong>Diashow löschen…</strong> (an ihrer Karte auf der Startseite) zeigt, was mit in den <strong>Papierkorb</strong> kommt: ältere Versionen, Rückgängig-Verlauf, hochgeladene Fotos und fertige Export-Aufträge. Der Zwischenspeicher wird gleich gelöscht; er entsteht neu, wenn du die Diashow wiederherstellst und öffnest. Solange ein Export der Diashow noch wartet oder läuft, lässt sie sich nicht löschen.</p>
+<figure>
+  <img src="img/de/trash.jpg" width="1100" height="688" alt="Der Papierkorb" loading="lazy" decoding="async">
+  <figcaption>Der Papierkorb</figcaption>
+</figure>
 <ul>
-  <li><strong>Papierkorb (n)</strong> unten auf der Startseite zeigt die gelöschten Diashows: wann sie gelöscht wurden, wann sie endgültig verschwinden, und wie groß sie sind.</li>
-  <li><strong>Wiederherstellen</strong> holt eine Diashow zurück, wie sie war, auch nach einem Neustart: mit ihren älteren Versionen, den hochgeladenen Fotos und dem Rückgängig-Verlauf. Eine andere Diashow wird dabei nie überschrieben. <kbd>Strg+Z</kbd> im Editor hat damit nichts zu tun.</li>
-  <li><strong>Endgültig löschen</strong> und <strong>Papierkorb leeren…</strong> löschen nach einer Rückfrage sofort. Nach 30 Tagen löscht die App eine Diashow im Papierkorb von selbst endgültig.</li>
-  <li>Die Löschfrist bleibt im Papierkorb erhalten. Ist sie erreicht, bietet die Startseite <strong>Endgültig löschen…</strong> an.</li>
+  <li><strong>Papierkorb (n)</strong> unten auf der Startseite zeigt die gelöschten Diashows: wann sie gelöscht wurden, wann sie endgültig verschwinden und wie groß sie sind.</li>
+  <li><strong>Wiederherstellen</strong> holt eine Diashow zurück, wie sie war, auch nach einem Neustart. Eine andere Diashow wird dabei nie überschrieben.</li>
+  <li><strong>Endgültig löschen…</strong> und <strong>Papierkorb leeren…</strong> löschen nach einer Rückfrage sofort. Nach 30 Tagen löscht die App eine Diashow im Papierkorb von selbst endgültig.</li>
+  <li>Die Löschfrist gilt auch im Papierkorb. Ist sie erreicht, bietet die Startseite <strong>Endgültig löschen…</strong> an.</li>
 </ul>
 <p class="tip">Auch im Papierkorb enthält eine Diashow noch ihre Gesichtsdaten und die Fotos der Klasse. <strong>Einstellungen → Datenschutz</strong> zeigt, wie viel im Papierkorb liegt, und leert ihn.</p>
-<p>Ein <a href="#projects">ZIP-Archiv der Diashow</a> ist eine Kopie, die das Aufräumen nicht erreicht; lösche es selbst.</p>
 </section>
 
 <section class="hb-chapter" id="present" aria-labelledby="present-title">
 <h2 id="present-title">Vorführen</h2>
 <ul>
   <li><strong>Abspielen</strong> zeigt die Diashow im Vollbild (<kbd>Esc</kbd> beendet).</li>
-  <li><strong>Präsentieren</strong> (Menü <strong>⋯</strong>) zeigt die Show auf dem Beamer und auf dem Laptop die aktuelle und die nächste Folie mit Zeit und Steuerung.</li>
-  <li>Der <strong>Kioskmodus</strong> (Einstellungen) startet die App direkt mit einer Diashow in Endlosschleife, z. B. für den Tag der offenen Tür.</li>
+  <li><strong>Präsentieren</strong> (Menü <strong>⋯</strong>) zeigt die Diashow auf dem Beamer und auf dem Laptop die aktuelle und die nächste Folie mit Zeit und Steuerung.</li>
+  <li>Der <strong>Endlos-/Kioskmodus</strong> (Einstellungen) startet die App direkt mit einer Diashow in Endlosschleife, z. B. für den Tag der offenen Tür.</li>
 </ul>
 </section>
 
@@ -329,28 +382,22 @@
 <h2 id="projects-title">Projekte sichern und mitnehmen</h2>
 <ul>
   <li><strong>Ältere Version wiederherstellen…</strong> (Menü <strong>⋯</strong>): Vor dem Speichern wird die vorige Version aufgehoben (die letzten 20).</li>
-  <li><strong>Projekt packen…</strong> kopiert das Projekt mit allen Fotos, Videos und Musik in einen Ordner, z. B. für einen USB-Stick. Am anderen PC öffnest du die <code>.dshow</code>-Datei.</li>
+  <li><strong>Projekt packen…</strong> kopiert die Diashow mit allen Fotos, Videos und Musik in einen Ordner, z. B. für einen USB-Stick. Am anderen PC öffnest du die <code>.dshow</code>-Datei.</li>
   <li>Wurden Originale verschoben (anderer Ordner, neuer Laufwerksbuchstabe), findet <strong>Ordner durchsuchen…</strong> im gelben Hinweis sie wieder.</li>
 </ul>
 <h3>Diashow als ZIP archivieren</h3>
-<p>Ist die Diashow fertig, legt <strong>⋯ → Als ZIP archivieren…</strong> (oder das Archiv-Symbol an der Diashow auf der Startseite) alles in eine einzige ZIP-Datei, z. B. für das Schularchiv oder einen USB-Stick: das Projekt, die Original-Fotos und -Videos, deine Musik oder die Themenmusik, auf Wunsch die fertigen Exporte und eine kurze Anleitung (<code>LIESMICH.txt</code>).</p>
+<p><strong>⋯ → Als ZIP archivieren…</strong> (oder das Archiv-Symbol an der Karte) legt alles in eine ZIP-Datei, z. B. für das Schularchiv: das Projekt, die Original-Fotos und -Videos, die Musik, auf Wunsch die fertigen Exporte und eine kurze Anleitung (<code>LIESMICH.txt</code>).</p>
 <figure>
   <img src="img/de/archive.jpg" width="1100" height="688" alt="Diashow als ZIP archivieren" loading="lazy" decoding="async">
   <figcaption>Diashow als ZIP archivieren</figcaption>
 </figure>
 <ul>
-  <li>Der Dialog zeigt jeden Teil mit seiner Größe, die Summe und den freien Platz am Ziel. Aussortierte Fotos kommen nur mit, wenn du es ankreuzt; <strong>Gesichtsdaten weglassen</strong> ist voreingestellt, verpixelt bleibt verpixelt.</li>
-  <li>Fehlende Originale werden genannt und übersprungen. Nach dem Schreiben liest die App das Archiv noch einmal und prüft es.</li>
-  <li><strong>Öffnen:</strong> das ZIP entpacken (Rechtsklick → <strong>Alle extrahieren…</strong>) und die <code>.dshow</code>-Datei doppelklicken oder <strong>Projekt öffnen…</strong> wählen. Direkt aus dem ZIP öffnet die App die Diashow nicht.</li>
+  <li>Der Dialog zeigt jeden Teil mit seiner Größe, die Summe und den freien Platz. Herausgenommene Fotos kommen nur mit, wenn du es ankreuzt; <strong>Gesichtsdaten weglassen</strong> ist voreingestellt, verpixelt bleibt verpixelt.</li>
+  <li><strong>Öffnen:</strong> das ZIP entpacken (Rechtsklick → <strong>Alle extrahieren…</strong>) und die <code>.dshow</code>-Datei doppelklicken.</li>
 </ul>
-<p class="tip">Das Archiv enthält Fotos der Schülerinnen und Schüler. Es ist eine Kopie, die das <a href="#cleanup">Aufräumen</a> nicht erreicht: Bewahre es sicher auf und lösche es selbst bis zur Löschfrist; sie steht auch in der Anleitung im Archiv.</p>
+<p class="tip">Das Archiv enthält Fotos der Schülerinnen und Schüler und ist eine Kopie, die das <a href="#cleanup">Aufräumen</a> nicht erreicht: Bewahre es sicher auf und lösche es selbst bis zur Löschfrist.</p>
 <h3>Beschädigte Projekte reparieren</h3>
-<p>Wurde eine Projektdatei beim Speichern unterbrochen (z. B. durch einen Stromausfall), steht sie auf der Startseite rot umrandet mit <strong>Reparieren…</strong>. Der Dialog bietet zwei Wege:</p>
-<ul>
-  <li><strong>Aus der Datei retten:</strong> Alles, was noch lesbar ist, wird übernommen. Eine Liste sagt, was fehlte oder repariert wurde.</li>
-  <li><strong>Automatische Sicherungen:</strong> eine ältere, vollständige Fassung öffnen.</li>
-</ul>
-<p>Die beschädigte Datei bleibt in jedem Fall erhalten. Kleinere Schäden behebt die App beim Öffnen selbst und zeigt dann, was sich geändert hat.</p>
+<p>Wurde eine Projektdatei beim Speichern unterbrochen (z. B. durch einen Stromausfall), steht sie auf der Startseite mit <strong>Reparieren…</strong>: <strong>Aus der Datei retten</strong> übernimmt, was noch lesbar ist, <strong>Automatische Sicherungen</strong> öffnet eine ältere, vollständige Version. Die beschädigte Datei bleibt erhalten. Kleinere Schäden behebt die App beim Öffnen selbst und sagt, was sich geändert hat.</p>
 </section>
 
 <section class="hb-chapter" id="settings" aria-labelledby="settings-title">
@@ -361,18 +408,16 @@
   <figcaption>Die Einstellungen</figcaption>
 </figure>
 <ul>
-  <li><strong>Erscheinungsbild:</strong> System, Hell oder Dunkel (siehe unten).</li>
+  <li><strong>Erscheinungsbild:</strong> System, Hell oder Dunkel. <strong>System</strong> folgt dem App-Modus von Windows. Vorschau und Vollbild bleiben immer dunkel.</li>
   <li><strong>Vorschauqualität:</strong> Hoch, Mittel oder Niedrig für langsamere Laptops. Exporte sind davon nicht betroffen.</li>
-  <li><strong>Grafikchip</strong> (nur auf Laptops mit zwei Grafikchips): <strong>Leistung</strong> zeichnet Vorschau und Export auf der stärkeren Grafikkarte, 4K-Exporte sind dann etwa ein Drittel schneller. <strong>Stromsparend</strong> schont den Akku. Die Wahl gilt ab dem nächsten Start.</li>
-  <li><strong>Speicher:</strong> zeigt, wie viel Platz Vorschaubilder und Video-Fassungen belegen, und räumt auf.</li>
-  <li><strong>Endlos-/Kioskmodus:</strong> siehe <a href="#present">Vorführen</a>.</li>
+  <li><strong>Grafikchip</strong> (nur auf Laptops mit zwei Grafikchips): <strong>Leistung</strong> macht 4K-Exporte etwa ein Drittel schneller, <strong>Stromsparend</strong> schont den Akku. Gilt ab dem nächsten Start.</li>
+  <li><strong>Speicher:</strong> zeigt, wie viel Platz Vorschaubilder, Videokopien und 4K-Fassungen belegen, und löscht sie bei Bedarf.</li>
+  <li><strong>Datenschutz:</strong> <a href="#cleanup">Aufräumen</a>, Rückgängig-Verlauf und <a href="#trash">Papierkorb</a>.</li>
   <li><strong>Updates:</strong> Auf Wunsch fragt die App einmal am Tag bei GitHub nach einer neuen Version und zeigt dann einen Hinweis. Installiert wird nichts automatisch.</li>
-  <li><strong>Fehlersuche:</strong> Der <strong>Systemcheck</strong> prüft einen fremden PC (z. B. im Computerraum): Grafikkarte, Video-Encoder, Speicher und einen kurzen Export-Test. <strong>Bericht kopieren</strong> kopiert alles als Text. Dazu kommt das <strong>Diagnosepaket</strong> (siehe unten).</li>
+  <li><strong>Fehlersuche:</strong> Der <strong>Systemcheck</strong> prüft einen fremden PC (z. B. im Computerraum): Grafikkarte, Hardware-Encoder, Speicher und einen kurzen Export-Test. <strong>Bericht kopieren</strong> kopiert alles als Text.</li>
 </ul>
-<h3>Hell oder dunkel</h3>
-<p>Unter <strong>Erscheinungsbild</strong> wählst du <strong>System</strong>, <strong>Hell</strong> oder <strong>Dunkel</strong>. <strong>System</strong> folgt dem App-Modus von Windows (Einstellungen → Personalisierung → Farben). Die Vorschau, der Vollbild-Player und die große Ansicht beim Sichten bleiben immer dunkel, damit die Fotos gut wirken.</p>
 <h3>Diagnosepaket</h3>
-<p>Klappt etwas nicht, hilft ein <strong>Diagnosepaket</strong> der Person, die dir hilft: <strong>Einstellungen → Fehlersuche → Diagnosepaket erstellen…</strong>. Vor dem Speichern siehst du jede Datei des Pakets; ein Klick zeigt ihren Inhalt. Enthalten sind Fehlerprotokoll, Systemcheck, Einstellungen, Versionen und vom geöffneten Projekt nur Anzahlen, Formate und Größen – keine Fotos, Videos, Namen oder Gesichtsdaten. <strong>Speichern…</strong> legt eine ZIP-Datei ab, die du per E-Mail schicken kannst.</p>
+<p>Klappt etwas nicht, hilft ein <strong>Diagnosepaket</strong> der Person, die dir hilft: <strong>Einstellungen → Fehlersuche → Diagnosepaket erstellen…</strong>. Vor dem Speichern siehst du jede Datei des Pakets. Enthalten sind Fehlerprotokoll, Systemcheck, Einstellungen, Versionen und vom geöffneten Projekt nur Anzahlen, Formate und Größen, keine Fotos, Videos, Namen oder Gesichtsdaten.</p>
 </section>
 
 <section class="hb-chapter" id="shortcuts" aria-labelledby="shortcuts-title">
@@ -401,18 +446,17 @@
 </section>
 
 <section class="hb-chapter" id="keyboard" aria-labelledby="keyboard-title">
-<h2 id="keyboard-title">Mit der Tastatur bedienen</h2>
+<h2 id="keyboard-title">Tastatur und Touchscreen</h2>
 <p>Alles in Diashow Studio geht auch ohne Maus:</p>
 <ul>
   <li><kbd>Tab</kbd> und <kbd>Umschalt+Tab</kbd> springen von Bedienelement zu Bedienelement; das aktive ist blau umrandet. <kbd>Leertaste</kbd> oder <kbd>Enter</kbd> drücken einen Knopf.</li>
-  <li>In der rechten Leiste wechseln <kbd>↑</kbd> und <kbd>↓</kbd> zwischen den Reitern <strong>Themen</strong>, <strong>Musik</strong>, <strong>Dauer</strong> und <strong>Folie</strong>.</li>
-  <li>Der Filmstreifen ist ein einziger Halt für <kbd>Tab</kbd>: Dort gehen <kbd>←</kbd> und <kbd>→</kbd> von Folie zu Folie und wählen sie aus (<kbd>Umschalt</kbd> wählt einen Bereich), <kbd>Alt+←</kbd> / <kbd>Alt+→</kbd> verschieben die Folie, <kbd>Umschalt+F10</kbd> öffnet ihr Menü.</li>
-  <li><kbd>Strg+F</kbd> öffnet die Suche im Filmstreifen; <kbd>↑</kbd> / <kbd>↓</kbd> wählen einen Treffer, <kbd>Enter</kbd> springt hin. <kbd>Strg+V</kbd> fügt kopierte Fotos hinter der ausgewählten Folie ein.</li>
-  <li>Menüs bedienst du mit den Pfeiltasten und <kbd>Enter</kbd>; <kbd>Esc</kbd> schließt sie.</li>
-  <li><kbd>Esc</kbd> schließt jeden Dialog; danach steht der Fokus wieder dort, wo du vorher warst.</li>
-  <li>Bei Songs verschieben <kbd>↑</kbd> und <kbd>↓</kbd> auf der Nummer den Song in der Liste. Die Griffe zum Kürzen von Videos und Songs bewegen sich mit <kbd>←</kbd> und <kbd>→</kbd>, mit <kbd>Umschalt</kbd> in größeren Schritten.</li>
+  <li>In der rechten Leiste wechseln <kbd>↑</kbd> und <kbd>↓</kbd> zwischen den Reitern.</li>
+  <li>Der Filmstreifen ist ein einziger Halt für <kbd>Tab</kbd>: Dort wählen <kbd>←</kbd> und <kbd>→</kbd> eine Folie aus (<kbd>Umschalt</kbd> wählt einen Bereich), <kbd>Alt+←</kbd> / <kbd>Alt+→</kbd> verschieben sie, <kbd>Umschalt+F10</kbd> öffnet ihr Menü.</li>
+  <li>Menüs bedienst du mit den Pfeiltasten und <kbd>Enter</kbd>. <kbd>Esc</kbd> schließt Menüs und Dialoge; danach steht der Fokus wieder dort, wo du vorher warst.</li>
+  <li>Die Griffe zum Kürzen von Videos und Songs bewegen sich mit <kbd>←</kbd> und <kbd>→</kbd>, mit <kbd>Umschalt</kbd> in größeren Schritten. Songs in der Liste verschieben <kbd>↑</kbd> und <kbd>↓</kbd> auf ihrer Nummer.</li>
   <li>Solange du in ein Textfeld schreibst, reagieren die Tastenkürzel nicht.</li>
 </ul>
+<p><strong>Touchscreen:</strong> Textfelder, Fotos in der freien Collage, Bildausschnitte, den Rahmen beim Zuschneiden, die Griffe zum Kürzen und die Anzeigedauer am Rand einer Karte ziehst du auch mit dem Finger.</p>
 <p class="tip">Ist in Windows „Animationseffekte“ ausgeschaltet, verzichtet auch die App auf Bewegungen in der Oberfläche. Die Diashow selbst läuft unverändert.</p>
 </section>
 
@@ -421,19 +465,19 @@
 <ul>
   <li><strong>Windows warnt beim Installieren</strong> („Der Computer wurde durch Windows geschützt“): <strong>Weitere Informationen</strong> und <strong>Trotzdem ausführen</strong> wählen. Die App ist nicht kostenpflichtig signiert.</li>
   <li><strong>Die Vorschau ruckelt:</strong> in den Einstellungen die <strong>Vorschauqualität</strong> senken. Der Export wird dadurch nicht schlechter.</li>
-  <li><strong>Ein Video bleibt „in Vorbereitung“:</strong> Manche Handy-Videos (HEVC, HDR) werden erst umgewandelt. Das dauert, ist aber einmalig.</li>
-  <li><strong>Der Export ist sehr langsam:</strong> im <a href="#settings">Systemcheck</a> nachsehen, ob ein Hardware-Encoder gefunden wird. Ohne Grafikkarte hilft eine kleinere Auflösung (720p).</li>
-  <li><strong>Dateien fehlen:</strong> Originale wurden verschoben – im gelben Hinweis <strong>Ordner durchsuchen…</strong> wählen.</li>
-  <li><strong>Dateien auf einem Netzlaufwerk bleiben gesperrt:</strong> Ein Projekt von einem anderen PC verweist auf Freigaben wie <code>\\server\fotos</code>. Weil sich Windows dort mit deinem Konto anmeldet, fragt die App oben im Editor erst nach. Wähle <strong>Zugriff erlauben</strong> nur, wenn du dem Projekt vertraust; Freigaben, aus denen du selbst importierst, gelten automatisch als vertrauenswürdig.</li>
-  <li><strong>Handys erreichen den Laptop nicht:</strong> Laptop und Handys müssen im selben WLAN sein; die Windows-Firewall muss die App zulassen. Sonst den mobilen Hotspot von Windows nutzen.</li>
-  <li><strong>Etwas anderes:</strong> Unter <strong>Einstellungen → Fehlersuche</strong> ein <a href="#settings">Diagnosepaket</a> erstellen und mit einer Beschreibung an die Person schicken, die dir hilft.</li>
-  <li><strong>Einen Fehler melden:</strong> <strong>Problem melden…</strong> (unter <strong>Einstellungen → Fehlersuche</strong> oder in <strong>Über Diashow Studio</strong>) öffnet ein Formular auf GitHub, in dem App-Version, Windows-Version und Grafikkarte schon eingetragen sind; dafür brauchst du ein kostenloses GitHub-Konto. Der Bericht ist öffentlich: Häng höchstens das Diagnosepaket an, keine Fotos von Schülerinnen und Schülern.</li>
+  <li><strong>Ein Video bleibt „in Vorbereitung“:</strong> Manche Handyvideos (HEVC, HDR) werden erst umgewandelt. Das dauert, ist aber einmalig.</li>
+  <li><strong>Der Export ist sehr langsam:</strong> im <a href="#settings">Systemcheck</a> nachsehen, ob ein Hardware-Encoder gefunden wird. Ohne ihn hilft eine kleinere Auflösung (720p).</li>
+  <li><strong>Dateien fehlen:</strong> Originale wurden verschoben. Im gelben Hinweis <strong>Ordner durchsuchen…</strong> wählen.</li>
+  <li><strong>Dateien auf einem Netzlaufwerk bleiben gesperrt:</strong> Ein Projekt von einem anderen PC verweist auf Freigaben wie <code>\\server\fotos</code>. Weil sich Windows dort mit deinem Konto anmeldet, fragt die App oben im Editor erst nach. Wähle <strong>Zugriff erlauben</strong> nur, wenn du dem Projekt vertraust.</li>
+  <li><strong>Handys erreichen den Laptop nicht:</strong> Laptop und Handys müssen im selben WLAN sein, und die Windows-Firewall muss die App zulassen. Sonst den mobilen Hotspot von Windows nutzen.</li>
+  <li><strong>Etwas anderes:</strong> unter <strong>Einstellungen → Fehlersuche</strong> ein <a href="#settings">Diagnosepaket</a> erstellen und mit einer Beschreibung an die Person schicken, die dir hilft.</li>
+  <li><strong>Einen Fehler melden:</strong> <strong>Problem melden…</strong> (unter <strong>Einstellungen → Fehlersuche</strong> oder in <strong>Über Diashow Studio</strong>) öffnet ein Formular auf GitHub, in dem App-Version, Windows-Version und Grafikkarte schon eingetragen sind. Dafür brauchst du ein kostenloses GitHub-Konto. Der Bericht ist öffentlich: Häng höchstens das Diagnosepaket an, keine Fotos von Schülerinnen und Schülern.</li>
 </ul>
 </section>
 
 <section class="hb-chapter" id="about" aria-labelledby="about-title">
 <h2 id="about-title">Über, Lizenzen und Updates</h2>
-<p>Diashow Studio ist freie Software (MIT-Lizenz). Es enthält FFmpeg (GPL), Schriften, Modelle zur Gesichtserkennung und weitere Bibliotheken; deren Lizenzen und den Quellcode von FFmpeg findest du unter <strong>Über Diashow Studio</strong>. Dort kannst du auch <strong>Nach Updates suchen</strong>.</p>
+<p>Diashow Studio ist freie Software (MIT-Lizenz) und spricht Deutsch oder Englisch, je nach Sprache von Windows. Es enthält FFmpeg (GPL), Schriften, Modelle zur Gesichtserkennung und weitere Bibliotheken; ihre Lizenzen und den Quellcode von FFmpeg findest du unter <strong>Über Diashow Studio</strong>. Dort kannst du auch <strong>Nach Updates suchen</strong>.</p>
 </section>
 </main>
 </div>

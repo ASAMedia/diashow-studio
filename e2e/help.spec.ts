@@ -87,7 +87,7 @@ test('assistant, handbook, about and update hint', async () => {
     await wizard.locator('.theme-card', { hasText: 'Magazin' }).click()
     expect((await project()).settings.theme).toBe('magazine')
     await stubOpenDialog(app, [join(mediaDir, 'music', 'track1.mp3')])
-    await wizard.getByRole('button', { name: 'Musik hinzufügen' }).click()
+    await wizard.getByRole('button', { name: 'Musik hinzufügen…' }).click()
     await expect(wizard.locator('.wizard-music li')).toHaveCount(1)
     await wizard.getByRole('button', { name: 'Weiter' }).click()
     await expect(wizard).toHaveAttribute('data-step', '3')

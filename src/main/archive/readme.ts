@@ -46,15 +46,16 @@ export function readmeText(i: ReadmeInfo, lang: 'de' | 'en'): string {
   lines.push(de ? 'INHALT' : 'CONTENTS')
   lines.push(de ? `- ${i.projectFile}: das Projekt mit allen Folien, Texten und Einstellungen` : `- ${i.projectFile}: the project with all slides, texts and settings`)
   if (i.media) lines.push(de ? `- media\\: ${i.media} Fotos und Videos (Originale)` : `- media\\: ${i.media} photos and videos (originals)`)
-  if (i.music) lines.push(de ? `- music\\: ${i.music} Song(s) der Diashow` : `- music\\: ${i.music} song(s) of the slideshow`)
+  if (i.music) lines.push(de ? `- music\\: ${i.music} ${i.music === 1 ? 'Song' : 'Songs'} der Diashow` : `- music\\: ${i.music} ${i.music === 1 ? 'song' : 'songs'} of the slideshow`)
   if (i.theme) {
     const by = i.theme.artist ? (de ? ` von ${i.theme.artist}` : ` by ${i.theme.artist}`) : ''
     const lic = i.theme.licence ? ` (${i.theme.licence})` : ''
-    lines.push(de ? `- ${winPath(i.theme.file)}: die Titelmusik „${i.theme.title}“${by}${lic}` : `- ${winPath(i.theme.file)}: the theme song “${i.theme.title}”${by}${lic}`)
+    lines.push(de ? `- ${winPath(i.theme.file)}: die Themenmusik „${i.theme.title}“${by}${lic}` : `- ${winPath(i.theme.file)}: the theme song “${i.theme.title}”${by}${lic}`)
   }
-  if (i.videos.length) lines.push(de ? `- videos\\: ${i.videos.length} exportierte(s) Video(s): ${some(i.videos)}` : `- videos\\: ${i.videos.length} exported video(s): ${some(i.videos)}`)
-  if (i.leftOut === 'included') lines.push(de ? '- Auch die Fotos und Videos, die nicht in der Diashow sind (aussortiert), sind enthalten.' : '- The photos and videos left out of the slideshow are included too.')
-  if (i.leftOut === 'omitted') lines.push(de ? '- Aussortierte Fotos und Videos (nicht in der Diashow) sind nicht enthalten.' : '- Photos and videos left out of the slideshow are not included.')
+  const one = i.videos.length === 1
+  if (i.videos.length) lines.push(de ? `- videos\\: ${i.videos.length} ${one ? 'exportiertes Video' : 'exportierte Videos'}: ${some(i.videos)}` : `- videos\\: ${i.videos.length} exported ${one ? 'video' : 'videos'}: ${some(i.videos)}`)
+  if (i.leftOut === 'included') lines.push(de ? '- Auch die herausgenommenen Fotos und Videos (nicht in der Diashow) sind enthalten.' : '- The photos and videos left out of the slideshow are included too.')
+  if (i.leftOut === 'omitted') lines.push(de ? '- Herausgenommene Fotos und Videos (nicht in der Diashow) sind nicht enthalten.' : '- Photos and videos left out of the slideshow are not included.')
   if (i.faceData === 'removed') lines.push(de ? '- Gesichtsdaten (erkannte Gesichter, Personenliste) sind nicht enthalten. Was verpixelt war, bleibt verpixelt.' : '- Face data (detected faces, the people list) is not included. What was pixelated stays pixelated.')
   if (i.faceData === 'kept') lines.push(de ? '- Gesichtsdaten (erkannte Gesichter, Personenliste mit Namen) sind enthalten.' : '- Face data (detected faces, the people list with names) is included.')
   if (i.missing.length) lines.push(de ? `- Nicht enthalten, weil die Datei beim Archivieren fehlte (${i.missing.length}): ${some(i.missing)}` : `- Not included because the file was missing when archiving (${i.missing.length}): ${some(i.missing)}`)
@@ -71,7 +72,7 @@ export function readmeText(i: ReadmeInfo, lang: 'de' | 'en'): string {
       'Die Diashow erscheint dann unter „Deine Diashows“. Fotos, Videos und Musik bleiben im entpackten Ordner:',
       'Lass ihn, wo er ist, solange du die Diashow brauchst.'
     )
-    if (i.theme) lines.push('Spielt eine spätere Version von Diashow Studio andere Titelmusik, nimmt sie beim Öffnen die Titelmusik aus diesem Archiv.')
+    if (i.theme) lines.push('Spielt eine spätere Version von Diashow Studio andere Themenmusik, nimmt sie beim Öffnen die Themenmusik aus diesem Archiv.')
   } else {
     lines.push(
       '1. Extract the ZIP archive first: right-click it and choose “Extract All…”, e.g. to the hard disk or a',

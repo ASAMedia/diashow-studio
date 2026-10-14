@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { CalendarDays, CircleHelp, Clapperboard, Copy, QrCode, ScanFace, ChevronLeft, Download, Eraser, FileArchive, FolderTree, History, LayoutGrid, Loader2, MonitorPlay, MoreHorizontal, Package, Play, Redo2, ScanSearch, Settings, ShieldCheck, SortAsc, Undo2 } from 'lucide-react'
 import { useStore } from '../store'
 import { useTimeline } from '../timeline'
-import { fmtTime, t } from '../i18n'
+import { count, fmtTime, t } from '../i18n'
 import { QueueChip } from './Queue'
 import { UpdateChip } from './Updates'
 import { AppIcon } from './AppIcon'
@@ -90,7 +90,7 @@ export function TitleBar() {
       ) : (
         <button
           className="name"
-          title={[project.name, `${slides} ${t('slides')} · ${fmtTime(tl?.duration ?? 0)} · ${project.settings.aspect}`, t('renameHint')].join('\n')}
+          title={[project.name, `${count('slideCount', slides)} · ${fmtTime(tl?.duration ?? 0)} · ${project.settings.aspect}`, t('renameHint')].join('\n')}
           aria-label={`${project.name}. ${t('renameHint')}`}
           onDoubleClick={() => setEditing(true)}
           onKeyDown={(e) => (e.key === 'F2' || e.key === 'Enter') && (e.preventDefault(), setEditing(true))}
@@ -98,8 +98,8 @@ export function TitleBar() {
           {project.name}
         </button>
       )}
-      <span className="meta" title={`${slides} ${t('slides')} · ${fmtTime(tl?.duration ?? 0)} · ${project.settings.aspect}`}>
-        {slides} {t('slides')} · {fmtTime(tl?.duration ?? 0)} · {project.settings.aspect}
+      <span className="meta" title={`${count('slideCount', slides)} · ${fmtTime(tl?.duration ?? 0)} · ${project.settings.aspect}`}>
+        {count('slideCount', slides)} · {fmtTime(tl?.duration ?? 0)} · {project.settings.aspect}
       </span>
       <span className="sep" aria-hidden />
       <IconButton label={t('undo')} disabled={!canUndo} onClick={() => useStore.getState().undo()}>
@@ -145,7 +145,7 @@ export function TitleBar() {
               {t('reviewCheck')}
             </MenuItem>
             <MenuItem icon={<QrCode size={15} />} onSelect={() => set({ dialog: 'share' })}>
-              {t('shareTitle')}
+              {t('shareMenu')}
             </MenuItem>
             <MenuItem icon={<Copy size={15} />} onSelect={() => void duplicateShow(project.id)}>
               {t('duplicate')}
