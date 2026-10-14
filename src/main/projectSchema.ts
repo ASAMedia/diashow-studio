@@ -48,7 +48,15 @@ export class ProjectFormatError extends Error {
 const isObj = (v: unknown): v is Data => typeof v === 'object' && v !== null && !Array.isArray(v)
 const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
 const str = (v: unknown): v is string => typeof v === 'string'
-const ID = /^[A-Za-z0-9_-]{1,128}$/
+
+/** Project ids become file and folder names: only safe characters, so an id can never leave its folder. */
+export const PROJECT_ID = /^[A-Za-z0-9_-]{1,128}$/
+
+/** `id` when it is a valid project id; throws otherwise. */
+export function checkProjectId(id: unknown): string {
+  if (typeof id !== 'string' || !PROJECT_ID.test(id)) throw new Error(`invalid project id: ${String(id)}`)
+  return id
+}
 
 /** Counts changes for the report. */
 class Changes {
@@ -542,8 +550,8 @@ export function validateProject(raw: unknown, opts: ValidateOptions = {}): { pro
   const p: Data = { ...raw }
 
   let basics = 0
-  if (!(str(p.id) && ID.test(p.id))) {
-    p.id = opts.fallbackId && ID.test(opts.fallbackId) ? opts.fallbackId : newId()
+  if (!(str(p.id) && PROJECT_ID.test(p.id))) {
+    p.id = opts.fallbackId && PROJECT_ID.test(opts.fallbackId) ? opts.fallbackId : newId()
     basics++
   }
   if (!str(p.name)) {

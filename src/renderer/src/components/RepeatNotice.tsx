@@ -8,7 +8,7 @@ import { playerRef, useStore } from '../store'
 import { timelineOf } from '../timeline'
 import { stripReveal } from '../insert'
 import { notifyError } from '../errors'
-import { dismissRepeats, leftOutText, repeatText, useRepeatNotice, type RepeatNotice as Notice } from '../repeats'
+import { dismissRepeats, noticeText, useRepeatNotice, type RepeatNotice as Notice } from '../repeats'
 import { t } from '../i18n'
 
 /** Back to the filmstrip once the notice is gone (its selected card is the strip's Tab stop). */
@@ -89,7 +89,7 @@ export function RepeatNotice() {
         >
           <CopyCheck size={16} className="notice-icon" aria-hidden />
           <div className="notice-body">
-            <span className="repeat-text" id={`repeat-text-${shown.id}`}>{[repeatText(shown), leftOutText(project, shown)].filter(Boolean).join(' ')}</span>
+            <span className="repeat-text" id={`repeat-text-${shown.id}`}>{noticeText(project, shown)}</span>
             <div className="row">
               <button className="btn small" disabled={busy} onClick={() => void addAnyway(shown)}>
                 {t('repeatAddAnyway')}

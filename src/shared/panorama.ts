@@ -48,9 +48,6 @@ export function panoMode(e: Entry | undefined): PanoMode {
   return e.whole ? 'whole' : 'crop'
 }
 
-/** What the Slide tab stores for a mode: the crop / whole setting (none for panning). */
-export const panoModePatch = (mode: PanoMode): { whole: boolean | undefined } => ({ whole: mode === 'pan' ? undefined : mode === 'whole' })
-
 /** How many frames the panorama spans when it fills the frame's height (width). */
 export function panSpan(aspect: number, frameAspect: number, axis: PanAxis): number {
   return Math.max(1, axis === 'x' ? aspect / frameAspect : frameAspect / aspect)

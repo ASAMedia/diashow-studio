@@ -14,8 +14,9 @@ import { basename, dirname, join, resolve } from 'node:path'
 import type { DamagedProject, ProjectReportEvent, RepairChoice, RepairPlan, RepairReport } from '@shared/diagnostics'
 import type { BackupInfo, Project, ProjectSummary } from '@shared/types'
 import { validDeleteAt } from '@shared/cleanup'
-import { cleanProjectText, formatVersion, hasChanges, lostData, PROJECT_VERSION, ProjectFormatError, readProjectText } from './projectSchema'
+import { checkProjectId, cleanProjectText, formatVersion, hasChanges, lostData, PROJECT_ID, PROJECT_VERSION, ProjectFormatError, readProjectText } from './projectSchema'
 import { replaceFile } from './replaceFile'
+import { serialByKey } from './serial'
 
 export const PROJECT_EXT = '.dshow'
 export const BACKUPS = '.backups'
@@ -48,6 +49,7 @@ export interface ProjectStore {
   load(id: string, onRead?: (text: string, repaired: boolean) => void): Promise<Project>
   /** `onWritten`: the text just written, called before the next save of the project may start. Refused while the show is in the trash. */
   save(project: Project, onWritten?: (text: string) => void): Promise<void>
+  /** Deletes the file and older versions for good, past the trash. Only tests/backups.test.ts uses it: the app deletes a show into the trash (cleanup.ts trashProjectData). */
   delete(id: string): Promise<void>
   /** A show of this id is in the trash (an imported file then gets another id). */
   inTrash(id: string): Promise<boolean>
@@ -78,12 +80,6 @@ export interface ProjectStore {
    * damaged file is kept next to the backups (`<time>.damaged`).
    */
   repair(id: string, choice: RepairChoice): Promise<Project>
-}
-
-/** Ids become file names; only allow safe characters so an id can never escape the folder. */
-function checkId(id: string): string {
-  if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(id)) throw new Error(`invalid project id: ${String(id)}`)
-  return id
 }
 
 export function summarize(project: Project): ProjectSummary {
@@ -149,22 +145,12 @@ export function createProjectStore(dir: string, opts: ProjectStoreOptions = {}):
   const interval = opts.backupInterval ?? 10 * 60_000
   const keep = opts.keepBackups ?? 20
   const now = opts.now ?? Date.now
-  const file = (id: string): string => join(dir, `${checkId(id)}${PROJECT_EXT}`)
-  const backupDir = (id: string): string => join(dir, BACKUPS, checkId(id))
+  const file = (id: string): string => join(dir, `${checkProjectId(id)}${PROJECT_EXT}`)
+  const backupDir = (id: string): string => join(dir, BACKUPS, checkProjectId(id))
   /** Per project: when this process last made a backup, or first saved it (time of the action). */
   const lastBackup = new Map<string, number>()
   /** Saves and restores of one project run one after another. */
-  const queues = new Map<string, Promise<unknown>>()
-
-  function serial<T>(id: string, task: () => Promise<T>): Promise<T> {
-    const next = (queues.get(id) ?? Promise.resolve()).then(task, task)
-    const settled = next.catch(() => {})
-    queues.set(id, settled)
-    void settled.then(() => {
-      if (queues.get(id) === settled) queues.delete(id)
-    })
-    return next
-  }
+  const serial = serialByKey()
 
   /** Writes a project file through a temp file; returns the text written. */
   async function writeAtomic(target: string, project: Project): Promise<string> {
@@ -260,7 +246,7 @@ export function createProjectStore(dir: string, opts: ProjectStoreOptions = {}):
     },
 
     async save(project, onWritten) {
-      const id = checkId(project.id)
+      const id = checkProjectId(project.id)
       return serial(id, async () => {
         // a late save of a deleted show (another window, a save still on its way) must not bring it back
         if (await opts.inTrash?.(id)) throw new Error(`project ${id} is in the trash`)
@@ -284,10 +270,10 @@ export function createProjectStore(dir: string, opts: ProjectStoreOptions = {}):
       lastBackup.delete(id)
     },
 
-    inTrash: async (id) => !!(await opts.inTrash?.(checkId(id))),
+    inTrash: async (id) => !!(await opts.inTrash?.(checkProjectId(id))),
 
     exclusive(id, task) {
-      return serial(checkId(id), async () => {
+      return serial(checkProjectId(id), async () => {
         try {
           return await task()
         } finally {
@@ -298,7 +284,7 @@ export function createProjectStore(dir: string, opts: ProjectStoreOptions = {}):
     },
 
     async overwrite(project, onWritten) {
-      const id = checkId(project.id)
+      const id = checkProjectId(project.id)
       return serial(id, async () => {
         const text = await writeAtomic(file(id), project)
         onWritten?.(text)
@@ -368,7 +354,7 @@ export function createProjectStore(dir: string, opts: ProjectStoreOptions = {}):
       if (typeof path !== 'string' || !path) throw new Error('no backup file')
       const full = resolve(path)
       const folder = dirname(full)
-      const id = checkId(basename(folder))
+      const id = checkProjectId(basename(folder))
       if (resolve(backupDir(id)).toLowerCase() !== folder.toLowerCase() || backupTime(basename(full)) === null) {
         throw new Error('not a backup of this app')
       }
@@ -398,7 +384,7 @@ export function createProjectStore(dir: string, opts: ProjectStoreOptions = {}):
       }
       const found = await Promise.all(
         names
-          .filter((n) => n.toLowerCase().endsWith(PROJECT_EXT) && /^[A-Za-z0-9_-]{1,128}$/.test(n.slice(0, -PROJECT_EXT.length)))
+          .filter((n) => n.toLowerCase().endsWith(PROJECT_EXT) && PROJECT_ID.test(n.slice(0, -PROJECT_EXT.length)))
           .map(async (n): Promise<DamagedProject | null> => {
             const id = n.slice(0, -PROJECT_EXT.length)
             const path = join(dir, n)
@@ -453,7 +439,7 @@ export function createProjectStore(dir: string, opts: ProjectStoreOptions = {}):
     },
 
     async repair(id, choice) {
-      checkId(id)
+      checkProjectId(id)
       let result: { project: Project; report: RepairReport }
       if (choice?.kind === 'backup') {
         const full = resolve(String(choice.file ?? ''))

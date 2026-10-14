@@ -1,9 +1,9 @@
 // Disk usage of the media cache (<cacheDir>/<media id>/...) and cleaning it. Electron-free. Only
 // files inside media id folders are ever deleted; originals never live there.
-import type { Dirent } from 'node:fs'
-import { readdir, rm, stat } from 'node:fs/promises'
+import { rm, stat } from 'node:fs/promises'
 import { join, resolve, sep } from 'node:path'
 import type { CacheInfo } from '@shared/types'
+import { listDir } from './files'
 
 export type CachePart = keyof CacheInfo['parts']
 export type CleanTarget = 'unused' | 'hires' | 'proxies'
@@ -42,17 +42,9 @@ interface CacheFolder {
   bytes: number
 }
 
-async function entries(dir: string): Promise<Dirent[]> {
-  try {
-    return await readdir(dir, { withFileTypes: true })
-  } catch {
-    return []
-  }
-}
-
 async function walkFiles(dir: string, prefix: string, out: CacheFile[], depth = 0): Promise<void> {
   if (depth > 8) return
-  const list = await entries(dir)
+  const list = await listDir(dir)
   await Promise.all(
     list.map(async (e) => {
       const path = join(dir, e.name)
@@ -71,7 +63,7 @@ async function walkFiles(dir: string, prefix: string, out: CacheFile[], depth = 
 
 /** Every top-level entry of the cache with its files. */
 export async function scanCache(dir: string): Promise<CacheFolder[]> {
-  const top = await entries(dir)
+  const top = await listDir(dir)
   const folders: CacheFolder[] = []
   // A few folders at a time: thousands of stat calls at once only queue up in libuv
   for (let i = 0; i < top.length; i += 32) {

@@ -1,4 +1,4 @@
-// Reference counting for "keep the display awake" requests. Electron-free: ipc.ts plugs in
+// Reference counting for "keep the display awake" requests. Electron-free: appMain.ts plugs in
 // powerSaveBlocker and releases a window's requests when it closes.
 
 export interface PowerBlocker {

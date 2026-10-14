@@ -34,3 +34,8 @@ export function classify(path: string): 'photo' | 'video' | 'audio' | null {
   if (AUDIO_EXT.includes(e)) return 'audio'
   return null
 }
+
+/** Dropped or pasted paths: songs go to the music, everything else (photos, videos, folders) into the show. */
+export function splitAudio(paths: string[]): { audio: string[]; media: string[] } {
+  return { audio: paths.filter((p) => classify(p) === 'audio'), media: paths.filter((p) => classify(p) !== 'audio') }
+}

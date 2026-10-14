@@ -6,7 +6,7 @@ import { panEase, panFrames, panoMode, panoramaOf, panoWindow, panRamp, panUv } 
 import type { TimelineSlide } from '@shared/timeline'
 import type { QuadSpec, Tex, UvRect } from './gl'
 import type { Ctx, SlideState } from './types'
-import type { TextSpec } from './media'
+import type { TextSpec } from './text'
 
 export const clamp01 = (v: number): number => Math.min(1, Math.max(0, v))
 export const lerp = (a: number, b: number, t: number): number => a + (b - a) * t

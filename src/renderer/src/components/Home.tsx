@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Copy, Eraser, FileArchive, FileUp, FolderOpen, Plus, Trash2, Play, Wand2 } from 'lucide-react'
 import { mediaUrl } from '@shared/api'
-import { classify } from '@shared/formats'
+import { splitAudio } from '@shared/formats'
 import { useStore } from '../store'
-import { handledDrops } from '../insert'
-import { Tip } from './Settings'
+import { droppedPaths, handledDrops } from '../insert'
+import { Tip } from './Tip'
 import { openWizard } from './Wizard'
 import { DamagedProjects, importProjectSafely, openProjectSafely } from './ProjectRepair'
 import { CleanupBanner, DeadlineBadge, openCleanup } from './Cleanup'
@@ -21,8 +21,7 @@ const FORMATS = 'JPEG · HEIC · HIF · ARW · DNG · PNG · WebP · AVIF — MO
  * is skipped with the notice (repeats.ts); songs go into its music.
  */
 async function dropOntoShow(id: string, paths: string[]): Promise<void> {
-  const audio = paths.filter((p) => classify(p) === 'audio')
-  const media = paths.filter((p) => classify(p) !== 'audio')
+  const { audio, media } = splitAudio(paths)
   await openProjectSafely(id)
   // it couldn't be opened (the notice says why, a damaged one offers "Repair…"): nothing goes in
   if (useStore.getState().project?.id !== id) return
@@ -37,8 +36,8 @@ export function Home() {
   const [over, setOver] = useState<string | null>(null)
 
   // Files over a show's card go into that show; on the drop box or anywhere else they make a new one
-  // (App.tsx). dragenter is accepted like dragover (Chromium may decide the drop by it alone). The mark
-  // lies over the card, so nothing moves under the pointer and the card's name stays the same.
+  // (windowDrop.ts). dragenter is accepted like dragover (Chromium may decide the drop by it alone).
+  // The mark lies over the card, so nothing moves under the pointer and the card's name stays the same.
   const filesOver = (id: string) => (e: React.DragEvent): void => {
     if (!e.dataTransfer.types.includes('Files')) return
     e.preventDefault()
@@ -56,7 +55,7 @@ export function Home() {
     setOver(null)
     // the window's drop handler leaves them alone
     handledDrops.add(e.nativeEvent)
-    const paths = [...e.dataTransfer.files].map((f) => window.api.pathForFile(f)).filter(Boolean)
+    const paths = droppedPaths(e.dataTransfer)
     if (paths.length) void dropOntoShow(id, paths)
   }
 

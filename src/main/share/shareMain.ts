@@ -5,12 +5,13 @@
 // Windows Firewall asks once per program whether it may accept connections from the network (the
 // first time it listens on a LAN address); the dialog explains that prompt. We never change firewall
 // settings ourselves.
-import { app, BrowserWindow, dialog, ipcMain, type WebContents } from 'electron'
+import { app, ipcMain, type WebContents } from 'electron'
 import { join } from 'node:path'
 import { IMAGE_EXT, VIDEO_EXT } from '@shared/formats'
 import type { ShareCommand, ShareFilesEvent, ShareStatus } from '@shared/share'
 import { lanAddresses } from './net'
-import { createShareServer, DEFAULT_LIMITS, safeName, type ShareServer } from './server'
+import { createShareServer, DEFAULT_LIMITS, showFolderName, type ShareServer } from './server'
+import { showOpen } from '../dialogs'
 
 export interface ShareMainConfig {
   /** <Documents>/Diashow Studio/Uploads */
@@ -95,7 +96,7 @@ export function registerShare(cfg: ShareMainConfig): { stop(): Promise<void> } {
       return
     }
     await stop()
-    const folder = join(cfg.uploadsRoot, safeName(projectName, 60) || 'Diashow')
+    const folder = join(cfg.uploadsRoot, showFolderName(projectName))
     let s: Session | null = null
     const server = createShareServer({
       uploadDir: folder,
@@ -173,8 +174,7 @@ export function registerShare(cfg: ShareMainConfig): { stop(): Promise<void> } {
             { name: 'Fotos und Videos', extensions: [...VIDEO_EXT, ...IMAGE_EXT] }
           ]
         }
-        const win = BrowserWindow.fromWebContents(e.sender)
-        const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+        const r = await showOpen(e, opts)
         if (!r.canceled) for (const p of r.filePaths) await session?.server.offer(p)
         break
       }

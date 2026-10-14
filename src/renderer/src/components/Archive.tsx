@@ -9,10 +9,9 @@ import { AlertTriangle, Film, Loader2, Plus } from 'lucide-react'
 import { archiveSize, type ArchiveInventory, type ArchiveProgress, type ArchiveResult, type ArchiveTarget, type ArchiveVideo } from '@shared/archive'
 import { errorMessage } from '@shared/friendlyError'
 import { saveOpenProject } from '../store'
-import { localeTag, t, type StringKey } from '../i18n'
+import { fill, fmtBytes, fmtDate, localeTag, t } from '../i18n'
 import { ErrorText } from '../errors'
 import { Modal } from './Modal'
-import { fmtBytes } from './Cleanup'
 import './archive.css'
 
 const useArchive = create<{ projectId: string | null }>(() => ({ projectId: null }))
@@ -28,10 +27,6 @@ export function ArchiveHost() {
   if (!projectId) return null
   return <ArchiveDialog key={projectId} projectId={projectId} onClose={() => useArchive.setState({ projectId: null })} />
 }
-
-const fill = (key: StringKey, values: Record<string, string | number>): string => Object.entries(values).reduce((s, [k, v]) => s.replaceAll(`{${k}}`, String(v)), t(key))
-
-const fmtDate = (ms: number): string => new Date(ms).toLocaleDateString(localeTag(), { day: 'numeric', month: 'long', year: 'numeric' })
 
 /** At most a few names, then "…". */
 const someNames = (names: string[], n = 5): string => (names.length > n ? `${names.slice(0, n).join(', ')} …` : names.join(', '))

@@ -10,8 +10,8 @@
 // repair, saved by an older version) it is discarded and logged. Every state it leads to goes
 // through the same validation as a project file (projectSchema.ts); a damaged file is discarded
 // too, and never stops a show from opening. Restoring a backup, a repair, the clean-up and an import
-// start with an empty history (ipc.ts, cleanup.ts). A deleted show's history goes into the trash with
-// it and comes back when the show is restored (trash.ts). Electron-free.
+// start with an empty history (projectsMain.ts, ipc.ts, cleanup.ts). A deleted show's history goes
+// into the trash with it and comes back when the show is restored (trash.ts). Electron-free.
 import { createHash } from 'node:crypto'
 import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -19,9 +19,10 @@ import { promisify } from 'node:util'
 import * as zlib from 'node:zlib'
 import { applyPatch, diffProject, HISTORY_BYTES, HISTORY_STEPS, type HistoryRestore, type HistoryUpload, type StepPatch } from '@shared/history'
 import type { Project } from '@shared/types'
-import { validateProject } from './projectSchema'
+import { checkProjectId, validateProject } from './projectSchema'
 import { replaceFile } from './replaceFile'
 import { removeInside } from './safeDelete'
+import { serialByKey } from './serial'
 
 const gzip = promisify(zlib.gzip)
 const gunzip = promisify(zlib.gunzip)
@@ -76,11 +77,6 @@ export interface HistoryStore {
   size(id: string): Promise<{ files: number; bytes: number }>
 }
 
-function checkId(id: string): string {
-  if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(id)) throw new Error(`invalid project id: ${String(id)}`)
-  return id
-}
-
 /** SHA-256 of a project file's text: what a stored history is anchored to. */
 export function projectHash(text: string): string {
   return createHash('sha256').update(text, 'utf8').digest('hex')
@@ -122,22 +118,12 @@ export function createHistoryStore(opts: HistoryStoreOptions): HistoryStore {
   const maxBytes = opts.maxBytes ?? HISTORY_BYTES
   const now = opts.now ?? Date.now
   const log = (m: string): void => opts.log?.(m)
-  const fileOf = (id: string): string => join(dir, `${checkId(id)}${EXT}`)
+  const fileOf = (id: string): string => join(dir, `${checkProjectId(id)}${EXT}`)
   const lives = new Map<string, Live>()
   /** Per show: the file text and project the editor opened last (until its history is loaded). */
   const openedShows = new Map<string, { text: string; project: Project; repaired: boolean }>()
-  const queues = new Map<string, Promise<unknown>>()
-
   /** Writes, loads and deletions of one show run one after another. */
-  function serial<T>(id: string, task: () => Promise<T>): Promise<T> {
-    const next = (queues.get(id) ?? Promise.resolve()).then(task, task)
-    const settled = next.catch(() => {})
-    queues.set(id, settled)
-    void settled.then(() => {
-      if (queues.get(id) === settled) queues.delete(id)
-    })
-    return next
-  }
+  const serial = serialByKey()
 
   /** The stored steps of a chain, nearest first, within the limits left. */
   function take(live: Live, ids: number[], budget: { steps: number; bytes: number }): string[] {
@@ -239,14 +225,14 @@ export function createHistoryStore(opts: HistoryStoreOptions): HistoryStore {
     fileOf,
 
     opened(id, text, project, repaired) {
-      openedShows.delete(checkId(id))
+      openedShows.delete(checkProjectId(id))
       openedShows.set(id, { text, project, repaired })
       // only the last few opened shows wait for their history
       while (openedShows.size > 4) openedShows.delete(openedShows.keys().next().value!)
     },
 
     async load(id) {
-      checkId(id)
+      checkProjectId(id)
       const rec = openedShows.get(id)
       openedShows.delete(id)
       if (!rec) return null
@@ -282,7 +268,7 @@ export function createHistoryStore(opts: HistoryStoreOptions): HistoryStore {
     },
 
     saved(id, text, raw) {
-      checkId(id)
+      checkProjectId(id)
       const up = checkUpload(raw)
       // without its history the editor doesn't vouch for the stored one: it stays as it is
       if (!up) return 'ignored'
@@ -310,7 +296,7 @@ export function createHistoryStore(opts: HistoryStoreOptions): HistoryStore {
     },
 
     async rebase(id, before, after) {
-      checkId(id)
+      checkProjectId(id)
       await flushOne(id)
       const from = projectHash(before)
       const to = projectHash(after)
@@ -333,12 +319,12 @@ export function createHistoryStore(opts: HistoryStoreOptions): HistoryStore {
     },
 
     async flush(id) {
-      if (id !== undefined) return flushOne(checkId(id))
+      if (id !== undefined) return flushOne(checkProjectId(id))
       await Promise.all([...lives.keys()].map(flushOne))
     },
 
     async release(id) {
-      await flushOne(checkId(id))
+      await flushOne(checkProjectId(id))
       lives.delete(id)
       openedShows.delete(id)
       // a write or load still running ends first
@@ -346,7 +332,7 @@ export function createHistoryStore(opts: HistoryStoreOptions): HistoryStore {
     },
 
     async clear(id) {
-      checkId(id)
+      checkProjectId(id)
       const live = lives.get(id)
       if (live?.timer) clearTimeout(live.timer)
       lives.delete(id)
@@ -358,7 +344,7 @@ export function createHistoryStore(opts: HistoryStoreOptions): HistoryStore {
       for (const live of lives.values()) if (live.timer) clearTimeout(live.timer)
       lives.clear()
       openedShows.clear()
-      await Promise.all([...queues.values()])
+      await serial.settled()
       const names = await readdir(dir).catch(() => [] as string[])
       const targets = names.filter((n) => /\.json\.gz(\..*\.tmp)?$/i.test(n)).map((n) => join(dir, n))
       if (!targets.length) return { files: 0, bytes: 0 }
@@ -367,7 +353,7 @@ export function createHistoryStore(opts: HistoryStoreOptions): HistoryStore {
     },
 
     async size(id) {
-      await flushOne(checkId(id))
+      await flushOne(checkProjectId(id))
       try {
         const st = await stat(fileOf(id))
         return { files: 1, bytes: st.size }

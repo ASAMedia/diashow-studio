@@ -8,7 +8,7 @@ import { clipboard, ipcMain } from 'electron'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { safeName } from './share/server'
+import { showFolderName } from './share/server'
 import { isInsideRoot } from './safeDelete'
 
 const PASTED = { de: 'Eingefügt', en: 'Pasted' } as const
@@ -54,7 +54,7 @@ const isPng = (b: Uint8Array): boolean => b.length > PNG_SIGNATURE.length && PNG
 /** Writes a pasted picture into the project's folder under `root` without overwriting anything; returns its path. */
 export async function savePastedPng(root: string, projectName: string, bytes: Uint8Array, at = new Date()): Promise<string> {
   if (!isPng(bytes) || bytes.length > MAX_PNG) throw new Error('the clipboard holds no usable picture')
-  const dir = join(root, safeName(projectName, 60) || 'Diashow')
+  const dir = join(root, showFolderName(projectName))
   if (!isInsideRoot(dir, root)) throw new Error('invalid project name')
   await mkdir(dir, { recursive: true })
   for (let n = 1; n < 1000; n++) {

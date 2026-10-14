@@ -3,7 +3,7 @@
 // a slide's menu (behind that slide). Files are imported like any import (folders expanded, Live
 // Photos and RAW+JPEG paired, sorted by capture time) and go in as one undo step; the new slides are
 // selected. Where they go is decided in insertAt.ts. What the show has already is skipped (repeats.ts).
-import { classify } from '@shared/formats'
+import { splitAudio } from '@shared/formats'
 import type { MediaItem } from '@shared/types'
 import { useStore } from './store'
 import { timelineOf } from './timeline'
@@ -21,8 +21,11 @@ export interface InsertPlace {
   into?: string[]
 }
 
-/** Drops of files the filmstrip took (the window's own drop handler leaves them alone). */
+/** Drops of files the filmstrip or a show's card took (the window's own drop handler leaves them alone). */
 export const handledDrops = new WeakSet<Event>()
+
+/** The paths of the files (and folders) dropped from Explorer. */
+export const droppedPaths = (dt: DataTransfer | null | undefined): string[] => [...(dt?.files ?? [])].map((f) => window.api.pathForFile(f)).filter(Boolean)
 
 /** Scrolls the filmstrip to the slide of an entry (set while the filmstrip is shown). */
 export const stripReveal: { current: ((entryId: string) => void) | null } = { current: null }
@@ -32,8 +35,7 @@ export const stripReveal: { current: ((entryId: string) => void) | null } = { cu
  * Audio files go into the music as with any drop. Resolves with the new entry ids.
  */
 export async function insertFiles(paths: string[], place: InsertPlace): Promise<string[]> {
-  const audio = paths.filter((p) => classify(p) === 'audio')
-  const media = paths.filter((p) => classify(p) !== 'audio')
+  const { audio, media } = splitAudio(paths)
   if (audio.length) void useStore.getState().addMusic(audio).catch((e) => notifyError(e, 'import'))
   if (!media.length) return []
   return serially(async () => {

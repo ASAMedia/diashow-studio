@@ -9,7 +9,7 @@ import { localeTag, pick, t } from '../i18n'
 import { CopyChaptersButton, JobRow } from './Queue'
 import { openFacesInShow } from '@shared/people'
 import { PrivacyReview } from './PrivacyReview'
-import { DeadlineNudge } from './Cleanup'
+import { DeadlineNudge } from './Deadline'
 import { Modal } from './Modal'
 import { ErrorText } from '../errors'
 

@@ -10,9 +10,12 @@ import { useStore } from '../store'
 import { timelineOf, useTimeline } from '../timeline'
 import { fmtTime, localeTag, t } from '../i18n'
 import { Check, Field, Section, Slider, TITLE_STYLES } from './ui'
-import { BatchAdjust, BatchPanel, EditSection, FreeTextSection, LivePhotoControls, PanoramaControls, panoramaEntries, PrivacySection, SpeedSelect } from './SlideTools'
+import { BatchAdjust, EditSection, LivePhotoControls, PanoramaControls, panoramaEntries, PrivacySection, SpeedSelect } from './SlideTools'
+import { BatchPanel } from './BatchPanel'
+import { FreeTextSection } from './FreeTextSection'
 import { MediaThumb } from './EditedPicture'
 import { openPhotoEdit } from '../photoEdit'
+import { firstInShow, showOrder } from '../entryEdits'
 import { TrimStrip } from './TrimStrip'
 import { ErrorText } from '../errors'
 
@@ -115,8 +118,7 @@ function LayoutPicker({ slide }: { slide: TimelineSlide }) {
   const setEntry = useStore((s) => s.setEntry)
   const options = templatesFor(project.settings.theme, slide.entries.length)
   // the override lives on the slide's first entry in filmstrip order
-  const order = new Map(project.entries.map((e, i) => [e.id, i]))
-  const first = [...slide.entries].sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))[0]
+  const first = firstInShow(slide.entries, showOrder(project))
   const free = first?.layout === 'free'
   if ((options.length < 2 && slide.entries.length < 2) || !first) return null
   const mini = (tpl: Template) => (
@@ -261,8 +263,7 @@ export function SlidePanel() {
   if (slides.length > 1) return <BatchPanel entries={entries} slides={slides} />
 
   if (entries.length > 1) {
-    const order = new Map(project.entries.map((x, i) => [x.id, i]))
-    const first = [...entries].sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))[0]
+    const first = firstInShow(entries, showOrder(project))
     const ids = entries.map((x) => x.id)
     const audible = new Set(slide ? audibleClips(slide).map((c) => c.entry.id) : [])
     const videos = entries.filter((x) => x.type === 'video' && media(x)?.hasAudio).length

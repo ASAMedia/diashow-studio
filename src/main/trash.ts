@@ -11,7 +11,7 @@
 // - <userData>/trash/<id>/: history.json.gz (the undo history) and exports/<job>/ (finished export jobs).
 // trash.json records how far a change got ('moving', 'trashed', 'restoring', 'purging'): after a crash,
 // recover() takes a half-done move back and finishes a restore or a purge. A move or restore that fails
-// (a file stays busy) is taken back at once.
+// (a file stays busy) is taken back at once. trash.json and how it is checked when read: trashEntry.ts.
 //
 // Restoring puts everything back where it was, never over anything that is there now: a show whose id
 // is taken is refused; an upload whose place is taken comes back under a free name, the show and its
@@ -20,44 +20,18 @@
 // Uploads a show shares with another one (a duplicate) are not moved in (cleanup.ts decides what goes
 // along): media() tells the clean-up what the shows in the trash still use, so nothing deletes them
 // meanwhile, and the last show using them takes them along when it is deleted for good.
-import type { Dirent } from 'node:fs'
-import { lstat, mkdir, readdir, readFile, rm, rmdir, stat, utimes, writeFile } from 'node:fs/promises'
-import { basename, dirname, extname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path'
+import { mkdir, readdir, readFile, rm, rmdir, stat, utimes, writeFile } from 'node:fs/promises'
+import { basename, dirname, extname, join, relative, resolve } from 'node:path'
 import { validDeleteAt } from '@shared/cleanup'
 import { TRASH_DAYS, type TrashContents, type TrashEntry, type TrashProblem, type TrashRefusal, type TrashRemoveResult } from '@shared/trash'
-import { cleanProjectText } from './projectSchema'
+import { listDir, present } from './files'
+import { checkProjectId, cleanProjectText } from './projectSchema'
 import { BACKUPS, PROJECT_EXT } from './projects'
 import { replaceFile } from './replaceFile'
 import { removeInside, sizeOf } from './safeDelete'
+import { checkKey, checkRel, count, FORMAT, followFiles, ID, MANIFEST, mediaOf, parseManifest, SHOW, TRASH, type Item, type Manifest } from './trashEntry'
 
-/** The trash's folder in the projects folder (and its name in userData). */
-export const TRASH = '.trash'
-const MANIFEST = 'trash.json'
-const SHOW = 'show.json'
-const FORMAT = 'diashow-trash'
 const DAY = 86_400_000
-const ID = /^[A-Za-z0-9_-]{1,128}$/
-
-type State = 'moving' | 'trashed' | 'restoring' | 'purging'
-const STATES: readonly State[] = ['moving', 'trashed', 'restoring', 'purging']
-
-/** What went into the trash: the show, its older versions, its undo history, a file of the projects folder (relative path), an export job. */
-type Item = { kind: 'show' } | { kind: 'backups' } | { kind: 'history' } | { kind: 'file'; path: string } | { kind: 'job'; job: string }
-
-interface Manifest {
-  format: typeof FORMAT
-  version: 1
-  id: string
-  name: string
-  state: State
-  deletedAt: number
-  purgeAt: number
-  deleteAt?: number
-  slideCount: number
-  versions: number
-  faces: boolean
-  items: Item[]
-}
 
 export interface TrashOptions {
   /** <Documents>/Diashow Studio: the show, its older versions, uploads and pasted pictures come from here. */
@@ -142,93 +116,6 @@ export interface Trash {
   media(): Promise<Map<string, TrashedMedia[]>>
 }
 
-const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
-const count = (v: unknown): number => (Number.isSafeInteger(v) && (v as number) >= 0 ? (v as number) : 0)
-
-function checkId(id: string): string {
-  if (typeof id !== 'string' || !ID.test(id)) throw new Error(`invalid project id: ${String(id)}`)
-  return id
-}
-
-/** One folder or file name directly in the trash: no separators, no drive, not . or .. */
-function checkKey(key: string): string {
-  if (typeof key !== 'string' || !key || key.length > 255 || key === '.' || key === '..' || /[\\/:\0]/.test(key)) throw new Error('invalid trash entry')
-  return key
-}
-
-/**
- * A file's path relative to the projects folder as stored in trash.json, or null: it must lie in a
- * subfolder (Uploads, Eingefügt, …), never in the trash or the older versions, and never lead out.
- */
-function checkRel(rel: unknown): string | null {
-  if (typeof rel !== 'string' || !rel || rel.length > 2000 || rel.includes('\0') || rel.includes(':') || isAbsolute(rel)) return null
-  if (normalize(rel) !== rel) return null
-  const parts = rel.split(sep)
-  if (parts.length < 2 || parts.some((p) => !p || p === '.' || p === '..')) return null
-  const top = parts[0].toLowerCase()
-  return top === TRASH || top === BACKUPS ? null : rel
-}
-
-function checkItem(v: unknown): Item | null {
-  if (!isObj(v)) return null
-  if (v.kind === 'show' || v.kind === 'backups' || v.kind === 'history') return { kind: v.kind }
-  if (v.kind === 'file') {
-    const path = checkRel(v.path)
-    return path ? { kind: 'file', path } : null
-  }
-  if (v.kind === 'job' && typeof v.job === 'string' && ID.test(v.job)) return { kind: 'job', job: v.job }
-  return null
-}
-
-/** trash.json read and checked; null when it is missing or damaged. */
-function parseManifest(text: string, key: string): Manifest | null {
-  let m: unknown
-  try {
-    m = JSON.parse(text)
-  } catch {
-    return null
-  }
-  if (!isObj(m) || m.format !== FORMAT || m.version !== 1 || m.id !== key || typeof m.name !== 'string' || !STATES.includes(m.state as State)) return null
-  if (!Number.isFinite(m.deletedAt) || !Number.isFinite(m.purgeAt) || !Array.isArray(m.items)) return null
-  const items: Item[] = []
-  for (const raw of m.items) {
-    const item = checkItem(raw)
-    if (!item) return null
-    items.push(item)
-  }
-  return {
-    format: FORMAT,
-    version: 1,
-    id: key,
-    name: m.name.slice(0, 300),
-    state: m.state as State,
-    deletedAt: m.deletedAt as number,
-    purgeAt: m.purgeAt as number,
-    ...(validDeleteAt(m.deleteAt) ? { deleteAt: m.deleteAt } : {}),
-    slideCount: count(m.slideCount),
-    versions: count(m.versions),
-    faces: m.faces === true,
-    items
-  }
-}
-
-async function present(p: string): Promise<boolean> {
-  try {
-    await lstat(p)
-    return true
-  } catch {
-    return false
-  }
-}
-
-async function children(dir: string): Promise<Dirent[]> {
-  try {
-    return await readdir(dir, { withFileTypes: true })
-  } catch {
-    return []
-  }
-}
-
 /** `a.jpg` → `a (2).jpg`, `a (3).jpg` …: the first name that is free. */
 async function freeName(path: string): Promise<string> {
   const ext = extname(path)
@@ -238,41 +125,6 @@ async function freeName(path: string): Promise<string> {
     if (!(await present(p))) return p
   }
   throw new Error('no free name')
-}
-
-/** Points the media of a project (parsed JSON) at the files' new places; true when something changed. */
-function followFiles(p: unknown, renamed: ReadonlyMap<string, string>): boolean {
-  let changed = false
-  const to = (v: unknown): unknown => {
-    if (typeof v !== 'string') return v
-    const next = renamed.get(resolve(v).toLowerCase())
-    if (!next) return v
-    changed = true
-    return next
-  }
-  for (const m of isObj(p) && Array.isArray(p.media) ? p.media : []) {
-    if (!isObj(m)) continue
-    m.path = to(m.path)
-    if (isObj(m.live)) m.live.source = to(m.live.source)
-  }
-  return changed
-}
-
-/** The photos and videos of a project file's text (raw JSON: only what is well-formed counts). */
-function mediaOf(text: string): TrashedMedia[] {
-  let p: unknown
-  try {
-    p = JSON.parse(cleanProjectText(text))
-  } catch {
-    return []
-  }
-  const out: TrashedMedia[] = []
-  for (const m of isObj(p) && Array.isArray(p.media) ? p.media : []) {
-    if (!isObj(m) || typeof m.id !== 'string' || typeof m.path !== 'string') continue
-    const live = isObj(m.live) && typeof m.live.source === 'string' ? m.live.source : undefined
-    out.push(live ? { id: m.id, path: m.path, live } : { id: m.id, path: m.path })
-  }
-  return out
 }
 
 export function createTrash(opts: TrashOptions): Trash {
@@ -320,7 +172,7 @@ export function createTrash(opts: TrashOptions): Trash {
   const ids = new Set<string>()
   let loaded: Promise<void> | null = null
   const load = (): Promise<void> =>
-    (loaded ??= children(dir).then((list) => {
+    (loaded ??= listDir(dir).then((list) => {
       for (const e of list) if (ID.test(e.name)) ids.add(e.name)
     }))
 
@@ -516,7 +368,7 @@ export function createTrash(opts: TrashOptions): Trash {
 
     moveIn(mv) {
       return serial(async () => {
-        const id = checkId(mv.id)
+        const id = checkProjectId(mv.id)
         if (await present(entryDir(id))) throw new Error(`the trash still holds an entry of ${id}`)
         // what userData kept of an entry whose folder in the projects folder went (it can't come back)
         if (await present(dataEntry(id))) await removeInside([dataEntry(id)], [dataDir])
@@ -577,7 +429,7 @@ export function createTrash(opts: TrashOptions): Trash {
       const entries: TrashEntry[] = []
       const problems: TrashProblem[] = []
       const seen = new Set<string>()
-      for (const e of await children(dir)) {
+      for (const e of await listDir(dir)) {
         const key = e.name
         seen.add(key.toLowerCase())
         const m = e.isDirectory() && ID.test(key) ? await readManifest(key) : null
@@ -591,7 +443,7 @@ export function createTrash(opts: TrashOptions): Trash {
         }
       }
       // what userData keeps of an entry whose folder in the projects folder is gone
-      for (const e of await children(dataDir)) {
+      for (const e of await listDir(dataDir)) {
         if (seen.has(e.name.toLowerCase())) continue
         problems.push({ key: e.name, bytes: (await sizeOf(dataEntry(e.name))).bytes })
         report(e.name, 'only its undo history or export jobs are left')
@@ -603,7 +455,7 @@ export function createTrash(opts: TrashOptions): Trash {
 
     restore(id) {
       return serial(async () => {
-        checkId(id)
+        checkProjectId(id)
         const m = await readManifest(id)
         if (!m || (m.state !== 'trashed' && m.state !== 'restoring')) throw new TrashRefusedError('not-found', `no show ${id} in the trash`)
         // the id must be free: no show and no older versions under it
@@ -624,7 +476,7 @@ export function createTrash(opts: TrashOptions): Trash {
 
     empty() {
       return serial(async () => {
-        const keys = new Set([...(await children(dir)), ...(await children(dataDir))].map((e) => e.name))
+        const keys = new Set([...(await listDir(dir)), ...(await listDir(dataDir))].map((e) => e.name))
         const total: TrashRemoveResult = { files: 0, bytes: 0, failed: [] }
         for (const key of keys) {
           const r = await purgeOne(key)
@@ -643,12 +495,12 @@ export function createTrash(opts: TrashOptions): Trash {
         const seen = new Set<string>()
         // an unreadable entry goes by the time its folder was last changed
         const old = async (p: string): Promise<boolean> => (await stat(p).then((s) => s.mtimeMs, () => t)) + days * DAY <= t
-        for (const e of await children(dir)) {
+        for (const e of await listDir(dir)) {
           seen.add(e.name.toLowerCase())
           const m = e.isDirectory() && ID.test(e.name) ? await readManifest(e.name) : null
           if (m ? m.state === 'purging' || (m.state === 'trashed' && m.purgeAt <= t) : await old(entryDir(e.name))) due.push(e.name)
         }
-        for (const e of await children(dataDir)) if (!seen.has(e.name.toLowerCase()) && (await old(dataEntry(e.name)))) due.push(e.name)
+        for (const e of await listDir(dataDir)) if (!seen.has(e.name.toLowerCase()) && (await old(dataEntry(e.name)))) due.push(e.name)
         for (const key of due) await purgeOne(key).catch((err: Error) => log(`trash entry could not be deleted: ${err.message}`))
         return due
       })
@@ -656,7 +508,7 @@ export function createTrash(opts: TrashOptions): Trash {
 
     recover() {
       return serial(async () => {
-        for (const e of await children(dir)) {
+        for (const e of await listDir(dir)) {
           if (!e.isDirectory() || !ID.test(e.name)) continue
           const m = await readManifest(e.name)
           try {
@@ -681,7 +533,7 @@ export function createTrash(opts: TrashOptions): Trash {
     media() {
       return serial(async () => {
         const out = new Map<string, TrashedMedia[]>()
-        for (const e of await children(dir)) {
+        for (const e of await listDir(dir)) {
           if (!e.isDirectory() || !ID.test(e.name)) continue
           // an entry being deleted for good uses nothing any more; one that can't be read is never restored
           const m = await readManifest(e.name)

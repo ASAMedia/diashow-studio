@@ -97,6 +97,15 @@ export function sortByDate(p: Project): void {
 /** Whether an entry's slide was fixed by hand (combined, split, or kept as it was when photos were inserted). */
 export const isFixed = (e: Entry): boolean => e.groupBreak === 'force' || e.groupBreak === 'join'
 
+/** Each entry's place in the show (for firstInShow). */
+export const showOrder = (p: Project): Map<string, number> => new Map(p.entries.map((e, i) => [e.id, i]))
+
+/**
+ * The first of `entries` in show order (undefined for none): a slide keeps its own time, layout and
+ * new text boxes on that entry.
+ */
+export const firstInShow = <T extends Entry>(entries: readonly T[], order: ReadonlyMap<string, number>): T => [...entries].sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))[0]
+
 /**
  * The theme groups the photos into slides again, following its pattern: of the given entries (their
  * slides, in a selection), or of the whole show. A selection keeps its edges, so the slides around it

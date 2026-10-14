@@ -1,7 +1,7 @@
 // Text boxes the user placed freely on a slide: text with an optional shadow, band, card or
 // speech bubble behind it, rotated around its centre.
 import type { FreeText, TextFont } from '@shared/types'
-import type { FontRole, TextSpec } from './media'
+import type { FontRole, TextSpec } from './text'
 import type { Ctx } from './types'
 
 export const FONT_ROLE: Record<TextFont, FontRole> = {

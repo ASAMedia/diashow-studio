@@ -18,8 +18,7 @@
 //   mixed sound and the rendered parts;
 // - the undo history in <userData>/history/<id>.json.gz (history.ts): earlier states of the show. It
 //   goes when chosen, with face data or uploads, and whenever the clean-up rewrote the show.
-import type { Dirent } from 'node:fs'
-import { lstat, readdir, stat } from 'node:fs/promises'
+import { stat } from 'node:fs/promises'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import type { ExportJobState } from '@shared/exportQueue'
 import type { MediaItem, Project } from '@shared/types'
@@ -37,10 +36,12 @@ import {
   type CleanupResult
 } from '@shared/cleanup'
 import type { TrashEntry, TrashMoveResult } from '@shared/trash'
+import { ID_FOLDER } from './cache'
+import { isDir, listDir } from './files'
 import { mediaId } from './media/scan'
 import { BACKUPS, type ProjectStore } from './projects'
 import { isInsideRoot, pruneEmptyDirs, removeInside, sizeOf } from './safeDelete'
-import { safeName } from './share/server'
+import { showFolderName } from './share/server'
 import { TrashRefusedError, type Trash, type TrashedMedia } from './trash'
 
 export interface CleanupDeps {
@@ -128,61 +129,40 @@ export interface CleanupScan {
   keep: string[]
 }
 
-/** Upload folders of a project: by its name (where the share dialog puts them) and those its media come from. */
-export function uploadDirsOf(project: Project, uploadsRoot: string): string[] {
+/**
+ * The folders directly in `root` that hold a show's received files: the one named after the show (where
+ * they are put) and those `files` lie in (its media may come from a folder of an earlier name).
+ */
+function showFolders(root: string, name: string, files: unknown[]): string[] {
   const dirs = new Map<string, string>()
   const add = (dir: string): void => void dirs.set(low(dir), resolve(dir))
-  add(join(uploadsRoot, safeName(project.name, 60) || 'Diashow'))
-  for (const m of project.media) {
-    for (const p of [m.path, m.live?.source]) {
-      if (typeof p !== 'string' || !isInsideRoot(p, uploadsRoot)) continue
-      const first = relative(resolve(uploadsRoot), resolve(p)).split(sep)[0]
-      if (first && first !== '..') add(join(uploadsRoot, first))
-    }
+  add(join(root, showFolderName(name)))
+  for (const p of files) {
+    if (typeof p !== 'string' || !isInsideRoot(p, root)) continue
+    const first = relative(resolve(root), resolve(p)).split(sep)[0]
+    if (first && first !== '..') add(join(root, first))
   }
   return [...dirs.values()]
 }
 
+/** Upload folders of a project: by its name (where the share dialog puts them) and those its media come from. */
+export function uploadDirsOf(project: Project, uploadsRoot: string): string[] {
+  return showFolders(uploadsRoot, project.name, project.media.flatMap((m) => [m.path, m.live?.source]))
+}
+
 /** Folders of pictures pasted into a project (Eingefügt/<project name>, and the ones its media come from), with their root. */
 export function pastedDirsOf(project: Project, roots: readonly string[]): { dir: string; root: string }[] {
-  const dirs = new Map<string, { dir: string; root: string }>()
-  for (const root of roots) {
-    const add = (dir: string): void => void dirs.set(low(dir), { dir: resolve(dir), root })
-    add(join(root, safeName(project.name, 60) || 'Diashow'))
-    for (const m of project.media) {
-      if (typeof m.path !== 'string' || !isInsideRoot(m.path, root)) continue
-      const first = relative(resolve(root), resolve(m.path)).split(sep)[0]
-      if (first && first !== '..') add(join(root, first))
-    }
-  }
-  return [...dirs.values()]
+  return roots.flatMap((root) => showFolders(root, project.name, project.media.map((m) => m.path)).map((dir) => ({ dir, root })))
 }
 
 /** In one of the app's folders of received files (uploads, pasted pictures), not the user's own. */
 const received = (d: Pick<CleanupDeps, 'uploadsRoot' | 'pastedRoots'>, p: string): boolean =>
   isInsideRoot(p, d.uploadsRoot) || (d.pastedRoots ?? []).some((r) => isInsideRoot(p, r))
 
-async function list(dir: string): Promise<Dirent[]> {
-  try {
-    return await readdir(dir, { withFileTypes: true })
-  } catch {
-    return []
-  }
-}
-
-async function isDir(p: string): Promise<boolean> {
-  try {
-    const st = await lstat(p)
-    return st.isDirectory() && !st.isSymbolicLink()
-  } catch {
-    return false
-  }
-}
-
 /** Files below `dir` (links are not followed), with their sizes, and the folders on the way. */
 async function walk(dir: string, files: SizedPath[], dirs: string[], depth = 0): Promise<void> {
   if (depth > 8) return
-  for (const e of await list(dir)) {
+  for (const e of await listDir(dir)) {
     const p = join(dir, e.name)
     if (e.isSymbolicLink()) continue
     if (e.isDirectory()) {
@@ -229,7 +209,7 @@ export async function scanProject(d: CleanupDeps, id: string): Promise<CleanupSc
   for (const dir of uploadDirsOf(project, d.uploadsRoot)) {
     if (!(await isDir(dir))) continue
     uploadDirs.push(dir)
-    for (const e of await list(dir)) {
+    for (const e of await listDir(dir)) {
       if (!e.isDirectory() || e.isSymbolicLink()) continue
       const pupil = join(dir, e.name)
       uploaderDirs.push(pupil)
@@ -245,7 +225,7 @@ export async function scanProject(d: CleanupDeps, id: string): Promise<CleanupSc
   for (const { dir, root } of pastedDirsOf(project, d.pastedRoots ?? [])) {
     if (!(await isDir(dir))) continue
     uploadDirs.push(dir)
-    for (const e of await list(dir)) {
+    for (const e of await listDir(dir)) {
       if (!e.isFile() || !/\.png$/i.test(e.name)) continue
       const path = join(dir, e.name)
       const key = low(path)
@@ -257,7 +237,7 @@ export async function scanProject(d: CleanupDeps, id: string): Promise<CleanupSc
   const caches: CacheFolder[] = []
   const ids = [...new Set([...project.media.map((m) => m.id), ...project.music.map((t) => t.id)])]
   for (const cid of ids) {
-    if (typeof cid !== 'string' || !/^[0-9a-f]{16}$/.test(cid)) continue
+    if (typeof cid !== 'string' || !ID_FOLDER.test(cid)) continue
     const path = join(d.cacheDir, cid)
     if (!(await isDir(path))) continue
     const s = await sizeOf(path)
@@ -268,7 +248,7 @@ export async function scanProject(d: CleanupDeps, id: string): Promise<CleanupSc
   // older versions (and damaged files a repair kept)
   const backups: SizedPath[] = []
   const folder = d.projects.backupFolder(id)
-  for (const e of await list(folder)) {
+  for (const e of await listDir(folder)) {
     if (!e.isFile()) continue
     const p = join(folder, e.name)
     backups.push({ path: p, ...(await sizeOf(p)) })

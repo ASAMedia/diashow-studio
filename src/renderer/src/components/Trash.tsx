@@ -7,10 +7,9 @@ import { AlertTriangle, CalendarClock, Loader2, RotateCcw, ScanFace, Trash2, X }
 import { deletionDue } from '@shared/cleanup'
 import type { TrashContents, TrashEntry } from '@shared/trash'
 import { useStore } from '../store'
-import { localeTag, t, type StringKey } from '../i18n'
+import { fill, fmtBytes, fmtDate, t } from '../i18n'
 import { ErrorText } from '../errors'
 import { Modal } from './Modal'
-import { fmtBytes } from './Cleanup'
 
 interface TrashState {
   contents: TrashContents | null
@@ -20,10 +19,6 @@ interface TrashState {
 }
 
 const useTrash = create<TrashState>(() => ({ contents: null, open: false, ask: null }))
-
-const fill = (key: StringKey, values: Record<string, string | number>): string => Object.entries(values).reduce((s, [k, v]) => s.replaceAll(`{${k}}`, String(v)), t(key))
-
-const fmtDate = (ms: number): string => new Date(ms).toLocaleDateString(localeTag(), { day: 'numeric', month: 'long', year: 'numeric' })
 
 /** Reads the trash again (after a delete, a restore, or when it changed by itself). */
 export async function loadTrash(): Promise<void> {

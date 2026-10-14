@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react'
-import { classify } from '@shared/formats'
+import { useEffect } from 'react'
 import { useStore, wireMediaUpdates, playerRef } from './store'
 import { startFaceQueue } from './faces'
 import { t } from './i18n'
@@ -11,7 +10,11 @@ import { Filmstrip } from './components/Filmstrip'
 import { ExportDialog } from './components/ExportDialog'
 import { FullscreenPlayer } from './components/FullscreenPlayer'
 import { PackDialog, RejectsDialog } from './components/Dialogs'
-import { BackupsDialog, HelpDialog, MissingBanner, SettingsDialog, Tip } from './components/Settings'
+import { SettingsDialog } from './components/Settings'
+import { BackupsDialog } from './components/BackupsDialog'
+import { HelpDialog } from './components/HelpDialog'
+import { MissingBanner } from './components/MissingBanner'
+import { Tip } from './components/Tip'
 import { PresenterPanel } from './components/Presentation'
 import { Cull } from './components/Cull'
 import { QueueDialog } from './components/Queue'
@@ -27,24 +30,11 @@ import { ArchiveHost } from './components/Archive'
 import { DuplicateNotice } from './components/Duplicate'
 import { watchStabilize } from './stabilize'
 import { timelineOf } from './timeline'
-import { dialogRefusesFiles, keyForFocus, modalOpen } from './keys'
+import { keyForFocus, modalOpen } from './keys'
 import { closePhotoEdit, rotateSelection } from './photoEdit'
-import { handledDrops, pasteMedia } from './insert'
+import { pasteMedia } from './insert'
+import { useWindowDrop } from './windowDrop'
 import { NetworkBanner } from './components/NetworkBanner'
-
-/** Routes dropped files: audio goes to the playlist, everything else into the show. */
-export async function handleDroppedPaths(paths: string[]): Promise<void> {
-  const s = useStore.getState()
-  const audio = paths.filter((p) => classify(p) === 'audio')
-  const media = paths.filter((p) => classify(p) !== 'audio')
-  if (!s.project) {
-    if (media.length) await s.createProject(media)
-    if (audio.length) await useStore.getState().addMusic(audio)
-    return
-  }
-  if (media.length) await s.importMedia(media)
-  if (audio.length) await s.addMusic(audio)
-}
 
 export function App() {
   const view = useStore((s) => s.view)
@@ -52,9 +42,6 @@ export function App() {
   const exportOpen = useStore((s) => s.exportOpen)
   const dialog = useStore((s) => s.dialog)
   const presenting = useStore((s) => s.presenting)
-  const [dragging, setDragging] = useState(false)
-  /** Files came over the window while a dialog was open: "Close the dialog first". */
-  const [refused, setRefused] = useState(false)
 
   useEffect(() => {
     void useStore.getState().loadProjects()
@@ -81,84 +68,8 @@ export function App() {
     }
   }, [])
 
-  useEffect(() => {
-    const isFiles = (e: DragEvent): boolean => !!e.dataTransfer?.types.includes('Files')
-    // While a dialog is open (Settings, the trash, the archive, …), files would land in the show behind
-    // it or make a new show: they are refused (keys.ts; the assistant takes them). Caught before any
-    // other handler sees them, with the drop effect "none", also over a text field in the dialog (it
-    // would take a file's path as text). The hint comes once per drag, and goes a moment after the
-    // files left the window or were let go.
-    let hinted = false
-    let hintTimer: ReturnType<typeof setTimeout> | undefined
-    const hint = (): void => {
-      clearTimeout(hintTimer)
-      if (!hinted) setRefused(true)
-      hinted = true
-    }
-    const hideHint = (): void => {
-      clearTimeout(hintTimer)
-      hintTimer = setTimeout(() => {
-        hinted = false
-        setRefused(false)
-      }, 3000)
-    }
-    const refuse = (e: DragEvent): void => {
-      if (!isFiles(e) || !dialogRefusesFiles()) return
-      e.stopImmediatePropagation()
-      e.preventDefault()
-      e.dataTransfer!.dropEffect = 'none'
-      setDragging(false)
-      if (e.type === 'dragenter') hint()
-      else if (e.type === 'drop') {
-        // the dialog opened while the files hovered: nothing goes in
-        hint()
-        hideHint()
-      }
-    }
-    // dragenter is accepted like dragover, with the same effect: right after the element under the
-    // pointer changed (an edge between two pictures), Chromium decides on a drop by the dragenter
-    // alone, and a refused one loses the drop
-    const over = (e: DragEvent): void => {
-      if (!isFiles(e)) return
-      e.preventDefault()
-      e.dataTransfer!.dropEffect = 'copy'
-    }
-    const enter = (e: DragEvent): void => {
-      if (!isFiles(e)) return
-      over(e)
-      setDragging(true)
-    }
-    // a dragleave with nowhere to go: the files left the window, or the drag was cancelled (Esc). A
-    // count of enters and leaves missed the leave of an element removed under the files (a card that
-    // scrolled out of the filmstrip, a picture that appeared) and kept the overlay up.
-    const leave = (e: DragEvent): void => {
-      if (!isFiles(e) || e.relatedTarget) return
-      setDragging(false)
-      if (hinted) hideHint()
-    }
-    const drop = (e: DragEvent): void => {
-      if (!isFiles(e)) return
-      e.preventDefault()
-      setDragging(false)
-      // files dropped on the filmstrip or a show's card went in there (Filmstrip.tsx, Home.tsx)
-      if (handledDrops.has(e)) return
-      const paths = [...(e.dataTransfer?.files ?? [])].map((f) => window.api.pathForFile(f)).filter(Boolean)
-      if (paths.length) void handleDroppedPaths(paths)
-    }
-    for (const type of ['dragenter', 'dragover', 'drop']) window.addEventListener(type, refuse as EventListener, true)
-    window.addEventListener('dragenter', enter)
-    window.addEventListener('dragleave', leave)
-    window.addEventListener('dragover', over)
-    window.addEventListener('drop', drop)
-    return () => {
-      clearTimeout(hintTimer)
-      for (const type of ['dragenter', 'dragover', 'drop']) window.removeEventListener(type, refuse as EventListener, true)
-      window.removeEventListener('dragenter', enter)
-      window.removeEventListener('dragleave', leave)
-      window.removeEventListener('dragover', over)
-      window.removeEventListener('drop', drop)
-    }
-  }, [])
+  // files from Explorer over the window (windowDrop.ts)
+  const { dragging, refused } = useWindowDrop()
 
   useEffect(() => {
     const key = (e: KeyboardEvent): void => {

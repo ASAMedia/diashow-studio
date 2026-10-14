@@ -17,7 +17,6 @@ import { markPerson, notThisPerson, personLabel, takeRequestedStill } from '../p
 import { useStore } from '../store'
 import { t } from '../i18n'
 import { followPointer } from '../pointerDrag'
-import { togglePrivacy } from './SlideTools'
 import { EditedPicture } from './EditedPicture'
 import { areaToSource, rectToEdit, shownAspect, sourceAspect } from '@shared/mediaEdit'
 import './people.css'
@@ -33,6 +32,14 @@ export function stillTime(e: VideoEntry, m: MediaItem): number {
 }
 
 const sameArea = (a: Rect, b: Rect): boolean => Math.abs(a.x - b.x) < 1e-4 && Math.abs(a.y - b.y) < 1e-4 && Math.abs(a.w - b.w) < 1e-4
+
+/** Toggles an area: removes it when present, adds it otherwise. */
+function togglePrivacy(entry: PhotoEntry | VideoEntry, area: Rect): Rect[] | undefined {
+  const cur = entry.privacy ?? []
+  const next = cur.some((r) => sameArea(r, area)) ? cur.filter((r) => !sameArea(r, area)) : [...cur, area]
+  return next.length ? next : undefined
+}
+
 const round = (r: Rect): Rect => ({ x: +r.x.toFixed(4), y: +r.y.toFixed(4), w: +r.w.toFixed(4), h: +r.h.toFixed(4) })
 /** Rounded outwards, so the area never shrinks. */
 const roundOut = (r: Rect): Rect => {

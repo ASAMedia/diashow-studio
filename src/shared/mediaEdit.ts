@@ -172,9 +172,6 @@ export function facesInEdit(faces: readonly Rect[] | undefined, e: MediaEdit | u
   return out
 }
 
-/** The faces of a media item as they sit on its edited picture (face-aware crops, Ken Burns targets). */
-export const shownFaces = (m: MediaItem | undefined): Rect[] => facesInEdit(m?.faces, m?.edit, sourceAspect(m))
-
 /** A point of the original on the edited picture, kept inside it (e.g. a focus point that was cropped away). */
 export function pointToEdit(p: { x: number; y: number }, e: MediaEdit | undefined, aspect: number): { x: number; y: number } {
   if (!isEdited(e)) return p

@@ -1,19 +1,19 @@
 // The filmstrip's tools above the cards: search (Ctrl+F) with its result list, the chapters menu and
 // the zoom (−, slider, +, "show the whole slideshow"). The search field is a combobox with a listbox
-// of results; Enter / Shift+Enter (and F3 / Shift+F3, Filmstrip.tsx) go to the next / previous match,
-// and a live region says how many there are. The matching itself is in search.ts.
+// of results; Enter / Shift+Enter (and F3 / Shift+F3 anywhere in the editor) go to the next / previous
+// match, and a live region says how many there are. The matching itself is in search.ts.
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ChevronUp, ListTree, Maximize2, Search, X, ZoomIn, ZoomOut } from 'lucide-react'
 import type { Timeline, TimelineSlide } from '@shared/timeline'
 import type { Project, TextEntry } from '@shared/types'
 import { oneLine } from '@shared/chapters'
-import { fmtTime, localeTag, t, type StringKey } from '../i18n'
+import { fill, fmtTime, localeTag, t, type StringKey } from '../i18n'
 import { searchSlides, type MatchField, type SearchHit } from '../search'
+import { useStore } from '../store'
+import { modalOpen } from '../keys'
 import { MediaThumb } from './EditedPicture'
 import { Menu, MenuItem } from './Menu'
 import { cardToSlider, MAX_CARD, MIN_CARD, sliderToCard, zoomStep } from './stripScale'
-
-const fill = (key: StringKey, values: Record<string, string | number>): string => Object.entries(values).reduce((s, [k, v]) => s.replaceAll(`{${k}}`, String(v)), t(key))
 
 export interface StripSearch {
   open: boolean
@@ -65,6 +65,33 @@ export function useStripSearch(tl: Timeline, project: Project, onJump: (index: n
     next: () => go(current < 0 || current >= hits.length ? 0 : current + 1),
     prev: () => go(current < 0 || current >= hits.length ? hits.length - 1 : current - 1)
   }
+}
+
+/** Ctrl+F opens the search (also from another field), F3 / Shift+F3 go to the next / previous match. */
+export function useSearchKeys(search: StripSearch, inputRef: React.RefObject<HTMLInputElement | null>): void {
+  const searchRef = useRef(search)
+  searchRef.current = search
+  useEffect(() => {
+    const key = (e: KeyboardEvent): void => {
+      const st = useStore.getState()
+      if (st.view !== 'editor' || st.fullscreen || st.exportOpen || st.presenting || st.dialog || modalOpen()) return
+      const s = searchRef.current
+      if (e.ctrlKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        s.setOpen(true)
+        requestAnimationFrame(() => {
+          inputRef.current?.focus()
+          inputRef.current?.select()
+        })
+      } else if (e.key === 'F3' && s.open && s.hits.length) {
+        e.preventDefault()
+        if (e.shiftKey) s.prev()
+        else s.next()
+      }
+    }
+    window.addEventListener('keydown', key)
+    return () => window.removeEventListener('keydown', key)
+  }, [])
 }
 
 const FIELD: Record<MatchField, StringKey> = {

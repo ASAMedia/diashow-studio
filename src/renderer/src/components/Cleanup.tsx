@@ -1,21 +1,23 @@
 // "Nach dem Projekt aufräumen": the dialog that lists what the app keeps for a show (face data, the
 // pupils' uploads, caches, older versions, undo history, export jobs) with sizes and removes what the user picks, for
 // good (src/main/cleanup.ts); deleting a whole show from the home screen moves it into the trash
-// (Trash.tsx). Also the deletion reminder: the date picker, the hint on the project card and the
-// banner on the home screen.
+// (DeleteShow.tsx, Trash.tsx). Also where the deletion reminder leads here: the hint on the project card
+// and the banner on the home screen (the date itself: Deadline.tsx), and Settings → Privacy.
 import { useEffect, useState, type ReactNode } from 'react'
 import { create } from 'zustand'
 import { AlertTriangle, CalendarClock, Loader2, X } from 'lucide-react'
-import { addMonths, CLEANUP_CATEGORIES, DELETE_MONTHS, deletionDue, historyGoes, NOTHING, startOfDay, type CleanupCategory, type CleanupChoice, type CleanupInventory, type CleanupResult } from '@shared/cleanup'
+import { addMonths, CLEANUP_CATEGORIES, deletionDue, historyGoes, NOTHING, type CleanupCategory, type CleanupChoice, type CleanupInventory, type CleanupResult } from '@shared/cleanup'
 import type { ProjectSummary } from '@shared/types'
 import { forgetUndoHistory, holdSaves, saveOpenProject, useStore } from '../store'
 import { holdFaceAnalysis } from '../faces'
 import { forgetFaceCrops } from '../faceCrops'
-import { localeTag, t, type StringKey } from '../i18n'
+import { fill, fmtBytes, fmtDate, t, type StringKey } from '../i18n'
 import { ErrorText } from '../errors'
 import { Modal } from './Modal'
 import { Section } from './ui'
-import { loadTrash, TrashDueBanner, TrashHost, TrashSetting } from './Trash'
+import { TrashDueBanner, TrashHost, TrashSetting } from './Trash'
+import { DeadlinePicker, setDeleteAt } from './Deadline'
+import { DeleteDialog } from './DeleteShow'
 import './cleanup.css'
 
 type Mode = 'cleanup' | 'delete'
@@ -37,24 +39,6 @@ export function CleanupHost() {
       <TrashHost />
     </>
   )
-}
-
-/** Bytes as KB, MB or GB. */
-export function fmtBytes(bytes: number): string {
-  const n = (v: number, digits = 0): string => v.toLocaleString(localeTag(), { maximumFractionDigits: digits })
-  if (bytes >= 1e9) return `${n(bytes / 1e9, 1)} GB`
-  if (bytes >= 1e6) return `${n(bytes / 1e6, bytes >= 1e8 ? 0 : 1)} MB`
-  return `${n(Math.max(bytes, bytes > 0 ? 1000 : 0) / 1e3)} KB`
-}
-
-const fill = (key: StringKey, values: Record<string, string | number>): string => Object.entries(values).reduce((s, [k, v]) => s.replaceAll(`{${k}}`, String(v)), t(key))
-
-const fmtDate = (ms: number): string => new Date(ms).toLocaleDateString(localeTag(), { day: 'numeric', month: 'long', year: 'numeric' })
-
-/** yyyy-mm-dd of a local date, for <input type="date">. */
-const isoDay = (ms: number): string => {
-  const d = new Date(ms)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 /** Saves the open project now (with its undo history) and loads what the app keeps for a show. */
@@ -95,70 +79,7 @@ export async function runCleanup(projectId: string, choice: CleanupChoice): Prom
   }
 }
 
-/** Sets or clears a show's deletion reminder (an open show through the editor, as an edit). */
-export async function setDeleteAt(projectId: string, at: number | null): Promise<void> {
-  const s = useStore.getState()
-  if (s.project?.id === projectId) {
-    s.update((p) => {
-      if (at === null) delete p.deleteAt
-      else p.deleteAt = startOfDay(at)
-    })
-  } else await window.api.setDeleteAt(projectId, at === null ? null : startOfDay(at))
-  await useStore.getState().loadProjects()
-}
-
 // ---------------------------------------------------------------- deletion reminder
-
-/** The deletion date of a show: none, in 1 / 3 / 6 / 12 months, or a date. */
-export function DeadlinePicker({ projectId, value, onChange }: { projectId: string; value?: number; onChange?: (at: number | null) => void }) {
-  const [at, setAt] = useState<number | undefined>(value)
-  useEffect(() => setAt(value), [value])
-  const apply = (next: number | null): void => {
-    setAt(next ?? undefined)
-    onChange?.(next)
-    void setDeleteAt(projectId, next)
-  }
-  return (
-    <div className="deadline" data-testid="deadline">
-      <div className="row wrap">
-        <select
-          aria-label={t('deleteAtTitle')}
-          value={at ? 'date' : ''}
-          onChange={(e) => {
-            const v = e.target.value
-            if (!v) apply(null)
-            else if (v !== 'date') apply(addMonths(Date.now(), Number(v)))
-            else if (!at) apply(addMonths(Date.now(), 3))
-          }}
-        >
-          <option value="">{t('deleteAtNone')}</option>
-          {DELETE_MONTHS.map((n) => (
-            <option key={n} value={n}>
-              {n === 1 ? t('deleteAtMonth') : fill('deleteAtMonths', { n })}
-            </option>
-          ))}
-          <option value="date">{at ? fmtDate(at) : t('deleteAtPick')}</option>
-        </select>
-        {at !== undefined && (
-          <input
-            type="date"
-            aria-label={t('deleteAtPick')}
-            value={isoDay(at)}
-            onChange={(e) => {
-              const [y, m, d] = e.target.value.split('-').map(Number)
-              if (y && m && d) apply(new Date(y, m - 1, d).getTime())
-            }}
-          />
-        )}
-        {at !== undefined && deletionDue(at) && (
-          <span className="chip due">
-            <CalendarClock size={13} aria-hidden /> {t('deleteAtDue')}
-          </span>
-        )}
-      </div>
-    </div>
-  )
-}
 
 /** Hint on a project card whose deletion date has come; opens the clean-up. */
 export function DeadlineBadge({ project }: { project: ProjectSummary }) {
@@ -215,18 +136,6 @@ function DueBanner() {
       <button className="btn ghost icon small" title={t('close')} aria-label={t('close')} onClick={dismiss}>
         <X size={14} />
       </button>
-    </div>
-  )
-}
-
-/** After an export was queued: the show is probably finished, so offer the deletion date. */
-export function DeadlineNudge() {
-  const project = useStore((s) => s.project)
-  if (!project || project.deleteAt) return null
-  return (
-    <div className="deadline-nudge">
-      <p className="hint">{t('deleteAtNudge')}</p>
-      <DeadlinePicker projectId={project.id} />
     </div>
   )
 }
@@ -568,111 +477,6 @@ export function CleanupDialog({ projectId, onClose }: { projectId: string; onClo
           </p>
         </Modal>
       )}
-    </Modal>
-  )
-}
-
-/**
- * Deleting a whole show (home screen): it goes into the trash with its older versions, undo history,
- * uploads and finished export jobs, listed with their sizes; its cache is deleted (src/main/cleanup.ts).
- */
-export function DeleteDialog({ projectId, onClose }: { projectId: string; onClose: () => void }) {
-  const [inv, setInv] = useState<CleanupInventory | null>(null)
-  const [error, setError] = useState<unknown>(null)
-  const [refused, setRefused] = useState<{ unfinished?: number; gone?: boolean } | null>(null)
-  const [busy, setBusy] = useState(false)
-  const name = useStore((s) => s.projects.find((p) => p.id === projectId)?.name)
-  // an export still to run needs the show's files
-  const unfinished = refused?.unfinished ?? inv?.exports.unfinished ?? 0
-
-  useEffect(() => {
-    let alive = true
-    window.api.cleanupInventory(projectId).then(
-      (i) => alive && setInv(i),
-      // a show that can't be read is still deleted with its older versions
-      () => alive && setInv(null)
-    )
-    return () => {
-      alive = false
-    }
-  }, [projectId])
-
-  // what goes into the trash with it (the uploads another show uses stay with that one)
-  const parts = inv
-    ? [
-        { id: 'backups', title: t('backupsTitle'), n: inv.backups.files ? fill('cleanupVersions', { n: inv.backups.files }) : '', bytes: inv.backups.bytes },
-        { id: 'history', title: t('cleanupHistory'), n: '', bytes: inv.history.files ? inv.history.bytes : 0 },
-        { id: 'uploads', title: t('cleanupUploads'), n: inv.uploads.files ? fill('cleanupFiles', { n: inv.uploads.files }) : '', bytes: inv.uploads.bytes },
-        { id: 'exports', title: t('cleanupExports'), n: inv.exports.jobs ? fill('cleanupJobs', { n: inv.exports.jobs }) : '', bytes: inv.exports.bytes }
-      ].filter((x) => x.bytes > 0 || x.n)
-    : []
-  const remove = async (): Promise<void> => {
-    setBusy(true)
-    setError(null)
-    // a save still pending for the show (just closed) must not bring its file back
-    const resume = await holdSaves().catch(() => () => {})
-    try {
-      const r = await window.api.deleteProject(projectId)
-      if ('refused' in r) {
-        setRefused(r.refused === 'export-pending' ? { unfinished: r.unfinished ?? 1 } : { gone: true })
-        setBusy(false)
-        return
-      }
-      await useStore.getState().loadProjects()
-      void loadTrash()
-      onClose()
-    } catch (e) {
-      setError(e)
-      setBusy(false)
-    } finally {
-      resume()
-    }
-  }
-  return (
-    <Modal
-      title={t('deleteShow')}
-      onClose={busy ? undefined : onClose}
-      className="cleanup-dialog"
-      testId="delete-dialog"
-      actions={
-        <>
-          <button className="btn" onClick={onClose} disabled={busy}>
-            {t('cancel')}
-          </button>
-          <button className="btn danger" data-testid="delete-run" disabled={busy || unfinished > 0 || !!refused?.gone} onClick={() => void remove()}>
-            {busy ? <Loader2 size={14} className="spin" aria-hidden /> : null} {t('deleteRun')}
-          </button>
-        </>
-      }
-    >
-      <p className="cleanup-name">{inv?.name ?? name}</p>
-      <p className="hint lead">{t('deleteIntro')}</p>
-      {inv && (
-        <>
-          {parts.length > 0 && (
-            <>
-              <h3 className="subhead">{t('deleteAlso')}</h3>
-              <ul className="cleanup-confirm-list trash-goes">
-                {parts.map((x) => (
-                  <li key={x.id} data-category={x.id}>
-                    {x.title}
-                    {x.n ? `: ${x.n}` : ''} · {fmtBytes(x.bytes)}
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-          {inv.uploads.shared > 0 && <p className="hint">{fill('cleanupUploadsShared', { n: inv.uploads.shared })}</p>}
-          {inv.caches.folders > 0 && <p className="hint">{fill('deleteCache', { size: fmtBytes(inv.caches.bytes) })}</p>}
-        </>
-      )}
-      {unfinished > 0 && (
-        <p className="callout warn" data-testid="delete-blocked">
-          <AlertTriangle size={14} aria-hidden /> <span>{fill('deleteBlocked', { n: unfinished })}</span>
-        </p>
-      )}
-      {refused?.gone && <p className="callout warn">{t('deleteGone')}</p>}
-      {!!error && <ErrorText err={error} context="save" />}
     </Modal>
   )
 }

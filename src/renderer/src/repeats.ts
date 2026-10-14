@@ -60,7 +60,7 @@ export const useRepeatNotice = create<NoticeState>(() => ({ notice: null, announ
 let seq = 0
 
 /** "3 Fotos sind schon in der Diashow und wurden übersprungen." */
-export function repeatText(n: Pick<RepeatNotice, 'photos' | 'videos' | 'all'>): string {
+function repeatText(n: Pick<RepeatNotice, 'photos' | 'videos' | 'all'>): string {
   const total = n.photos + n.videos
   const what =
     n.photos && n.videos
@@ -86,12 +86,15 @@ export function leftOutTargets(p: Project, targets: string[]): number {
 }
 
 /** "1 davon ist herausgenommen …", or '' when every target has a slide in the show. */
-export function leftOutText(p: Project, notice: RepeatNotice): string {
+function leftOutText(p: Project, notice: RepeatNotice): string {
   const n = leftOutTargets(p, notice.targets)
   if (!n) return ''
   if (notice.photos + notice.videos === 1) return t('repeatLeftOutOne')
   return n === 1 ? t('repeatLeftOut1') : t('repeatLeftOut').replace('{n}', String(n))
 }
+
+/** What a notice says: what was skipped, and how many of them are only left out of the show. */
+export const noticeText = (p: Project, notice: RepeatNotice): string => [repeatText(notice), leftOutText(p, notice)].filter(Boolean).join(' ')
 
 /** Shows the notice for an import that skipped something (it replaces an earlier one). */
 export function noticeRepeats(project: Project, checked: CheckedImport, addAnyway: () => Promise<string[]>): void {
@@ -105,7 +108,7 @@ export function noticeRepeats(project: Project, checked: CheckedImport, addAnywa
     targets: [...new Set(Object.values(checked.repeatOf))],
     addAnyway
   }
-  const text = [repeatText(notice), leftOutText(project, notice)].filter(Boolean).join(' ')
+  const text = noticeText(project, notice)
   // the live region is emptied first, so the same text twice in a row is read out twice
   useRepeatNotice.setState({ notice, announce: '' })
   setTimeout(() => {

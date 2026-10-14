@@ -1,7 +1,7 @@
 // Electron side of diagnostics: the log file (<userData>/logs/diashow.log, rotated), what goes into it
 // (app start with versions and GPU, main-process errors, unhandled rejections, crashed renderers and
 // helper processes, errors the windows report through `diag:log`), and the diagnostics package.
-import { app, BrowserWindow, dialog, ipcMain, type IpcMainEvent, type WebContents } from 'electron'
+import { app, ipcMain, type IpcMainEvent, type WebContents } from 'electron'
 import { readFileSync } from 'node:fs'
 import { readFile, stat, writeFile } from 'node:fs/promises'
 import { arch, homedir, release, version } from 'node:os'
@@ -10,9 +10,11 @@ import type { DiagnosticsInput, DiagnosticsPreview, RendererLogEntry } from '@sh
 import type { SystemInfo } from '@shared/systemCheck'
 import type { ThemeTrack } from '@shared/themeMusic'
 import type { Project } from '@shared/types'
+import { PROJECT_ID } from '../projectSchema'
 import { trustedSender } from '../security'
 import { createLogger, type Logger } from './logger'
 import { packageFileName, packageFiles, previewOf, zipOf, type PackageSources } from './package'
+import { showSave } from '../dialogs'
 
 let logger: Logger | null = null
 
@@ -190,7 +192,7 @@ export function registerDiagnostics(cfg: DiagnosticsConfig): void {
 
   const sources = async (input: DiagnosticsInput): Promise<PackageSources> => {
     const safe = <T>(p: Promise<T>, fallback: T): Promise<T> => p.catch(() => fallback)
-    const projectId = typeof input?.projectId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(input.projectId) ? input.projectId : null
+    const projectId = typeof input?.projectId === 'string' && PROJECT_ID.test(input.projectId) ? input.projectId : null
     const [system, settings, project, projects, damaged, ffmpeg, themeTracks, trash] = await Promise.all([
       cfg.systemInfo().catch((err: unknown) => ({ error: err instanceof Error ? err.message : String(err) })),
       safe(cfg.settings(), {}),
@@ -259,8 +261,7 @@ export function registerDiagnostics(cfg: DiagnosticsConfig): void {
       defaultPath: join(app.getPath('desktop'), packageFileName(now)),
       filters: [{ name: 'ZIP', extensions: ['zip'] }]
     }
-    const win = BrowserWindow.fromWebContents(e.sender)
-    const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts)
+    const r = await showSave(e, opts)
     if (r.canceled || !r.filePath) return null
     const target = /\.zip$/i.test(r.filePath) ? r.filePath : `${r.filePath}.zip`
     const src = await sources(input)

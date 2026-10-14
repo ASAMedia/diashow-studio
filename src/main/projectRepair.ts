@@ -2,14 +2,15 @@
 // opened, what a repair could rescue (the readable part of the file, or a backup), and the repair.
 // Works for projects in the projects folder (with their backups) and for any .dshow file elsewhere
 // (e.g. a packed project on a USB stick: rescued and imported as a new project).
-import { BrowserWindow, dialog, ipcMain } from 'electron'
+import { ipcMain } from 'electron'
 import { readFile } from 'node:fs/promises'
 import { basename, dirname, extname, resolve } from 'node:path'
 import type { ProjectRef, ProjectReportEvent, RepairChoice, RepairPlan } from '@shared/diagnostics'
 import type { Project } from '@shared/types'
 import { importProjectFile } from './projectFile'
-import { readProjectText } from './projectSchema'
+import { PROJECT_ID, readProjectText } from './projectSchema'
 import { PROJECT_EXT, type ProjectStore } from './projects'
+import { showOpen } from './dialogs'
 
 export interface ProjectRepairConfig {
   projects: ProjectStore
@@ -26,7 +27,7 @@ function normalize(ref: ProjectRef, store: ProjectStore): ProjectRef {
   const file = resolve(ref.path)
   if (extname(file).toLowerCase() !== PROJECT_EXT) throw new Error('not a Diashow Studio project file (.dshow)')
   const id = basename(file, extname(file))
-  if (dirname(file).toLowerCase() === resolve(store.dir).toLowerCase() && /^[A-Za-z0-9_-]{1,128}$/.test(id)) return { id }
+  if (dirname(file).toLowerCase() === resolve(store.dir).toLowerCase() && PROJECT_ID.test(id)) return { id }
   return { path: file }
 }
 
@@ -61,8 +62,7 @@ export function registerProjectRepair(cfg: ProjectRepairConfig): void {
       properties: ['openFile'],
       filters: [{ name: 'Diashow-Projekt', extensions: [PROJECT_EXT.slice(1)] }]
     }
-    const win = BrowserWindow.fromWebContents(e.sender)
-    const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+    const r = await showOpen(e, opts)
     return r.canceled || !r.filePaths.length ? null : r.filePaths[0]
   })
   ipcMain.handle('project:damaged', () => cfg.projects.damaged())

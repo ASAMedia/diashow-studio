@@ -1,24 +1,20 @@
-// Slide tab tools: pixelated areas, panoramas, Live Photos, clip speed, free text boxes, and editing many slides at once.
-import { Crop as CropIcon, EyeOff, Plus, RotateCcw, RotateCw, ScanFace, Trash2, Merge } from 'lucide-react'
+// Slide tab tools for photos and videos (SlidePanel.tsx, BatchPanel.tsx): pixelated areas, the picture
+// (rotate, straighten, crop, light and colour), panoramas, Live Photos, clip speed and stabilising.
+// Free text boxes are in FreeTextSection.tsx.
+import { Crop as CropIcon, RotateCcw, RotateCw, ScanFace } from 'lucide-react'
 import { isChanged, isEdited, rotateEdit } from '@shared/mediaEdit'
-import { closePhotoEdit, openPhotoEdit, rotateSelection, selectedMediaIds, setMediaEdit } from '../photoEdit'
-import type { AspectRatio, Entry, FreeText, LiveEffect, MediaItem, PhotoEntry, Rect, VideoEntry } from '@shared/types'
-import { themeMeta } from '@shared/themes'
+import { closePhotoEdit, openPhotoEdit, selectedMediaIds, setMediaEdit } from '../photoEdit'
+import type { AspectRatio, Entry, LiveEffect, MediaItem, PhotoEntry, VideoEntry } from '@shared/types'
 import { liveEffectOf } from '@shared/livePhoto'
-import { aspectValue, MAX_SPEED, MIN_SPEED, speedHasSound, type TimelineSlide } from '@shared/timeline'
+import { aspectValue, MAX_SPEED, MIN_SPEED, speedHasSound } from '@shared/timeline'
 import { panoMode, panoramaOf, type PanAxis, type PanoMode } from '@shared/panorama'
 import { useStore } from '../store'
-import { t, type StringKey } from '../i18n'
+import { t } from '../i18n'
 import { requestStabilize, useStabilizeRequest } from '../stabilize'
 import { allVideoTracks, faceArea, photoPersonFaces, videoPersonTracks } from '@shared/people'
-import { Check, Field, FONTS, Section, Slider } from './ui'
+import { Check, Field, Section } from './ui'
 import { PeopleList } from './PeopleList'
 import { AdjustSliders } from './AdjustSliders'
-
-/** A detected face grown to cover hair and chin, as the area to pixelate (now in @shared/people). */
-export { faceArea }
-
-const sameArea = (a: Rect, b: Rect): boolean => Math.abs(a.x - b.x) < 1e-4 && Math.abs(a.y - b.y) < 1e-4 && Math.abs(a.w - b.w) < 1e-4
 
 // ---------------------------------------------------------------- privacy
 
@@ -244,18 +240,11 @@ export function LivePhotoControls({ entries }: { entries: PhotoEntry[] }) {
   )
 }
 
-/** Toggles an area: removes it when present, adds it otherwise. */
-export function togglePrivacy(entry: PhotoEntry | VideoEntry, area: Rect): Rect[] | undefined {
-  const cur = entry.privacy ?? []
-  const next = cur.some((r) => sameArea(r, area)) ? cur.filter((r) => !sameArea(r, area)) : [...cur, area]
-  return next.length ? next : undefined
-}
-
 // ---------------------------------------------------------------- speed
 
 export const SPEEDS = [0.25, 0.5, 1, 2, 4, 8]
 
-const speedLabel = (v: number): string => {
+export const speedLabel = (v: number): string => {
   const x = `${v.toLocaleString(undefined, { maximumFractionDigits: 2 })}×`
   return v < 1 ? `${x} · ${t('speedSlow')}` : v > 1 ? `${x} · ${t('speedFast')}` : `${x} · ${t('speedNormal')}`
 }
@@ -316,298 +305,12 @@ export function StabilizeToggle({ entry }: { entry: VideoEntry }) {
   )
 }
 
-// ---------------------------------------------------------------- free text
-
-const BOXES: FreeText['box'][] = ['none', 'shadow', 'band', 'card', 'bubble']
-/** Text colours offered as swatches (the colour picker next to them takes any other). */
-const SWATCHES: [string, StringKey][] = [
-  ['#ffffff', 'white'],
-  ['#1c1c1c', 'black'],
-  ['#ffd75e', 'colorYellow'],
-  ['#ff5a4f', 'colorRed'],
-  ['#4d9fff', 'colorBlue']
-]
-const boxLabel = (b: FreeText['box']): string =>
-  ({ none: t('boxNone'), shadow: t('boxShadow'), band: t('boxBand'), card: t('boxCard'), bubble: t('boxBubble') })[b]
-
-export function FreeTextSection({ slide }: { slide: TimelineSlide }) {
-  const project = useStore((s) => s.project)!
-  const textSel = useStore((s) => s.textSel)
-  const set = useStore((s) => s.set)
-  // new boxes belong to the slide's first entry in show order (like its duration and layout)
-  const order = new Map(project.entries.map((e, i) => [e.id, i]))
-  const owner = [...slide.entries].sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))[0]
-  if (!owner) return null
-  const texts = slide.entries.flatMap((e) => (e.texts ?? []).map((ft) => ({ entryId: e.id, ft })))
-  const current = texts.find((x) => x.ft.id === textSel)
-  return (
-    <Section title={t('freeTexts')}>
-      <div className="stack">
-        {texts.length > 0 && (
-          <div className="text-chips">
-            {texts.map(({ entryId, ft }) => {
-              const label = ft.text.split('\n')[0] || '…'
-              return (
-                <div key={ft.id} className="text-chip">
-                  <button className={`btn small ${ft.id === textSel ? 'on' : ''}`} aria-pressed={ft.id === textSel} title={label} onClick={() => set({ textSel: ft.id === textSel ? null : ft.id })}>
-                    <span>{label}</span>
-                  </button>
-                  <button className="btn small ghost icon" title={t('deleteTextBox')} aria-label={`${t('deleteTextBox')}: ${label}`} onClick={() => useStore.getState().removeFreeText(entryId, ft.id)}>
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              )
-            })}
-          </div>
-        )}
-        <button className="btn small" onClick={() => useStore.getState().addFreeText(owner.id)}>
-          <Plus size={14} /> {t('addFreeText')}
-        </button>
-        {current && <FreeTextEditor entryId={current.entryId} ft={current.ft} />}
-        {texts.length > 0 && <p className="hint">{t('freeTextHint')}</p>}
-      </div>
-    </Section>
-  )
-}
-
-function FreeTextEditor({ entryId, ft }: { entryId: string; ft: FreeText }) {
-  const setText = (patch: Partial<FreeText>): void => useStore.getState().setFreeText(entryId, ft.id, patch)
-  return (
-    <div className="stack text-editor">
-      <textarea rows={2} aria-label={t('freeTextContent')} value={ft.text} onChange={(e) => setText({ text: e.target.value })} style={{ width: '100%', resize: 'vertical' }} />
-      <Field label={t('font')}>
-        <select value={ft.font} onChange={(e) => setText({ font: e.target.value as FreeText['font'] })}>
-          <option value="theme">Inter</option>
-          {FONTS.filter((f) => f.id !== 'sans').map((f) => (
-            <option key={f.id} value={f.id} style={{ fontFamily: f.family }}>
-              {f.label}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Slider label={t('textSize')} value={ft.size} min={0.03} max={0.22} step={0.005} display={`${Math.round(ft.size * 1000) / 10} %`} onChange={(v) => setText({ size: v })} />
-      <div className="row">
-        <span className="label">{t('textColor')}</span>
-        <div className="swatches" role="group" aria-label={t('textColor')}>
-          {SWATCHES.map(([c, name]) => (
-            <button key={c} className={ft.color.toLowerCase() === c ? 'on' : ''} style={{ background: c }} onClick={() => setText({ color: c })} title={t(name)} aria-label={t(name)} aria-pressed={ft.color.toLowerCase() === c} />
-          ))}
-          <input type="color" title={t('customColor')} aria-label={t('customColor')} value={ft.color} onChange={(e) => setText({ color: e.target.value })} />
-        </div>
-      </div>
-      <Check checked={ft.bold} onChange={(v) => setText({ bold: v })}>
-        {t('bold')}
-      </Check>
-      <Field label={t('textBox')}>
-        <select value={ft.box} onChange={(e) => setText({ box: e.target.value as FreeText['box'] })}>
-          {BOXES.map((b) => (
-            <option key={b} value={b}>
-              {boxLabel(b)}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Slider label={t('rotation')} value={ft.rotation} min={-45} max={45} step={1} display={`${ft.rotation}°`} onChange={(v) => setText({ rotation: v })} />
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------- several slides
+// ---------------------------------------------------------------- one choice for several items
 
 type Tri = 'mixed' | string
 
 /** The common value of all items, or 'mixed'. */
-function common<T>(items: T[], get: (x: T) => string): Tri {
+export function common<T>(items: T[], get: (x: T) => string): Tri {
   const vals = new Set(items.map(get))
   return vals.size === 1 ? [...vals][0] : 'mixed'
-}
-
-export function BatchPanel({ entries, slides }: { entries: Entry[]; slides: TimelineSlide[] }) {
-  const project = useStore((s) => s.project)!
-  const updateEntries = useStore((s) => s.updateEntries)
-  const meta = themeMeta(project.settings.theme)
-  const media = new Map(project.media.map((m) => [m.id, m]))
-  const ids = entries.map((e) => e.id)
-  const visual = entries.filter((e): e is PhotoEntry | VideoEntry => e.type !== 'text')
-  const videos = visual.filter((e): e is VideoEntry => e.type === 'video')
-  const lives = visual.filter((e): e is PhotoEntry => e.type === 'photo' && !!media.get(e.mediaId)?.live)
-  // a slide's own time lives on its first entry
-  const order = new Map(project.entries.map((e, i) => [e.id, i]))
-  const firsts = slides.map((s) => [...s.entries].sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))[0]).filter(Boolean)
-  const duration = common(firsts, (e) => (e.duration == null ? 'auto' : String(e.duration)))
-  const framing = common(visual, (e) => (e.whole == null ? 'default' : e.whole ? 'whole' : 'crop'))
-  const speed = common(videos, (e) => String(e.speed ?? 1))
-  const sound = common(videos, (e) => (e.muted ? 'off' : 'on'))
-  const withFaces = visual.filter((e) => media.get(e.mediaId)?.faces?.length || media.get(e.mediaId)?.videoFaces?.some((s) => s.faces.length))
-  const pixelated = visual.filter((e) => e.privacy?.length || (e.type === 'video' && e.privacyTracks?.length)).length
-  const panos = panoramaEntries(visual, (id) => media.get(id), project.settings.aspect)
-  // a panorama always keeps a slide of its own
-  const mergeable = meta.maxPerSlide > 1 && slides.length > 1 && slides.every((s) => (s.kind === 'photos' && !s.pano) || s.kind === 'video') && visual.length <= meta.maxPerSlide
-
-  const mixed = <option value="mixed">{t('unchanged')}</option>
-  return (
-    <>
-      <Section title={t('batchTitle').replace('{n}', String(slides.length))}>
-        <p className="hint" style={{ marginTop: 0 }}>
-          {t('batchHint')}
-        </p>
-        <div className="stack">
-          <div className="row">
-            <label htmlFor="batch-duration">{t('duration')}</label>
-            <select
-              id="batch-duration"
-              value={duration === 'auto' || duration === 'mixed' ? duration : 'custom'}
-              onChange={(e) => {
-                const v = e.target.value
-                if (v === 'mixed') return
-                const want = new Set(firsts.map((x) => x.id))
-                updateEntries([...want], (x) => (x.duration = v === 'auto' ? undefined : (x.duration ?? 4)))
-              }}
-            >
-              {duration === 'mixed' && mixed}
-              <option value="auto">{t('automatic')}</option>
-              <option value="custom">{t('customDuration')}</option>
-            </select>
-            {duration !== 'auto' && duration !== 'mixed' && (
-              <input
-                type="number"
-                aria-label={`${t('customDuration')} (${t('secondsLong')})`}
-                min={0.5}
-                max={120}
-                step={0.5}
-                style={{ width: 64 }}
-                value={duration}
-                onChange={(e) => {
-                  const sec = Math.max(0.5, Number(e.target.value) || 0.5)
-                  updateEntries(firsts.map((x) => x.id), (x) => (x.duration = sec), 'batch:duration')
-                }}
-              />
-            )}
-          </div>
-          {meta.scaleOption && visual.length > 0 && (
-            <div className="row">
-              <label htmlFor="batch-framing">{t('framing')}</label>
-              <select
-                id="batch-framing"
-                value={framing}
-                onChange={(e) => {
-                  const v = e.target.value
-                  if (v === 'mixed') return
-                  updateEntries(ids, (x) => x.type !== 'text' && (x.whole = v === 'default' ? undefined : v === 'whole'))
-                }}
-              >
-                {framing === 'mixed' && mixed}
-                <option value="default">{t('framingDefault')}</option>
-                <option value="crop">{t('cropMode')}</option>
-                <option value="whole">{t('wholeMode')}</option>
-              </select>
-            </div>
-          )}
-          {videos.length > 0 && (
-            <>
-              <div className="row">
-                <label htmlFor="batch-speed">{t('clipSpeed')}</label>
-                <select
-                  id="batch-speed"
-                  value={speed}
-                  onChange={(e) => {
-                    const v = e.target.value
-                    if (v === 'mixed') return
-                    updateEntries(videos.map((x) => x.id), (x) => x.type === 'video' && (x.speed = Number(v) === 1 ? undefined : Number(v)))
-                  }}
-                >
-                  {speed === 'mixed' && mixed}
-                  {SPEEDS.map((s) => (
-                    <option key={s} value={String(s)}>
-                      {speedLabel(s)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="row">
-                <label htmlFor="batch-sound">{t('videoSound')}</label>
-                <select
-                  id="batch-sound"
-                  value={sound}
-                  onChange={(e) => {
-                    const v = e.target.value
-                    if (v === 'mixed') return
-                    updateEntries(videos.map((x) => x.id), (x) => x.type === 'video' && (x.muted = v === 'off' ? true : undefined))
-                  }}
-                >
-                  {sound === 'mixed' && mixed}
-                  <option value="on">{t('on')}</option>
-                  <option value="off">{t('off')}</option>
-                </select>
-              </div>
-            </>
-          )}
-        </div>
-      </Section>
-      <PanoramaControls entries={panos} />
-      <LivePhotoControls entries={lives} />
-      {visual.length > 0 && (
-        <Section title={t('pePicture')}>
-          <div className="row wrap">
-            <button className="btn small" title={`${t('peRotateLeft')} (${t('kbdRotate')})`} onClick={() => rotateSelection(-1)}>
-              <RotateCcw size={14} /> {t('peRotateLeft')}
-            </button>
-            <button className="btn small" onClick={() => rotateSelection(1)}>
-              <RotateCw size={14} /> {t('peRotateRight')}
-            </button>
-          </div>
-          <BatchAdjust />
-        </Section>
-      )}
-      {visual.length > 0 && (
-        <Section title={t('privacy')}>
-          <div className="row wrap">
-            {withFaces.length > 0 && (
-              <button
-                className="btn small"
-                onClick={() =>
-                  updateEntries(withFaces.map((x) => x.id), (x) => {
-                    if (x.type === 'text') return
-                    const m = media.get(x.mediaId)
-                    // videos: every face followed through the clip
-                    if (x.type === 'video' && m) x.privacyTracks = allVideoTracks(x, m)
-                    else x.privacy = (m?.faces ?? []).map(faceArea)
-                  })
-                }
-              >
-                <ScanFace size={14} /> {t('privacyBatchOn')}
-              </button>
-            )}
-            {pixelated > 0 && (
-              <button className="btn small ghost" onClick={() => updateEntries(ids, (x) => x.type !== 'text' && delete x.privacy && (x.type !== 'video' || delete x.privacyTracks))}>
-                {t('privacyBatchOff')}
-              </button>
-            )}
-          </div>
-          {pixelated > 0 && <p className="hint">{t('privacyCount').replace('{n}', String(visual.reduce((n, x) => n + (x.privacy?.length ?? 0), 0)))}</p>}
-        </Section>
-      )}
-      <div className="section">
-        <div className="stack">
-          {mergeable && (
-            <button className="btn small" onClick={() => useStore.getState().mergeEntries(ids)}>
-              <Merge size={14} /> {t('merge')}
-            </button>
-          )}
-          <button
-            className="btn small"
-            onClick={() => {
-              updateEntries(ids, (x) => (x.excluded = true))
-              useStore.getState().select([])
-            }}
-          >
-            <EyeOff size={14} /> {t('excludeSel')}
-          </button>
-          <button className="btn small danger" onClick={() => useStore.getState().removeEntries(ids)}>
-            <Trash2 size={14} /> {t('deleteSlides')}
-          </button>
-        </div>
-      </div>
-    </>
-  )
 }

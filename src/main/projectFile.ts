@@ -10,7 +10,7 @@ import type { ExportProgress, MediaItem, MusicTrack, Project } from '@shared/typ
 import { abortError } from './abort'
 import { withArchivedThemeSong } from './archive/themeSong'
 import { mediaId } from './media/scan'
-import { hasChanges, readProjectText } from './projectSchema'
+import { hasChanges, PROJECT_ID, readProjectText } from './projectSchema'
 import { PROJECT_EXT, type ProjectStore } from './projects'
 import { rebaseBundledPath } from './themeMusic'
 
@@ -230,7 +230,7 @@ export async function importProjectFile(path: string, store: ProjectStore, opts:
   if (extname(file).toLowerCase() !== PROJECT_EXT) throw new Error('not a Diashow Studio project file (.dshow)')
   // Opening a project's own file in the projects folder: nothing to import
   const own = basename(file, extname(file))
-  if (!opts.salvage && /^[A-Za-z0-9_-]{1,128}$/.test(own) && samePath(file, join(store.dir, `${own}${PROJECT_EXT}`))) return opts.loadOwn ? opts.loadOwn(own) : store.load(own)
+  if (!opts.salvage && PROJECT_ID.test(own) && samePath(file, join(store.dir, `${own}${PROJECT_EXT}`))) return opts.loadOwn ? opts.loadOwn(own) : store.load(own)
   // migrated and validated: an older format is converted, a newer one refused, broken parts dropped
   const read = readProjectText(await readFile(file, 'utf8'), { salvage: opts.salvage })
   const report = read.report

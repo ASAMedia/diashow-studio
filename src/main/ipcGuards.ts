@@ -11,6 +11,11 @@ import { validateAudio } from './export/validate'
 
 const OUT_EXT = /\.(mp4|m4v|mov)$/i
 
+/** The strings of a list from the renderer (paths, ids); anything else is dropped. */
+export function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string' && v.length > 0) : []
+}
+
 /**
  * A path FFmpeg may read for the renderer (frames, filmstrip, waveform): an existing local or network
  * file, never a URL or protocol FFmpeg would follow (http:, tcp:, concat:, …) nor a device path. A

@@ -20,7 +20,6 @@ const S = {
   export: ['Exportieren', 'Export'],
   back: ['Zurück', 'Back'],
   delete: ['Löschen', 'Delete'],
-  rename: ['Umbenennen', 'Rename'],
   themes: ['Themen', 'Themes'],
   // sample words drawn on the Magazine and Snapshots thumbnails
   themeThumbTitle: ['TITEL', 'TITLE'],
@@ -109,10 +108,7 @@ const S = {
   startExport: ['Exportieren', 'Export'],
   cancel: ['Abbrechen', 'Cancel'],
   close: ['Schließen', 'Close'],
-  exporting: ['Wird exportiert…', 'Exporting…'],
-  mixingAudio: ['Audio wird gemischt…', 'Mixing audio…'],
   remaining: ['verbleibend', 'remaining'],
-  exportDone: ['Export abgeschlossen', 'Export complete'],
   showInFolder: ['Im Ordner anzeigen', 'Show in folder'],
   exportFailed: ['Export fehlgeschlagen', 'Export failed'],
   stillProcessing: ['Einige Fotos oder Videos werden noch vorbereitet. Exportieren geht, sobald sie fertig sind.', 'Some photos or videos are still being prepared. You can export as soon as they are done.'],
@@ -178,11 +174,8 @@ const S = {
   presetCustom: ['Eigene Einstellungen', 'Custom'],
   projectAspect: ['wie die Diashow', 'as the slideshow'],
   aspectRelayout: ['Für dieses Format werden die Layouts neu berechnet.', 'Layouts are recalculated for this shape.'],
-  preparingHires: ['Videos werden in voller Auflösung vorbereitet…', 'Preparing videos at full resolution…'],
   rejectsTitle: ['Ausschuss prüfen', 'Find rejects'],
   blurThreshold: ['Unschärfe-Grenze', 'Blur threshold'],
-  notAnalysed: ['{n} Fotos werden noch analysiert.', '{n} photos are still being analysed.'],
-  noRejects: ['Keine unscharfen oder doppelten Fotos gefunden.', 'No blurry or duplicate photos found.'],
   blurry: ['Unscharf', 'Blurry'],
   duplicateOf: ['Ähnlich wie', 'Similar to'],
   removeN: ['{n} entfernen', 'Remove {n}'],
@@ -406,7 +399,6 @@ const S = {
   privacyAll: ['Alle verpixeln', 'Pixelate all'],
   privacyNone: ['Verpixelung entfernen', 'Remove pixelation'],
   privacyHint: ['Gesicht anklicken oder Bereich aufziehen – gilt für Vorschau und Export.', 'Click a face or drag out an area – for preview and export.'],
-  privacyVideoHint: ['Der Bereich gilt für den ganzen Clip.', 'The area applies to the whole clip.'],
   noFacesFound: ['Keine Gesichter erkannt – Bereich aufziehen.', 'No faces detected – drag out an area.'],
   facesPending: ['Gesichtserkennung läuft noch…', 'Face detection is still running…'],
   privacyBatchOn: ['Alle Gesichter verpixeln', 'Pixelate all faces'],
@@ -441,7 +433,6 @@ const S = {
   queueAdded: ['Export läuft im Hintergrund – du kannst weiterarbeiten.', 'The export runs in the background – you can keep working.'],
   queueEmpty: ['Noch keine Exporte. Sie erscheinen hier, sobald du eine Diashow exportierst.', 'No exports yet. They appear here as soon as you export a slideshow.'],
   queueQueued: ['Wartet', 'Waiting'],
-  queueRunning: ['Läuft', 'Running'],
   queuePaused: ['Unterbrochen', 'Interrupted'],
   queueDone: ['Fertig', 'Done'],
   queueError: ['Fehler', 'Error'],
@@ -491,7 +482,6 @@ const S = {
   shareKindHotspot: ['Hotspot', 'Hotspot'],
   shareKindVirtual: ['virtuell', 'virtual'],
   shareNoNetwork: ['Kein WLAN oder Netzwerk gefunden. Verbinde den Laptop mit dem WLAN der Handys oder schalte den mobilen Hotspot ein.', 'No Wi-Fi or network found. Connect the laptop to the phones’ Wi-Fi or switch on the mobile hotspot.'],
-  shareError: ['Konnte nicht starten: {e}', 'Could not start: {e}'],
   shareAccept: ['Uploads annehmen', 'Accept uploads'],
   shareReceived: ['Angekommen', 'Received'],
   shareNothingYet: ['Noch keine Dateien angekommen.', 'No files received yet.'],
@@ -741,7 +731,6 @@ const S = {
   // diagnostics package (components/Diagnostics.tsx)
   diagnostics: ['Diagnose', 'Diagnostics'],
   diagButton: ['Diagnosepaket erstellen…', 'Create diagnostics package…'],
-  diagHint: ['Für die Fehlersuche: eine ZIP-Datei mit Protokoll, Systemcheck und Einstellungen zum Mailen. Ohne Fotos, Namen oder Gesichtsdaten.', 'For finding a problem: a zip file with the log, system check and settings to e-mail. Without photos, names or face data.'],
   diagTitle: ['Diagnosepaket erstellen', 'Create diagnostics package'],
   diagIntro: ['Das Paket hilft bei der Fehlersuche. Prüfe vor dem Speichern, was es enthält: Klick auf eine Datei zeigt ihren Inhalt.', 'The package helps to find a problem. Check what it contains before saving: click a file to see its content.'],
   diagPrivacy: ['Nicht enthalten: Fotos, Videos, Gesichtsdaten, Namen und Pfade der Fotos im Projekt. Pfade in den Protokollen sind gekürzt (%USERPROFILE%).', 'Not included: photos, videos, face data, names and paths of the project’s photos. Paths in the logs are shortened (%USERPROFILE%).'],
@@ -811,7 +800,6 @@ const S = {
   cullTitle: ['Alle Fotos und Videos sichten: herausnehmen und bewerten', 'Review all photos and videos: leave out and rate'],
   playFullscreen: ['Im Vollbild abspielen', 'Play fullscreen'],
   deleteShow: ['Diashow löschen', 'Delete slideshow'],
-  confirmDeleteHint: ['Die Fotos und Videos selbst bleiben erhalten.', 'The photos and videos themselves are kept.'],
   position: ['Position in der Diashow', 'Position in the slideshow'],
   playPreview: ['Vorschau abspielen', 'Play preview'],
   zoom: ['Zoom', 'Zoom'],
@@ -905,7 +893,7 @@ const S = {
   peEditedMark: ['Bearbeitet', 'Edited'],
   kbdRotate: ['Strg+R', 'Ctrl+R'],
   scRotate: ['Ausgewählte Fotos nach links drehen', 'Rotate the selected photos to the left'],
-  // filmstrip zoom, search, chapters and inserting (components/StripTools.tsx, Filmstrip.tsx, insert.ts)
+  // filmstrip zoom, search, chapters and inserting (components/StripTools.tsx, Filmstrip.tsx, StripMenu.tsx, insert.ts)
   stripTools: ['Werkzeuge des Filmstreifens', 'Filmstrip tools'],
   stripZoom: ['Größe der Folien im Filmstreifen', 'Size of the slides in the filmstrip'],
   stripZoomIn: ['Größere Folien', 'Larger slides'],
@@ -986,3 +974,17 @@ export function fmtTime(sec: number): string {
 export function fmtSeconds(sec: number): string {
   return `${sec.toLocaleString(localeTag(), { maximumFractionDigits: 1, minimumFractionDigits: 1 })} s`
 }
+
+/** A string with its placeholders filled in: "{n} files" with { n: 3 }. */
+export const fill = (key: StringKey, values: Record<string, string | number>): string => Object.entries(values).reduce((s, [k, v]) => s.replaceAll(`{${k}}`, String(v)), t(key))
+
+/** Bytes as KB, MB or GB. */
+export function fmtBytes(bytes: number): string {
+  const n = (v: number, digits = 0): string => v.toLocaleString(localeTag(), { maximumFractionDigits: digits })
+  if (bytes >= 1e9) return `${n(bytes / 1e9, 1)} GB`
+  if (bytes >= 1e6) return `${n(bytes / 1e6, bytes >= 1e8 ? 0 : 1)} MB`
+  return `${n(Math.max(bytes, bytes > 0 ? 1000 : 0) / 1e3)} KB`
+}
+
+/** A day as "12. Mai 2026" / "May 12, 2026". */
+export const fmtDate = (ms: number): string => new Date(ms).toLocaleDateString(localeTag(), { day: 'numeric', month: 'long', year: 'numeric' })

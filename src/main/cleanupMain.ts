@@ -7,14 +7,11 @@ import { startOfDay, validDeleteAt, type CleanupChoice, type UploadChoice } from
 import type { TrashRestoreResult } from '@shared/trash'
 import { inventoryOf, releaseShared, runCleanup, scanProject, trashProjectData, type CleanupDeps } from './cleanup'
 import { TrashRefusedError, type Trash, type TrashedMedia } from './trash'
+import { checkProjectId } from './projectSchema'
+import { serialByKey } from './serial'
 
 /** How often the trash looks for shows whose days are over. */
 const EXPIRE_EVERY_MS = 60 * 60_000
-
-function checkId(id: unknown): string {
-  if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(id)) throw new Error('invalid project id')
-  return id
-}
 
 /** The renderer's choice, with anything unknown meaning "no". */
 export function checkChoice(raw: unknown): CleanupChoice {
@@ -31,25 +28,16 @@ export interface CleanupIpcOptions {
 
 export function registerCleanup(d: CleanupDeps & { trash: Trash }, opts: CleanupIpcOptions = {}): { ready: Promise<void> } {
   const trash = d.trash
-  const queues = new Map<string, Promise<unknown>>()
-  const serial = <T>(id: string, task: () => Promise<T>): Promise<T> => {
-    const next = (queues.get(id) ?? Promise.resolve()).then(task, task)
-    const settled = next.catch(() => {})
-    queues.set(id, settled)
-    void settled.then(() => {
-      if (queues.get(id) === settled) queues.delete(id)
-    })
-    return next
-  }
+  const serial = serialByKey()
 
-  ipcMain.handle('cleanup:inventory', async (_e, id: unknown) => inventoryOf(await scanProject(d, checkId(id))))
+  ipcMain.handle('cleanup:inventory', async (_e, id: unknown) => inventoryOf(await scanProject(d, checkProjectId(id))))
   ipcMain.handle('cleanup:run', (_e, id: unknown, choice: unknown) => {
-    const pid = checkId(id)
+    const pid = checkProjectId(id)
     return serial(pid, () => runCleanup(d, pid, checkChoice(choice)))
   })
   // a project open in the editor sets its reminder like any other edit; this is for the home screen
   ipcMain.handle('cleanup:delete-at', (_e, id: unknown, at: unknown) => {
-    const pid = checkId(id)
+    const pid = checkProjectId(id)
     if (at !== null && !validDeleteAt(at)) throw new Error('invalid date')
     return serial(pid, async () => {
       let read: { text: string; repaired: boolean } | undefined
@@ -83,7 +71,7 @@ export function registerCleanup(d: CleanupDeps & { trash: Trash }, opts: Cleanup
   setInterval(() => void expire(), EXPIRE_EVERY_MS).unref()
 
   ipcMain.handle('project:delete', async (_e, id: unknown) => {
-    const pid = checkId(id)
+    const pid = checkProjectId(id)
     await ready
     return serial(pid, () => trashProjectData(d, pid))
   })
@@ -92,7 +80,7 @@ export function registerCleanup(d: CleanupDeps & { trash: Trash }, opts: Cleanup
     return trash.list()
   })
   ipcMain.handle('trash:restore', async (_e, id: unknown): Promise<TrashRestoreResult> => {
-    const pid = checkId(id)
+    const pid = checkProjectId(id)
     await ready
     return serial(pid, async () => {
       try {

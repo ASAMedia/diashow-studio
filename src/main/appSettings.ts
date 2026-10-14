@@ -4,6 +4,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { AppSettings } from '@shared/types'
 import { validHost } from '@shared/netPaths'
+import { PROJECT_ID } from './projectSchema'
 import { replaceFile } from './replaceFile'
 
 const MAX_BYTES = 256 * 1024
@@ -36,7 +37,7 @@ export function sanitizeAppSettings(value: unknown): AppSettings {
     return {}
   }
   const kiosk = copy.kioskProjectId
-  if (kiosk !== undefined && kiosk !== null && !(typeof kiosk === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(kiosk))) delete copy.kioskProjectId
+  if (kiosk !== undefined && kiosk !== null && !(typeof kiosk === 'string' && PROJECT_ID.test(kiosk))) delete copy.kioskProjectId
   sanitizeUpdateFields(copy)
   if (copy.gpuPreference !== undefined && copy.gpuPreference !== 'performance' && copy.gpuPreference !== 'saving') delete copy.gpuPreference
   if (copy.trustedHosts !== undefined) {

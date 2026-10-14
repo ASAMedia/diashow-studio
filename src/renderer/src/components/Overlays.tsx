@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import type { FreeText } from '@shared/types'
 import type { TimelineSlide } from '@shared/timeline'
-import { FONT_FAMILY } from '../engine/media'
+import { FONT_FAMILY } from '../engine/text'
 import { FONT_ROLE } from '../engine/freeText'
 import { useStore } from '../store'
 import { followPointer } from '../pointerDrag'

@@ -2,7 +2,7 @@ import type { MediaItem, Project, ProjectSettings } from '@shared/types'
 import type { Timeline, TimelineSlide } from '@shared/timeline'
 import type { Box } from './draw'
 import type { Compositor, PostParams, Tex } from './gl'
-import type { TextSpec } from './media'
+import type { TextSpec } from './text'
 
 export interface SlideState {
   slide: TimelineSlide

@@ -75,6 +75,12 @@ export function safeName(raw: string, max = 120): string {
   return s
 }
 
+/**
+ * The folder of a show's received files, in Uploads (the share dialog) and in Eingefügt (Ctrl+V): its
+ * safe name. The clean-up and the trash find them by the same name.
+ */
+export const showFolderName = (projectName: string): string => safeName(projectName, 60) || 'Diashow'
+
 /** Safe file name for an upload, or null when it is no photo or video the app imports. */
 export function uploadFileName(raw: string, mime?: string): { name: string; kind: 'photo' | 'video' } | null {
   let name = safeName(raw)

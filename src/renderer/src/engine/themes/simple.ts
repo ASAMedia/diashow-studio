@@ -5,7 +5,7 @@ import type { Ctx, SlideState, Theme } from '../types'
 import {
   aspectOf, dirVector, drawCell, drawMedia, drawText, drawTextBlock, drawWhole, kenBurnsEase, kenBurnsOf, kenBurnsUv, lerpRect, panProgress, showsMotion, showsWhole, slideTexture, textPosition, titleOpacity, rng
 } from '../draw'
-import type { FontRole } from '../media'
+import type { FontRole } from '../text'
 import type { Box } from '../draw'
 
 export function drawCenteredText(
