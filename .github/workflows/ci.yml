@@ -8,7 +8,7 @@ on:
 jobs:
   test:
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -24,17 +24,38 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npx vitest run
+
+  e2e:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pillow-heif numpy
+      - run: npm ci
       - run: npx electron-vite build
-      # runners have no GPU: WebGL runs on SwiftShader
-      - run: npx playwright test e2e/app.spec.ts e2e/features.spec.ts e2e/queue.spec.ts e2e/privacy.spec.ts e2e/help.spec.ts e2e/diagnostics.spec.ts e2e/kiosk.spec.ts e2e/present.spec.ts e2e/backups.spec.ts e2e/relink.spec.ts e2e/pack.spec.ts e2e/chapters.spec.ts e2e/keyboard.spec.ts e2e/edit.spec.ts e2e/cleanup.spec.ts e2e/report.spec.ts e2e/thememusic.spec.ts e2e/musiclibrary.spec.ts e2e/adjust.spec.ts e2e/archive.spec.ts e2e/history.spec.ts e2e/filmstrip.spec.ts e2e/regroup.spec.ts e2e/duplicates.spec.ts e2e/panorama.spec.ts e2e/livephoto.spec.ts e2e/dragdrop.spec.ts e2e/trash.spec.ts
+      # runners have no GPU: WebGL runs on SwiftShader and the processor draws everything, so one test at
+      # a time (playwright.config.ts); the specs are split over two runners instead (DIASHOW_E2E_SHARD)
+      - run: npx playwright test e2e/app.spec.ts e2e/features.spec.ts e2e/queue.spec.ts e2e/privacy.spec.ts e2e/help.spec.ts e2e/diagnostics.spec.ts e2e/kiosk.spec.ts e2e/present.spec.ts e2e/backups.spec.ts e2e/relink.spec.ts e2e/pack.spec.ts e2e/chapters.spec.ts e2e/keyboard.spec.ts e2e/edit.spec.ts e2e/cleanup.spec.ts e2e/report.spec.ts e2e/thememusic.spec.ts e2e/musiclibrary.spec.ts e2e/adjust.spec.ts e2e/archive.spec.ts e2e/history.spec.ts e2e/filmstrip.spec.ts e2e/regroup.spec.ts e2e/duplicates.spec.ts e2e/panorama.spec.ts e2e/livephoto.spec.ts e2e/dragdrop.spec.ts e2e/trash.spec.ts e2e/home.spec.ts
         env:
           DIASHOW_SOFTWARE_GL: '1'
           # the runner's Windows is English anyway; this makes the specs expect English too
           DIASHOW_LOCALE: en-US
-        timeout-minutes: 40
+          DIASHOW_E2E_SHARD: ${{ matrix.shard }}/2
+        timeout-minutes: 20
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: test-results
+          name: test-results-${{ matrix.shard }}
           path: test-results
           if-no-files-found: ignore
