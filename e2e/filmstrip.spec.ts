@@ -68,7 +68,7 @@ function clipboardText(): string | null {
   }
 }
 
-test('filmstrip: zoom, search, chapters, insert by drop and Ctrl+V, undo', async () => {
+test('filmstrip: zoom, search, chapters, insert by drop and Ctrl+V, undo', { lock: 'clipboard' }, async () => {
   test.setTimeout(8 * 60 * 1000)
   ensureTestMedia()
   mkdirSync(shots, { recursive: true })

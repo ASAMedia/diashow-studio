@@ -133,7 +133,7 @@ async function exportFrame(page: Page, dir: string, name: string, at: number): P
   await page.waitForFunction((n) => {
     const jobs = (window as any).__diashow.store.getState().exportJobs
     return jobs.length > n && jobs.every((j: any) => j.state === 'done' || j.state === 'error')
-  }, before, { timeout: 600_000, polling: 1000 })
+  }, before, { timeout: 600_000, polling: 250 })
   expect(await state<string[]>(page, `return s.exportJobs.map((j) => j.state)`)).not.toContain('error')
   const still = execFileSync(ffmpeg, ['-v', 'error', '-ss', at.toFixed(3), '-i', out, '-frames:v', '1', '-f', 'image2pipe', '-c:v', 'png', 'pipe:1'])
   keep(`${name}.png`, still)

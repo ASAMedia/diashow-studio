@@ -2,6 +2,28 @@
 
 All notable changes to Diashow Studio. Versions follow [Semantic Versioning](https://semver.org). The release workflow publishes the section of a version as its release notes.
 
+## [1.8.0] - 2026-10-14
+
+**Downloads**
+
+- `Diashow.Studio-Setup-1.8.0.exe`: installer (no admin rights needed); it updates an installed version and keeps your slideshows and settings.
+- `Diashow.Studio-1.8.0-portable.exe`: runs without installing, e.g. from a USB stick.
+- The installer is not code-signed. If Windows SmartScreen says "Windows protected your PC", choose "More info" and then "Run anyway".
+- `THIRD_PARTY_NOTICES.txt` lists the licences of everything bundled, including all songs. The `ffmpeg-*` archives contain the source code of the bundled FFmpeg build and of every library compiled into it (GPL), listed in `ffmpeg-deps-sources-*.txt`.
+
+**New**
+
+- Duplicate a slideshow from its card on the home screen or the "⋯" menu, e.g. a parents' version with more pixelation next to the class version. The copy has everything the show has, including its deletion date, starts without older versions or undo history, and keeps the original's title in the video.
+- Drop photos onto a slideshow on the home screen to add them to it, sorted into their day; photos it already has are skipped.
+
+**Fixes**
+
+- Files dropped while a dialog is open are no longer imported into the show behind it or made into a new show: the window refuses them and says "Close the dialog first". The assistant still takes photos.
+- The clean-up and deleting a show no longer remove uploads that a show in the trash still uses, and uploads two shows shared are deleted with the last of them.
+- The undo history is no longer lost when the slideshow is saved just as the app closes.
+- A paused preview no longer redraws ten times a second when nothing changes, which kept the processor busy on PCs without a graphics card.
+- Temporary files of the graphics card check at start-up no longer stay behind in the Windows temp folder when the app is closed during the check.
+
 ## [1.7.0] - 2026-10-13
 
 **Downloads**

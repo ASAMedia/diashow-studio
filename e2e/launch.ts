@@ -1,12 +1,22 @@
 // What Electron starts in the e2e specs: the project (out/, via package.json) or another build
 // output, e.g. DIASHOW_MAIN=out-b/main/index.js, so parallel builds don't overwrite each other.
-export const appArgs = (): string[] => [process.env.DIASHOW_MAIN ?? '.']
+//
+// Chromium slows down the renderer of a window it takes for hidden (lower priority, Windows' efficiency
+// mode), and a window covered by others counts as hidden: tests running at the same time cover each
+// other's windows. Measured: three tests at once each took two to four times as long as alone, with
+// these switches about as long as alone. They keep every window as fast as one in front, as Playwright
+// does for its own browsers (and a run alone no longer depends on what else is on the screen).
+const SWITCHES = ['--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--disable-features=CalculateNativeWinOcclusion']
+// DIASHOW_E2E_ARGS adds Chromium switches, e.g. "--disable-gpu": with DIASHOW_SOFTWARE_GL=1, WebGL then
+// runs on SwiftShader as on GitHub's runner (without it, a PC's graphics card still renders).
+const switches = (): string[] => [...SWITCHES, ...(process.env.DIASHOW_E2E_ARGS ?? '').split(/\s+/).filter(Boolean)]
+export const appArgs = (): string[] => [process.env.DIASHOW_MAIN ?? '.', ...switches()]
 
 /** Launch options for the app with its data in `dataDir`; DIASHOW_EXE runs a packaged build instead. */
 export function launchOptions(root: string, dataDir: string): { executablePath?: string; args?: string[]; cwd?: string; env: Record<string, string> } {
   const env = { ...(process.env as Record<string, string>), DIASHOW_DATA_DIR: dataDir }
   const exe = process.env.DIASHOW_EXE
-  return exe ? { executablePath: exe, env } : { args: appArgs(), cwd: root, env }
+  return exe ? { executablePath: exe, args: switches(), env } : { args: appArgs(), cwd: root, env }
 }
 
 /**

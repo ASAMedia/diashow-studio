@@ -8,7 +8,7 @@ import { launchOptions } from './launch'
 
 const root = resolve(__dirname, '..')
 
-test('system check: verdicts, benchmark, report', async () => {
+test('system check: verdicts, benchmark, report', { lock: 'clipboard' }, async () => {
   test.setTimeout(6 * 60 * 1000)
   const dataDir = mkdtempSync(join(tmpdir(), 'diashow-syscheck-'))
   const opts = launchOptions(root, dataDir)

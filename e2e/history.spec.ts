@@ -79,6 +79,9 @@ test('undo and redo survive closing the app; a changed file discards the history
       return d.store.getState().project.id as string
     }, { paths: sampleFiles().map((f) => join(mediaDir, ...f.split('/'))), name: NAME })
     await waitProcessed(page)
+    // and analysed (faces, likeness, sharpness): a result coming in later saves the show again, and one
+    // that lands while the app closes would leave the stored history behind the file (a slow, busy PC)
+    await page.waitForFunction(() => (window as any).__diashow.store.getState().project.media.every((m: any) => m.hash && m.faces !== undefined && m.sharpness !== undefined), null, { timeout: 300_000, polling: 250 })
     const looks: Look[] = [await look(page)]
     const entry = await state<string>(page, `return s.project.entries.find((e) => e.type === 'photo').id`)
     // the theme

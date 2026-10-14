@@ -54,6 +54,11 @@ export class Engine {
   playing = false
   /** Photos drawn from a placeholder in the last frame because their full image wasn't loaded yet. */
   missing = 0
+
+  /** The last frame had everything: no picture still loading, every video at its frame. */
+  get settled(): boolean {
+    return this.missing === 0 && (this.videos?.settled() ?? true)
+  }
   /** Areas to pixelate per media id: drawn areas, followed faces, marked people (engine/privacy.ts). */
   private privacy = new PrivacyIndex()
   /** Texture maps of edited media, per edit (edits are replaced, never changed in place). */
@@ -193,6 +198,9 @@ export class Engine {
       settings: project.settings,
       image: (m: MediaItem | undefined) => {
         if (!m) return null
+        // a video has no display image: its still is its thumbnail (a video print on Vintage's pile),
+        // and nothing better is on its way
+        if (m.kind === 'video') return this.markPrivate(m, this.images.get(m.thumb))
         const full = this.images.get(m.display, this.panoNeed(m))
         if (full) return this.markPrivate(m, full)
         this.missing++

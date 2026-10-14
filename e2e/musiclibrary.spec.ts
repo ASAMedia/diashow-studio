@@ -162,7 +162,7 @@ test('music library: songs per theme, by mood, in the assistant, added to the ow
     expect(srcs.length).toBeGreaterThan(0)
     expect(srcs.every((s: string) => s.toLowerCase() === song.path.toLowerCase())).toBe(true)
     await expect
-      .poll(() => page.evaluate((id) => (window as any).__diashow.store.getState().exportJobs.find((j: any) => j.id === id)?.state, jobId), { timeout: 600_000, intervals: [1000] })
+      .poll(() => page.evaluate((id) => (window as any).__diashow.store.getState().exportJobs.find((j: any) => j.id === id)?.state, jobId), { timeout: 600_000, intervals: [250] })
       .toBe('done')
     const probe = JSON.parse(execFileSync(ffprobe, ['-v', 'error', '-show_entries', 'stream=codec_type:format=duration', '-of', 'json', out]).toString())
     expect(probe.streams.map((s: any) => s.codec_type).sort()).toEqual(['audio', 'video'])

@@ -126,6 +126,10 @@ Photo and video slideshows for Windows, modelled on the slideshow feature of mac
     - a short export benchmark.
     Every item comes with a plain verdict, and "Copy report" copies a text report.
 - **Projects:**
+  - Home screen: drop photos, videos or folders onto a show's card to add them to that show: it opens, they are sorted into their day by capture time (a new day title if the show has day titles), repeats are skipped with the notice, one undo step. The drop box and the rest of the home screen make a new show.
+  - Duplicate (a show's card, or "⋯" in the editor): an independent copy "Name (Kopie)" / "(Copy)", "(Kopie 2)" …, with everything the show holds (slides, settings, music, edits, captions, pixelation, people and face data, deletion date); its title slide keeps the original name. It opens in the editor; older versions, undo history and export jobs stay with the original.
+    - Pupils' uploads and pasted pictures stay in place and belong to both: the clean-up and the trash of one leave what the other uses, also while that one lies in the trash, and the last one deleted for good takes them along (`src/shared/duplicate.ts`, `src/main/duplicate.ts`, `releaseShared` in `src/main/cleanup.ts`).
+  - While a dialog is open, files dragged into the window are refused (no overlay, the "no" cursor) with a short "Close the dialog first"; only the assistant takes them (`dialogRefusesFiles` in `keys.ts`).
   - Automatic backups: before a save, the previous version is kept (at most every 10 minutes, the last 20). Restore them with "Restore an older version…" in the "⋯" menu.
   - Missing originals (moved folder, new drive letter) are found again with "Search a folder…" in the banner.
   - A project made elsewhere that points to network shares (`\\host\share`) doesn't open those files until you allow it in a banner, because Windows would sign in to that host with your account. Shares you import from yourself are trusted automatically.
@@ -224,7 +228,7 @@ Sidecar files (XML, THM, AAE, …) are ignored, and RAW+JPEG pairs use the JPEG.
 npm install          # also downloads FFmpeg 9.0 (BtbN GPL build) and the face model into vendor/
 npm run dev          # start the app with hot reload
 npm test             # unit and pipeline tests (generates test media first)
-npm run e2e          # build + Playwright end-to-end test with screenshots of every theme
+npm run e2e          # build + Playwright end-to-end tests, several at a time (see below)
 npm run dist         # Windows installer and portable exe in dist/ (writes THIRD_PARTY_NOTICES first)
 npm run notices      # vendor/THIRD_PARTY_NOTICES.txt: licences of FFmpeg, fonts, models, theme songs and every bundled npm package
 npm run theme-music -- <folder>   # theme songs: resources/theme-music from <theme>.mp3 … files and sources.json (see the script)
@@ -237,15 +241,17 @@ npm run release-check   # before tagging: what the CI and the release workflow w
 
 The handbook lives in `src/renderer/src/handbook/de.md` and `en.md` (a small Markdown subset, see `handbook/markdown.tsx`). Its screenshots in `src/renderer/public/handbook/<de|en>/` are made from the sample trip (`npm run samples`) by `npx electron-vite build && DIASHOW_HANDBOOK_SHOTS=1 npx playwright test e2e/handbook-shots.spec.ts`; without the samples they fall back to the generated test media. `DIASHOW_DEMO_VIDEO=1 npx playwright test e2e/demo-video.spec.ts` makes the website's demo video (`docs/media/demo.mp4`) with the app from the same trip.
 
+The end-to-end tests run in parallel: each test starts its own app with its own data folder (`DIASHOW_DATA_DIR`), the longest first. `DIASHOW_E2E_WORKERS` sets how many run at once (default: half the logical processors, at most 6; one at a time where the processor draws everything, as on GitHub's runner). The specs that use the Windows clipboard take Playwright's test lock `clipboard` and never run at the same time; a new spec that copies or pastes declares it too: `test('…', { lock: 'clipboard' }, …)`. `e2e/launch.ts` starts the app with Chromium switches that keep a covered window as fast as one in front. `DIASHOW_E2E_ARGS` adds switches: `DIASHOW_SOFTWARE_GL=1 DIASHOW_E2E_ARGS=--disable-gpu` draws with SwiftShader as the runner does (with only `DIASHOW_SOFTWARE_GL=1`, a graphics card still draws). `DIASHOW_E2E_SHARD=1/2` runs one runner's part of the CI's specs.
+
 `e2e/dragdrop.spec.ts` drives every drag and drop through Chromium's own pipeline (CDP `Input.dispatchDragEvent`; `dragFiles`, `dragElement` and `dropFiles` in `e2e/harness.ts`): a release right after the element under the pointer changed, edges, out of the window and back, Esc. Drop targets accept `dragenter` as well as `dragover`, because Chromium decides a drop by the `dragenter` when the element under the pointer has just changed. Pointer drags (text boxes, collage, framing, crop, trim) go through `src/renderer/src/pointerDrag.ts`, which also ends them on a lost capture or a cancelled touch.
 
 `DIASHOW_UI_REVIEW=1 npx playwright test e2e/ui-review.spec.ts` takes screenshots of every screen and dialog (German and English, light and dark, small and large window) and checks contrast and accessible names; the results are in `test-results/ui-review/`.
 
 The app icon is drawn in `build/icon.svg` (and `build/icon-small.svg` for 16 px); `npm run icon` writes `build/icon.ico`, `build/icon.png` and the favicon of the phone pages from them.
 
-**Releases:** add a section for the version to `CHANGELOG.md`, set the same version in `package.json`, run `npm run release-check` on the commit to be tagged, and push a tag `v<version>`. The release check tests what GitHub will: version, changelog and tag, the type check and unit tests with freshly generated test media, and the build with the end-to-end tests and environment of `ci.yml` (`--quick` leaves those out); then it prints what to push. Push one version tag at a time. `.github/workflows/release.yml` then runs the type check and unit tests, builds the installer and the portable exe, and publishes them as a GitHub release with that changelog section, `THIRD_PARTY_NOTICES.txt` and the source of the bundled FFmpeg build.
+**Releases:** add a section for the version to `CHANGELOG.md`, set the same version in `package.json`, run `npm run release-check` on the commit to be tagged, and push a tag `v<version>`. The release check tests what GitHub will: version, changelog and tag, the type check and unit tests with freshly generated test media, and the build (during the unit tests) with the end-to-end tests and environment of `ci.yml`, in parallel (about 5 minutes; `--quick` leaves those out); then it prints what to push. Push one version tag at a time. `.github/workflows/release.yml` then runs the type check and unit tests, builds the installer and the portable exe, and publishes them as a GitHub release with that changelog section, `THIRD_PARTY_NOTICES.txt` and the source of the bundled FFmpeg build.
 
-GitHub Actions (`.github/workflows/ci.yml`) runs the type check, the unit tests and most end-to-end tests on Windows for every push, in English and with software WebGL. Tests that need a graphics card (GPU tone mapping, hardware encoders) skip themselves there.
+GitHub Actions (`.github/workflows/ci.yml`) runs the type check and the unit tests, and most end-to-end tests split over two runners, on Windows for every push, in English and with software WebGL. Tests that need a graphics card (GPU tone mapping, hardware encoders) skip themselves there.
 
 `npm run test:media` writes generated sample files (iPhone, Android and Sony-like) to `test-media/`.
 

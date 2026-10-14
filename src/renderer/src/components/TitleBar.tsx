@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CalendarDays, CircleHelp, Clapperboard, QrCode, ScanFace, ChevronLeft, Download, Eraser, FileArchive, FolderTree, History, LayoutGrid, Loader2, MonitorPlay, MoreHorizontal, Package, Play, Redo2, ScanSearch, Settings, ShieldCheck, SortAsc, Undo2 } from 'lucide-react'
+import { CalendarDays, CircleHelp, Clapperboard, Copy, QrCode, ScanFace, ChevronLeft, Download, Eraser, FileArchive, FolderTree, History, LayoutGrid, Loader2, MonitorPlay, MoreHorizontal, Package, Play, Redo2, ScanSearch, Settings, ShieldCheck, SortAsc, Undo2 } from 'lucide-react'
 import { useStore } from '../store'
 import { useTimeline } from '../timeline'
 import { fmtTime, t } from '../i18n'
@@ -9,6 +9,7 @@ import { AppIcon } from './AppIcon'
 import { Menu, MenuItem, MenuSeparator } from './Menu'
 import { openCleanup } from './Cleanup'
 import { openArchive } from './Archive'
+import { duplicateShow } from './Duplicate'
 
 /** An icon-only button of the title bar; the tooltip is its name for screen readers too. */
 function IconButton(props: { label: string; onClick: () => void; disabled?: boolean; children: React.ReactNode; expanded?: boolean; popup?: boolean }) {
@@ -145,6 +146,9 @@ export function TitleBar() {
             </MenuItem>
             <MenuItem icon={<QrCode size={15} />} onSelect={() => set({ dialog: 'share' })}>
               {t('shareTitle')}
+            </MenuItem>
+            <MenuItem icon={<Copy size={15} />} onSelect={() => void duplicateShow(project.id)}>
+              {t('duplicate')}
             </MenuItem>
             <MenuItem icon={<Package size={15} />} onSelect={() => set({ dialog: 'pack' })}>
               {t('pack')}

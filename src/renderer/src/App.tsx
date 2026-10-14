@@ -24,9 +24,10 @@ import { Wizard } from './components/Wizard'
 import { DiagnosticsHost } from './components/ProjectRepair'
 import { CleanupHost } from './components/Cleanup'
 import { ArchiveHost } from './components/Archive'
+import { DuplicateNotice } from './components/Duplicate'
 import { watchStabilize } from './stabilize'
 import { timelineOf } from './timeline'
-import { keyForFocus, modalOpen } from './keys'
+import { dialogRefusesFiles, keyForFocus, modalOpen } from './keys'
 import { closePhotoEdit, rotateSelection } from './photoEdit'
 import { handledDrops, pasteMedia } from './insert'
 import { NetworkBanner } from './components/NetworkBanner'
@@ -52,6 +53,8 @@ export function App() {
   const dialog = useStore((s) => s.dialog)
   const presenting = useStore((s) => s.presenting)
   const [dragging, setDragging] = useState(false)
+  /** Files came over the window while a dialog was open: "Close the dialog first". */
+  const [refused, setRefused] = useState(false)
 
   useEffect(() => {
     void useStore.getState().loadProjects()
@@ -80,6 +83,38 @@ export function App() {
 
   useEffect(() => {
     const isFiles = (e: DragEvent): boolean => !!e.dataTransfer?.types.includes('Files')
+    // While a dialog is open (Settings, the trash, the archive, …), files would land in the show behind
+    // it or make a new show: they are refused (keys.ts; the assistant takes them). Caught before any
+    // other handler sees them, with the drop effect "none", also over a text field in the dialog (it
+    // would take a file's path as text). The hint comes once per drag, and goes a moment after the
+    // files left the window or were let go.
+    let hinted = false
+    let hintTimer: ReturnType<typeof setTimeout> | undefined
+    const hint = (): void => {
+      clearTimeout(hintTimer)
+      if (!hinted) setRefused(true)
+      hinted = true
+    }
+    const hideHint = (): void => {
+      clearTimeout(hintTimer)
+      hintTimer = setTimeout(() => {
+        hinted = false
+        setRefused(false)
+      }, 3000)
+    }
+    const refuse = (e: DragEvent): void => {
+      if (!isFiles(e) || !dialogRefusesFiles()) return
+      e.stopImmediatePropagation()
+      e.preventDefault()
+      e.dataTransfer!.dropEffect = 'none'
+      setDragging(false)
+      if (e.type === 'dragenter') hint()
+      else if (e.type === 'drop') {
+        // the dialog opened while the files hovered: nothing goes in
+        hint()
+        hideHint()
+      }
+    }
     // dragenter is accepted like dragover, with the same effect: right after the element under the
     // pointer changed (an edge between two pictures), Chromium decides on a drop by the dragenter
     // alone, and a refused one loses the drop
@@ -97,22 +132,27 @@ export function App() {
     // count of enters and leaves missed the leave of an element removed under the files (a card that
     // scrolled out of the filmstrip, a picture that appeared) and kept the overlay up.
     const leave = (e: DragEvent): void => {
-      if (isFiles(e) && !e.relatedTarget) setDragging(false)
+      if (!isFiles(e) || e.relatedTarget) return
+      setDragging(false)
+      if (hinted) hideHint()
     }
     const drop = (e: DragEvent): void => {
       if (!isFiles(e)) return
       e.preventDefault()
       setDragging(false)
-      // files dropped on the filmstrip went in where they were dropped (Filmstrip.tsx)
+      // files dropped on the filmstrip or a show's card went in there (Filmstrip.tsx, Home.tsx)
       if (handledDrops.has(e)) return
       const paths = [...(e.dataTransfer?.files ?? [])].map((f) => window.api.pathForFile(f)).filter(Boolean)
       if (paths.length) void handleDroppedPaths(paths)
     }
+    for (const type of ['dragenter', 'dragover', 'drop']) window.addEventListener(type, refuse as EventListener, true)
     window.addEventListener('dragenter', enter)
     window.addEventListener('dragleave', leave)
     window.addEventListener('dragover', over)
     window.addEventListener('drop', drop)
     return () => {
+      clearTimeout(hintTimer)
+      for (const type of ['dragenter', 'dragover', 'drop']) window.removeEventListener(type, refuse as EventListener, true)
       window.removeEventListener('dragenter', enter)
       window.removeEventListener('dragleave', leave)
       window.removeEventListener('dragover', over)
@@ -224,7 +264,16 @@ export function App() {
       <DiagnosticsHost />
       <CleanupHost />
       <ArchiveHost />
+      <DuplicateNotice />
       {dragging && <div className="window-drop">{t('dropHere')}</div>}
+      {refused && (
+        <div className="drop-refused" aria-hidden data-testid="drop-refused">
+          {t('dropRefused')}
+        </div>
+      )}
+      <div className="sr-only" role="status" aria-live="polite">
+        {refused ? t('dropRefused') : ''}
+      </div>
     </div>
   )
 }

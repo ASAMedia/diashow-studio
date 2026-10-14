@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { seekDrawn } from './harness'
 import { appArgs, EXPORT_SIZE, SOFTWARE_GL } from './launch'
 
 const root = resolve(__dirname, '..')
@@ -93,8 +94,8 @@ test('import, preview every theme, export', async () => {
       return out
     })
     for (const [i, time] of times.slice(0, 8).entries()) {
-      await page.evaluate((tt) => (window as any).__diashow.player.current.seek(tt), time)
-      await page.waitForTimeout(450)
+      // drawn complete, or 450 ms at most as before (the pictures are only for a look)
+      await seekDrawn(page, time, { atMost: 450 })
       await frame.screenshot({ path: join(shots, `${theme}-${String(i).padStart(2, '0')}.png`) })
     }
   }
@@ -138,10 +139,9 @@ test('import, preview every theme, export', async () => {
   const cards = page.locator('.cards .card:not(.add)')
   await cards.nth(from).scrollIntoViewIfNeeded()
   await cards.nth(from).dragTo(cards.nth(to))
-  await page.waitForTimeout(300)
-  let after = await slideIds()
   const wanted = [...before[from], ...before[to]]
-  expect(after.some((s) => wanted.every((id) => s.includes(id)))).toBe(true)
+  let after: string[][] = []
+  await expect.poll(async () => (after = await slideIds()).some((s) => wanted.every((id) => s.includes(id)))).toBe(true)
   before = after
   const pairs2: [number, number][] = []
   for (let a = 0; a < before.length; a++) for (let b = a + 1; b < before.length; b++) if (before[a].length + before[b].length <= 6) pairs2.push([a, b])
@@ -151,19 +151,15 @@ test('import, preview every theme, export', async () => {
   await cards.nth(y).click({ modifiers: ['Control'] })
   await cards.nth(y).click({ button: 'right' })
   await page.locator('.menu').getByText(/Zu einer Folie zusammenfassen|Combine into one slide/).click()
-  await page.waitForTimeout(300)
-  after = await slideIds()
   const wanted2 = [...before[x], ...before[y]]
-  expect(after.some((s) => wanted2.every((id) => s.includes(id)))).toBe(true)
+  await expect.poll(async () => (after = await slideIds()).some((s) => wanted2.every((id) => s.includes(id)))).toBe(true)
 
   // Ctrl+Z restores the slides from before the merge, Ctrl+Y does it again
   await page.locator('.stage').click({ position: { x: 5, y: 5 } })
   await page.keyboard.press('Control+z')
-  await page.waitForTimeout(300)
-  expect(await slideIds()).toEqual(before)
+  await expect.poll(slideIds).toEqual(before)
   await page.keyboard.press('Control+y')
-  await page.waitForTimeout(300)
-  expect(await slideIds()).toEqual(after)
+  await expect.poll(slideIds).toEqual(after)
 
   // presentation: a second window plays the show, Esc in the editor ends it
   await page.evaluate(() => (window as any).__diashow.store.getState().set({ presenting: true }))
@@ -172,13 +168,11 @@ test('import, preview every theme, export', async () => {
   const pw = app.windows().find((w) => w.url().includes('#present'))!
   // polled by time: the default (animation frames) stalls while the window is still hidden
   await pw.waitForFunction(() => !!document.querySelector('canvas'), null, { timeout: 60_000, polling: 250 })
-  await page.waitForTimeout(2500)
-  const presenterTime = await page.locator('.presenter .val').innerText()
-  console.log('presenter shows', presenterTime)
-  expect(presenterTime).not.toBe('0:00 / 0:00')
+  // the presenter's readout has the show's time ("0:02 / 0:24"), not "0:00 / 0:00"
+  await expect(page.locator('.presenter .val')).toHaveText(/^\d+:\d\d \/ (?!0:00$)\d+:\d\d$/, { timeout: 30_000 })
+  console.log('presenter shows', await page.locator('.presenter .val').innerText())
   await page.keyboard.press('Escape')
-  await page.waitForTimeout(800)
-  expect(app.windows().length).toBe(1)
+  await expect.poll(() => app.windows().length).toBe(1)
 
   // pack the project into a folder and open the packed file again
   const packDir = join(dataDir, 'pack')
@@ -196,10 +190,9 @@ test('import, preview every theme, export', async () => {
   // day titles from the project menu
   await page.locator('.titlebar button[title="Weitere Aktionen"], .titlebar button[title="More actions"]').click()
   await page.getByText(/Tagestitel aus Aufnahmedatum|Day titles from capture date/).click()
-  await page.waitForTimeout(300)
-  const autoTitles = await page.evaluate(() => (window as any).__diashow.store.getState().project.entries.filter((e: any) => e.auto === 'day').length)
-  console.log('day titles', autoTitles)
-  expect(autoTitles).toBeGreaterThan(0)
+  const autoTitles = (): Promise<number> => page.evaluate(() => (window as any).__diashow.store.getState().project.entries.filter((e: any) => e.auto === 'day').length)
+  await expect.poll(autoTitles).toBeGreaterThan(0)
+  console.log('day titles', await autoTitles())
 
   const out = join(dataDir, 'export.mp4')
   await page.evaluate(

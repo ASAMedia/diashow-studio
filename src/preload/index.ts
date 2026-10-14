@@ -28,6 +28,7 @@ const api: DiashowApi = {
   loadProject: (id) => ipcRenderer.invoke('project:load', id),
   saveProject: (project, history) => ipcRenderer.invoke('project:save', project, history),
   deleteProject: (id) => ipcRenderer.invoke('project:delete', id),
+  duplicateProject: (id, word) => ipcRenderer.invoke('project:duplicate', id, word),
   trashList: () => ipcRenderer.invoke('trash:list'),
   trashRestore: (id) => ipcRenderer.invoke('trash:restore', id),
   trashPurge: (key) => ipcRenderer.invoke('trash:purge', key),

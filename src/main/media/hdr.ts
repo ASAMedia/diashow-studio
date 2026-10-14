@@ -3,7 +3,7 @@
 // against the CPU chain on a tiny generated HLG clip. Proxies fall back to the CPU chain per file.
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { readFile, rm } from 'node:fs/promises'
+import { readdir, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Ffmpeg } from '../ffmpeg'
@@ -54,7 +54,25 @@ export function detectGpuTonemap(ff: Ffmpeg): Promise<GpuTonemap | null> {
   return found
 }
 
+/** The check's own clips left in the temp folder when an app quit during it (an hour old or more). */
+export async function sweepOldChecks(dir = tmpdir(), now = Date.now()): Promise<number> {
+  const names = await readdir(dir).catch(() => [] as string[])
+  let removed = 0
+  for (const name of names) {
+    if (!/^diashow-hdr-\d+-[0-9a-f]{8}(-a|-h264)?\.(mp4|rgb)$/.test(name)) continue
+    const file = join(dir, name)
+    const st = await stat(file).catch(() => null)
+    if (!st?.isFile() || now - st.mtimeMs < 3_600_000) continue
+    await rm(file, { force: true }).then(
+      () => removed++,
+      () => {}
+    )
+  }
+  return removed
+}
+
 async function detect(ff: Ffmpeg): Promise<GpuTonemap | null> {
+  void sweepOldChecks()
   const signal = AbortSignal.timeout(60_000)
   let device: number | null
   try {

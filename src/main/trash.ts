@@ -16,6 +16,10 @@
 // Restoring puts everything back where it was, never over anything that is there now: a show whose id
 // is taken is refused; an upload whose place is taken comes back under a free name, the show and its
 // older versions follow it, and its undo history (which no longer fits) goes.
+//
+// Uploads a show shares with another one (a duplicate) are not moved in (cleanup.ts decides what goes
+// along): media() tells the clean-up what the shows in the trash still use, so nothing deletes them
+// meanwhile, and the last show using them takes them along when it is deleted for good.
 import type { Dirent } from 'node:fs'
 import { lstat, mkdir, readdir, readFile, rm, rmdir, stat, utimes, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path'
@@ -95,6 +99,14 @@ export interface TrashRestored {
   jobs: string[]
 }
 
+/** A photo or video of a show in the trash: its media id and where its file was (the show refers to it there). */
+export interface TrashedMedia {
+  id: string
+  path: string
+  /** A Live Photo's video. */
+  live?: string
+}
+
 /** A refusal the user is told about in plain words (TrashRefusal). */
 export class TrashRefusedError extends Error {
   constructor(
@@ -123,6 +135,11 @@ export interface Trash {
   expire(): Promise<string[]>
   /** After a crash: takes back a half-done move, finishes a restore or a purge. */
   recover(): Promise<void>
+  /**
+   * The photos and videos of each show in the trash (by id). Uploads and pasted pictures it shared with
+   * another show (a duplicate) stayed in place when it moved in: it still uses them (cleanup.ts).
+   */
+  media(): Promise<Map<string, TrashedMedia[]>>
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -239,6 +256,23 @@ function followFiles(p: unknown, renamed: ReadonlyMap<string, string>): boolean 
     if (isObj(m.live)) m.live.source = to(m.live.source)
   }
   return changed
+}
+
+/** The photos and videos of a project file's text (raw JSON: only what is well-formed counts). */
+function mediaOf(text: string): TrashedMedia[] {
+  let p: unknown
+  try {
+    p = JSON.parse(cleanProjectText(text))
+  } catch {
+    return []
+  }
+  const out: TrashedMedia[] = []
+  for (const m of isObj(p) && Array.isArray(p.media) ? p.media : []) {
+    if (!isObj(m) || typeof m.id !== 'string' || typeof m.path !== 'string') continue
+    const live = isObj(m.live) && typeof m.live.source === 'string' ? m.live.source : undefined
+    out.push(live ? { id: m.id, path: m.path, live } : { id: m.id, path: m.path })
+  }
+  return out
 }
 
 export function createTrash(opts: TrashOptions): Trash {
@@ -641,6 +675,21 @@ export function createTrash(opts: TrashOptions): Trash {
             log(`trash: ${m?.state} of ${e.name} not finished (${(err as NodeJS.ErrnoException).code ?? (err as Error).message})`)
           }
         }
+      })
+    },
+
+    media() {
+      return serial(async () => {
+        const out = new Map<string, TrashedMedia[]>()
+        for (const e of await children(dir)) {
+          if (!e.isDirectory() || !ID.test(e.name)) continue
+          // an entry being deleted for good uses nothing any more; one that can't be read is never restored
+          const m = await readManifest(e.name)
+          if (!m || m.state === 'purging') continue
+          const text = await readFile(inTrash(m.id, { kind: 'show' }), 'utf8').catch(() => null)
+          if (text !== null) out.set(m.id, mediaOf(text))
+        }
+        return out
       })
     }
   }

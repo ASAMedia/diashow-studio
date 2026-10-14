@@ -1,15 +1,16 @@
 // Checks a release before its tag is pushed, the way GitHub will: run it on the commit to be tagged.
-//   npm run release-check            everything (about 15 minutes)
+//   npm run release-check            everything (about 5 minutes)
 //   npm run release-check -- --quick without the end-to-end tests
 //
 // 1. The working tree is clean, package.json and package-lock.json have the same version, CHANGELOG.md
 //    has its section (with the downloads and THIRD_PARTY_NOTICES), and the tag isn't taken yet.
 // 2. Type check and unit tests with freshly generated test media, as on a new runner (test-media/ is
-//    set aside and put back if the generation fails).
-// 3. The build and the end-to-end tests of .github/workflows/ci.yml with its environment (English UI,
-//    software WebGL), read from the workflow so the two never drift apart.
+//    set aside and put back if the generation fails). The build runs meanwhile: it only writes out/.
+// 3. The end-to-end tests of .github/workflows/ci.yml with its environment (English UI, software
+//    WebGL), read from the workflow so the two never drift apart; all of them (not one runner's part,
+//    DIASHOW_E2E_SHARD), in parallel with as many workers as playwright.config.ts gives this machine.
 // At the end it prints what to push, in which order.
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, renameSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -17,7 +18,10 @@ import { releaseNotes } from './release-notes.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 
-/** The spec list and the DIASHOW_* environment of the end-to-end step in ci.yml; null when there is none. */
+/**
+ * The spec list and the DIASHOW_* environment of the end-to-end step in ci.yml; null when there is none.
+ * Not DIASHOW_E2E_* (DIASHOW_E2E_SHARD, DIASHOW_E2E_WORKERS): how the runners split the work is theirs.
+ */
 export function ciE2e(yml) {
   const lines = yml.replace(/\r\n/g, '\n').split('\n')
   const at = lines.findIndex((l) => /^\s*-\s*run:\s*npx playwright test\s/.test(l))
@@ -29,8 +33,8 @@ export function ciE2e(yml) {
   for (let i = at + 1; i < lines.length; i++) {
     const l = lines[i]
     if (l.trim() && l.search(/\S/) <= indent) break
-    const m = /^\s*(DIASHOW_[A-Z_]+):\s*'?([^'#\s]*)'?/.exec(l)
-    if (m) env[m[1]] = m[2]
+    const m = /^\s*(DIASHOW_[A-Z0-9_]+):\s*'?([^'#\s]*)'?/.exec(l)
+    if (m && !m[1].startsWith('DIASHOW_E2E_')) env[m[1]] = m[2]
   }
   return { specs, env }
 }
@@ -44,14 +48,26 @@ function run(cmd, args, env = {}) {
   return r.status === 0
 }
 
+/** Starts a command in the background, its output kept for later (so it doesn't mix with the step running meanwhile). */
+function start(cmd, args) {
+  const child = spawn(cmd, args, { cwd: root, shell: process.platform === 'win32', env: process.env })
+  let output = ''
+  child.stdout.on('data', (d) => (output += d))
+  child.stderr.on('data', (d) => (output += d))
+  return new Promise((resolve) => {
+    child.on('error', (err) => resolve({ ok: false, output: `${output}${err.message}\n` }))
+    child.on('close', (code) => resolve({ ok: code === 0, output }))
+  })
+}
+
 const results = []
 
-/** Runs one check; `fn` returns what is wrong, or nothing. */
-function step(name, fn) {
+/** Runs one check; `fn` returns (or resolves to) what is wrong, or nothing. */
+async function step(name, fn) {
   const t0 = Date.now()
   let problem
   try {
-    problem = fn()
+    problem = await fn()
   } catch (err) {
     problem = err instanceof Error ? err.message : String(err)
   }
@@ -60,13 +76,13 @@ function step(name, fn) {
   console.log(`\n${problem ? '✗' : '✓'} ${name}${problem ? `: ${problem}` : ''} (${s} s)\n`)
 }
 
-function main() {
+async function main() {
   const quick = process.argv.includes('--quick')
   const version = JSON.parse(read('package.json')).version
   const tag = `v${version}`
   let tagged = false
 
-  step(`Version ${version}, changelog and tag`, () => {
+  await step(`Version ${version}, changelog and tag`, () => {
     const dirty = git('status', '--porcelain').stdout.trim()
     if (dirty) return `the working tree has changes:\n${dirty}`
     const lock = JSON.parse(read('package-lock.json'))
@@ -83,7 +99,11 @@ function main() {
     return undefined
   })
 
-  step('Type check and unit tests with fresh test media', () => {
+  // the build for the end-to-end tests runs during the type check and the unit tests: it only writes
+  // out/, which they don't read
+  const build = quick ? null : start('npx', ['electron-vite', 'build'])
+
+  await step('Type check and unit tests with fresh test media', () => {
     const media = join(root, 'test-media')
     const aside = join(root, 'test-media.before-release-check')
     if (existsSync(aside)) return `${aside} is left over from an earlier run; put it back or delete it`
@@ -97,11 +117,16 @@ function main() {
     return ok ? undefined : 'failed (see above)'
   })
 
-  if (!quick) {
-    step('Build and the end-to-end tests of the CI', () => {
+  if (build) {
+    await step('Build and the end-to-end tests of the CI', async () => {
       const ci = ciE2e(read('.github/workflows/ci.yml'))
+      const built = await build
+      if (!built.ok) {
+        console.log(built.output)
+        return 'the build failed'
+      }
       if (!ci) return 'no "npx playwright test" step found in .github/workflows/ci.yml'
-      if (!run('npx', ['electron-vite', 'build'])) return 'the build failed'
+      // every spec, with this machine's workers (playwright.config.ts)
       console.log(`CI environment: ${JSON.stringify(ci.env)}, ${ci.specs.length} specs`)
       return run('npx', ['playwright', 'test', ...ci.specs], ci.env) ? undefined : 'failed (see above)'
     })
@@ -120,4 +145,4 @@ function main() {
   console.log('Push one version tag at a time and wait for its release, or "Latest" may land on an older one.')
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main()
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main()

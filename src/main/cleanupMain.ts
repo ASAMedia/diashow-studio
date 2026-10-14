@@ -5,8 +5,8 @@
 import { ipcMain } from 'electron'
 import { startOfDay, validDeleteAt, type CleanupChoice, type UploadChoice } from '@shared/cleanup'
 import type { TrashRestoreResult } from '@shared/trash'
-import { inventoryOf, runCleanup, scanProject, trashProjectData, type CleanupDeps } from './cleanup'
-import { TrashRefusedError, type Trash } from './trash'
+import { inventoryOf, releaseShared, runCleanup, scanProject, trashProjectData, type CleanupDeps } from './cleanup'
+import { TrashRefusedError, type Trash, type TrashedMedia } from './trash'
 
 /** How often the trash looks for shows whose days are over. */
 const EXPIRE_EVERY_MS = 60 * 60_000
@@ -64,9 +64,16 @@ export function registerCleanup(d: CleanupDeps & { trash: Trash }, opts: Cleanup
   })
 
   // ---- the trash
+  /** Deletes shows for good; then the uploads they shared with another show go once no show uses them (releaseShared). */
+  const forGood = async <T>(task: () => Promise<T>): Promise<T> => {
+    const before = await trash.media().catch(() => new Map<string, TrashedMedia[]>())
+    const result = await task()
+    await releaseShared(d, before).catch((err: Error) => opts.log?.(`shared uploads not released: ${err.message}`))
+    return result
+  }
   // after a crash a half-done move goes back first, then what is due goes
   const expire = (): Promise<void> =>
-    trash.expire().then(
+    forGood(() => trash.expire()).then(
       (keys) => {
         if (keys.length) opts.broadcast?.('trash:changed', null)
       },
@@ -102,11 +109,11 @@ export function registerCleanup(d: CleanupDeps & { trash: Trash }, opts: Cleanup
   ipcMain.handle('trash:purge', async (_e, key: unknown) => {
     if (typeof key !== 'string') throw new Error('invalid trash entry')
     await ready
-    return trash.purge(key)
+    return forGood(() => trash.purge(key))
   })
   ipcMain.handle('trash:empty', async () => {
     await ready
-    return trash.empty()
+    return forGood(() => trash.empty())
   })
   return { ready }
 }

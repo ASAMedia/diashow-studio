@@ -15,7 +15,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import sharp from 'sharp'
-import { ensureTestMedia, launch, mediaDir, menu, project, projectFile, readProject, removeDir, root, waitProcessed, waitSaved, type Session } from './harness'
+import { ensureTestMedia, launch, mediaDir, menu, project, projectFile, readProject, removeDir, root, seekDrawn, waitProcessed, waitSaved, type Session } from './harness'
 import { EXPORT_SIZE, SOFTWARE_GL } from './launch'
 
 const ffmpeg = join(root, 'vendor/ffmpeg/bin/ffmpeg.exe')
@@ -109,8 +109,7 @@ async function previewShots(page: Page): Promise<Buffer[]> {
   const out: Buffer[] = []
   const t = await slideTimes(page)
   for (const at of [t.photo, t.video + t.videoIn + 0.4, t.video + t.videoIn + 2.4]) {
-    await state(page, `d.player.current.seek(${at})`)
-    await page.waitForTimeout(at === t.photo ? 600 : 1300)
+    await seekDrawn(page, at)
     out.push(await frame.screenshot())
   }
   return out
@@ -125,7 +124,7 @@ async function exportFrames(page: Page, out: string): Promise<{ photo: Buffer; v
     return d.queueExport(d.store.getState().project, { outPath: file, ...size, fps: 25, codec: 'h264', quality: 'standard', hardware: true, locale: 'de-DE' }, 'Aufräumen')
   }, { file: out, size: EXPORT_SIZE })
   await expect
-    .poll(() => state<string[]>(page, `return s.exportJobs.map((j) => j.state)`), { timeout: 600_000, intervals: [1000] })
+    .poll(() => state<string[]>(page, `return s.exportJobs.map((j) => j.state)`), { timeout: 600_000, intervals: [250] })
     .toEqual([...Array(before).fill('done'), 'done'])
   const grab = (at: number): Buffer => execFileSync(ffmpeg, ['-v', 'error', '-ss', at.toFixed(3), '-i', out, '-frames:v', '1', '-f', 'image2pipe', '-c:v', 'png', 'pipe:1'])
   return { photo: grab(t.photo), video: [0.4, 2.4].map((x) => grab(t.video + t.videoIn + x)) }

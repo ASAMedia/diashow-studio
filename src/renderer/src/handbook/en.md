@@ -22,6 +22,22 @@ Projects are saved automatically, in `Documents\Diashow Studio`. New photos are 
 
 ![The home screen with your slideshows](home.jpg)
 
+### The home screen
+
+Each slideshow has a card on the home screen; a click opens it. Point at the card to see its buttons: **Duplicate**, **Archive as ZIP…**, **Clean up after the project…** and **Delete slideshow**.
+
+- **Adding photos to a slideshow:** drag photos, videos or folders from Explorer onto its card. The card shows **Add to this slideshow**. When you let go, the slideshow opens, and the photos are read as with **Add photos and videos** and sorted into their day by capture time, with a new day title if the slideshow has day titles. What is in it already is skipped; [[Ctrl+Z]] takes it all back in one step.
+- Dropped on **Drop photos, videos or folders here** or anywhere else on the home screen, they make a new slideshow.
+- While a dialog is open (e.g. Settings or the trash), the window takes no files, and a hint says **Close the dialog first**. Only the assistant takes photos then too.
+
+### Duplicating slideshows
+
+**Duplicate** (on the card or in the **⋯** menu) makes an independent copy, e.g. a version for the parents with more pixelated faces next to the version for the class. The copy is called “Class trip (Copy)”, “Class trip (Copy 2)” and so on, and opens in the editor right away; what you change there doesn't change the original.
+
+- It holds everything the slideshow has: slides, settings, music, edits, captions, pixelation, the people list with the face data, and the deletion date (they are the same photos of the class, after all). The title in the video stays “Class trip”.
+- Older versions, undo history and export jobs belong to the original; the copy starts without them.
+- Photos the class uploaded and pasted pictures stay where they are and belong to both slideshows. [Cleaning up](#cleanup) and deleting leave them as long as the other slideshow still uses them, also from the trash; they are deleted for good with the last of the two.
+
 ## Editing {#edit}
 
 The editor has three areas: the **preview** in the middle, the tabs **Themes**, **Music**, **Duration** and **Slide** on the right, and the **filmstrip** with every slide at the bottom.
@@ -57,7 +73,7 @@ The inserted slides are selected afterwards; [[Ctrl+Z]] takes back the whole ins
 
 ### Photos that are already in the slideshow
 
-What is already in the slideshow doesn't go in again: when adding photos or folders, dropping them on the window or the filmstrip, with [[Ctrl+V]], **Insert…**, in the assistant and with uploads over the Wi-Fi. "Already there" means:
+What is already in the slideshow doesn't go in again: when adding photos or folders, dropping them on the window, the filmstrip or its card on the home screen, with [[Ctrl+V]], **Insert…**, in the assistant and with uploads over the Wi-Fi. "Already there" means:
 
 - the same file, also when its slide is left out;
 - a copy under another name or in another folder that is identical byte for byte;

@@ -130,7 +130,7 @@ test('theme music: plays by default, follows the theme, gives way to own music, 
     expect(job.themeSong).toMatchObject({ song: 'kenburns', themes: ['kenburns'] })
     expect(existsSync(job.themeSong.path)).toBe(true)
     await expect
-      .poll(() => page.evaluate((id) => (window as any).__diashow.store.getState().exportJobs.find((j: any) => j.id === id)?.state, jobId), { timeout: 600_000, intervals: [1000] })
+      .poll(() => page.evaluate((id) => (window as any).__diashow.store.getState().exportJobs.find((j: any) => j.id === id)?.state, jobId), { timeout: 600_000, intervals: [250] })
       .toBe('done')
     const probe = JSON.parse(execFileSync(ffprobe, ['-v', 'error', '-show_entries', 'stream=codec_type:format=duration', '-of', 'json', out]).toString())
     expect(probe.streams.map((s: any) => s.codec_type).sort()).toEqual(['audio', 'video'])

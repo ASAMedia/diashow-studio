@@ -77,6 +77,11 @@ export interface DiashowApi {
    * export of it is still to run.
    */
   deleteProject(id: string): Promise<TrashMoveResult>
+  /**
+   * Duplicates a saved show (src/shared/duplicate.ts): an independent copy under a new id, named
+   * "<name> (<word>)" or "(<word> 2)" …, without older versions, undo history or export jobs.
+   */
+  duplicateProject(id: string, word: string): Promise<ProjectSummary>
 
   // The trash: deleted shows for TRASH_DAYS days (src/shared/trash.ts)
   trashList(): Promise<TrashContents>

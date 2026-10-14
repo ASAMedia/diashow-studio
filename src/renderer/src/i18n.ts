@@ -948,6 +948,13 @@ const S = {
   kbdCtrlWheel: ['Strg+Mausrad', 'Ctrl+mouse wheel'],
   scStripZoom: ['Filmstreifen vergrößern / verkleinern', 'Zoom the filmstrip in / out'],
   cleanupPasted: ['{n} Bild(er), mit Strg+V eingefügt (Ordner „Eingefügt“)', '{n} picture(s) pasted with Ctrl+V (folder “Pasted”)'],
+  // files dropped onto a show's card, refused while a dialog is open; duplicating (Home.tsx, App.tsx, Duplicate.tsx)
+  dropOntoShow: ['Zu dieser Diashow hinzufügen', 'Add to this slideshow'],
+  dropRefused: ['Erst den Dialog schließen', 'Close the dialog first'],
+  duplicate: ['Duplizieren', 'Duplicate'],
+  copyWord: ['Kopie', 'Copy'],
+  duplicateDone: ['Das ist die Kopie „{name}“.', 'This is the copy “{name}”.'],
+  duplicateHint: ['Was du hier änderst, ändert das Original nicht.', 'What you change here doesn’t change the original.'],
 } satisfies Record<string, [string, string]>
 
 export type StringKey = keyof typeof S

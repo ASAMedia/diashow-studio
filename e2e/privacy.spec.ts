@@ -13,6 +13,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import sharp from 'sharp'
+import { seekDrawn } from './harness'
 import { EXPORT_SIZE, launchOptions, SOFTWARE_GL } from './launch'
 
 const root = resolve(__dirname, '..')
@@ -95,13 +96,13 @@ async function waitAnalysed(page: Page): Promise<void> {
   await page.waitForFunction(() => {
     const p = (window as any).__diashow.store.getState().project
     return p && p.media.length > 0 && p.media.every((m: any) => m.status === 'error' || (m.status === 'ready' && (m.kind === 'video' ? m.videoFaces !== undefined : m.faces !== undefined)))
-  }, null, { timeout: 300_000, polling: 500 })
+  }, null, { timeout: 300_000, polling: 250 })
 }
 
 /** Seeks the editor's preview to a slide-local time and lets the video frame arrive. */
 async function seekTo(page: Page, kind: 'photos' | 'video', local: number): Promise<void> {
-  await state(page, `const sl = d.player.current.tl.slides.find((x) => x.kind === ${JSON.stringify(kind)}); d.player.current.seek(sl.start + ${local})`)
-  await page.waitForTimeout(kind === 'video' ? 1200 : 500)
+  const start = await state<number>(page, `return d.player.current.tl.slides.find((x) => x.kind === ${JSON.stringify(kind)}).start`)
+  await seekDrawn(page, start + local)
 }
 
 test('marked person and followed faces are pixelated in preview and export', async () => {
@@ -156,7 +157,8 @@ test('marked person and followed faces are pixelated in preview and export', asy
     await page.screenshot({ path: join(shots, 'editor-photo.png') })
     await page.locator('.privacy-edit .btn.primary').click()
     await expect(page.locator('.privacy-edit')).toHaveCount(0)
-    await page.waitForTimeout(500)
+    // the same moment drawn again, with the marked person
+    await seekTo(page, 'photos', 1)
     const after = await frame.screenshot()
     writeFileSync(join(shots, 'photo-before.png'), before)
     writeFileSync(join(shots, 'photo-after.png'), after)
@@ -216,7 +218,8 @@ test('marked person and followed faces are pixelated in preview and export', asy
     // the editor shows the followed face on its still (middle of the clip, 2 s)
     await page.locator('.inspector button', { hasText: /Gesichter verpixeln|Pixelate faces/ }).first().click()
     await expect(page.locator('.privacy-edit .privacy-face.on.track')).toHaveCount(1, { timeout: 20_000 })
-    await expect(page.locator('.privacy-edit img')).toBeVisible()
+    // (the still is cut from the clip first: slow while other tests run)
+    await expect(page.locator('.privacy-edit img')).toBeVisible({ timeout: 20_000 })
     await page.waitForTimeout(500)
     await page.screenshot({ path: join(shots, 'editor-video.png') })
     await page.locator('.privacy-edit .btn.primary').click()
@@ -232,7 +235,7 @@ test('marked person and followed faces are pixelated in preview and export', asy
     await page.waitForFunction(() => {
       const jobs = (window as any).__diashow.store.getState().exportJobs
       return jobs.length > 0 && jobs.every((j: any) => j.state === 'done' || j.state === 'error')
-    }, null, { timeout: 600_000, polling: 1000 })
+    }, null, { timeout: 600_000, polling: 250 })
     expect(await state<string[]>(page, `return s.exportJobs.map((j) => j.state)`)).toEqual(['done'])
     const grab = (t: number): Buffer => execFileSync(ffmpeg, ['-v', 'error', '-ss', t.toFixed(3), '-i', out, '-frames:v', '1', '-f', 'image2pipe', '-c:v', 'png', 'pipe:1'])
     const exPhoto = grab(times.photo)

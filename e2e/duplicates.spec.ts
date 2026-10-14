@@ -58,7 +58,7 @@ async function upload(url: string, file: string, name: string, uploader: string)
   return res.status
 }
 
-test('duplicates: a folder twice, a renamed copy, drop, Ctrl+V, two pupils uploading the same photo', async () => {
+test('duplicates: a folder twice, a renamed copy, drop, Ctrl+V, two pupils uploading the same photo', { lock: 'clipboard' }, async () => {
   test.setTimeout(8 * 60 * 1000)
   ensureTestMedia()
   const dataDir = mkdtempSync(join(tmpdir(), 'diashow-dup-'))

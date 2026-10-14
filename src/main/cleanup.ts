@@ -7,7 +7,10 @@
 // What a project keeps besides its .dshow file:
 // - face data in the project (faces, descriptors, video faces, the people list with names), in its
 //   older versions and in the media cache (meta.json of each item);
-// - the pupils' uploads in <Documents>/Diashow Studio/Uploads/<project name>/<pupil>/;
+// - the pupils' uploads in <Documents>/Diashow Studio/Uploads/<project name>/<pupil>/. An upload that
+//   two shows use (a duplicate and its original) belongs to both: neither the clean-up nor the trash
+//   of one takes it while the other uses it, also from the trash; the last one takes it along
+//   (releaseShared);
 // - the media cache, one folder per photo, video or song: thumbnails, display images, proxies, 4K
 //   versions, stabilised clips, extracted sound, frame strips;
 // - older versions in .backups/<id>/ (also damaged files a repair kept);
@@ -16,8 +19,8 @@
 // - the undo history in <userData>/history/<id>.json.gz (history.ts): earlier states of the show. It
 //   goes when chosen, with face data or uploads, and whenever the clean-up rewrote the show.
 import type { Dirent } from 'node:fs'
-import { lstat, readdir } from 'node:fs/promises'
-import { join, relative, resolve, sep } from 'node:path'
+import { lstat, readdir, stat } from 'node:fs/promises'
+import { dirname, join, relative, resolve, sep } from 'node:path'
 import type { ExportJobState } from '@shared/exportQueue'
 import type { MediaItem, Project } from '@shared/types'
 import {
@@ -34,10 +37,11 @@ import {
   type CleanupResult
 } from '@shared/cleanup'
 import type { TrashEntry, TrashMoveResult } from '@shared/trash'
+import { mediaId } from './media/scan'
 import { BACKUPS, type ProjectStore } from './projects'
 import { isInsideRoot, pruneEmptyDirs, removeInside, sizeOf } from './safeDelete'
 import { safeName } from './share/server'
-import { TrashRefusedError, type Trash } from './trash'
+import { TrashRefusedError, type Trash, type TrashedMedia } from './trash'
 
 export interface CleanupDeps {
   projects: ProjectStore
@@ -120,7 +124,7 @@ export interface CleanupScan {
   exports: JobFolder[]
   /** The stored undo history. */
   history: { files: number; bytes: number }
-  /** Never deleted: originals any project uses (uploads only another project's), exported videos. */
+  /** Never deleted: originals any project uses (uploads only another project's, also one in the trash), exported videos. */
   keep: string[]
 }
 
@@ -203,11 +207,19 @@ function showPaths(project: Project): Set<string> {
   return out
 }
 
-/** Everything the app keeps for a project, with sizes. Throws when the project can't be read. */
+/** The files of photos and videos: each one's file and a Live Photo's video. */
+const filesOf = (media: readonly TrashedMedia[]): string[] => media.flatMap((m) => (m.live ? [m.path, m.live] : [m.path]))
+
+/**
+ * Everything the app keeps for a project, with sizes. Throws when the project can't be read. What
+ * another show uses (a duplicate shares the uploads of its original) belongs to both and stays,
+ * also while that show lies in the trash: it may come back as it was.
+ */
 export async function scanProject(d: CleanupDeps, id: string): Promise<CleanupScan> {
   const project = await d.projects.peek(id)
   const others = await d.projects.references(id)
-  const otherPaths = new Set(others.paths.map(low))
+  const trashed = d.trash ? [...(await d.trash.media().catch(() => new Map<string, TrashedMedia[]>()))].flatMap(([tid, media]) => (tid === id ? [] : filesOf(media))) : []
+  const otherPaths = new Set([...others.paths, ...trashed].map(low))
 
   // uploads: only files inside a pupil's folder (an exported video saved next to them is the user's)
   const inShow = showPaths(project)
@@ -270,6 +282,7 @@ export async function scanProject(d: CleanupDeps, id: string): Promise<CleanupSc
   const own = project.media.flatMap((m) => [m.path, m.live?.source]).concat(project.music.map((t) => t.path))
   const keep = [
     ...others.paths,
+    ...trashed,
     ...own.filter((p): p is string => typeof p === 'string' && !received(d, p)),
     ...jobs.map((j) => j.outPath)
   ]
@@ -556,4 +569,38 @@ export async function trashProjectData(d: CleanupDeps, id: string): Promise<Tras
     await d.media.forgetFaces(scan.project.media.filter((m) => !gone.has(m.id)).map((m) => ({ id: m.id })))
   }
   return { entry, cache: result.removed.caches, failed: result.failed }
+}
+
+/**
+ * After shows left the trash for good (deleted, emptied, expired; `before`: what the trash held, its
+ * media()): uploads and pasted pictures they shared with another show stayed in place when they moved
+ * in. Each one that no show uses any more, open or in the trash, goes now: the last show that used it
+ * takes it along. Only the very file a show used counts (its media id still fits the file's size and
+ * time), and only inside the app's folders of received files. Returns how many files went.
+ */
+export async function releaseShared(d: CleanupDeps, before: ReadonlyMap<string, readonly TrashedMedia[]>): Promise<number> {
+  if (!d.trash || !before.size) return 0
+  const after = await d.trash.media()
+  const gone = [...before].flatMap(([id, media]) => (after.has(id) ? [] : media))
+  if (!gone.length) return 0
+  const used = new Set([...(await d.projects.references()).paths, ...[...after.values()].flatMap(filesOf)].map(low))
+  const free = (p: string): boolean => received(d, p) && !used.has(low(p))
+  const files: string[] = []
+  for (const m of gone) {
+    if (!free(m.path)) continue
+    const st = await stat(m.path).catch(() => null)
+    if (!st?.isFile() || mediaId(m.path, st.size, st.mtimeMs) !== m.id) continue
+    files.push(m.path, ...(m.live && free(m.live) ? [m.live] : []))
+  }
+  if (!files.length) return 0
+  const roots = [d.uploadsRoot, ...(d.pastedRoots ?? [])]
+  const done = await removeInside(files, roots)
+  // the pupils' folders and the show's upload folder, once empty
+  const dirs = files.flatMap((f) => {
+    const out: string[] = []
+    for (let dir = dirname(resolve(f)); roots.some((r) => isInsideRoot(dir, r)); dir = dirname(dir)) out.push(dir)
+    return out
+  })
+  await pruneEmptyDirs(dirs, roots)
+  return done.files
 }

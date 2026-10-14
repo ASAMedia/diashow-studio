@@ -12,7 +12,8 @@ import { endExiftool } from './media/exif'
 import { createMediaService, type MediaService } from './media/service'
 import { displayCount, isPresentationWindow, startPresentation, stopPresentation } from './presentation'
 import { importProjectFile, packProject } from './projectFile'
-import { createProjectStore, PROJECT_EXT } from './projects'
+import { createProjectStore, PROJECT_EXT, summarize } from './projects'
+import { duplicateShow } from './duplicate'
 import { createHistoryStore, type HistorySaveStatus } from './history'
 import { createTrash } from './trash'
 import { cancelActiveExport, startExport, type ExportJob } from './export/encoder'
@@ -324,12 +325,21 @@ export function registerIpc(): void {
   // after a crash, a show half moved into the trash is back first
   ipcMain.handle('project:list', () => trashReady.then(() => projects.list()))
   ipcMain.handle('project:load', (_e, id: string) => loadForEditor(id))
-  // the editor's saves carry its undo history; it is written a moment after the project file
-  ipcMain.handle('project:save', async (_e, project: Project, upload?: unknown) => {
-    const r: { status: HistorySaveStatus } = { status: 'ignored' }
-    await projects.save(project, (text) => (r.status = history.saved(project.id, text, upload)))
-    if (r.status === 'ok' && (upload as { flush?: unknown }).flush === true) await history.flush(project.id)
-    return r.status === 'resend' ? { resendHistory: true } : undefined
+  // "Duplizieren": a copy under a new id, without older versions, undo history or export jobs (duplicate.ts)
+  ipcMain.handle('project:duplicate', async (_e, id: unknown, word: unknown) => summarize(await duplicateShow(projects, String(id), word)))
+  // the editor's saves carry its undo history; it is written a moment after the project file, at once
+  // while the app quits (the quit waits for these saves: see before-quit)
+  const saving = new Set<Promise<unknown>>()
+  ipcMain.handle('project:save', (_e, project: Project, upload?: unknown) => {
+    const run = (async () => {
+      const r: { status: HistorySaveStatus } = { status: 'ignored' }
+      await projects.save(project, (text) => (r.status = history.saved(project.id, text, upload)))
+      if (r.status === 'ok' && (quitting || (upload as { flush?: unknown }).flush === true)) await history.flush(project.id)
+      return r.status === 'resend' ? { resendHistory: true } : undefined
+    })()
+    saving.add(run)
+    void run.finally(() => saving.delete(run)).catch(() => {})
+    return run
   })
   ipcMain.handle('project:backups', (_e, id: string) => projects.listBackups(id))
   // a restored version starts with an empty undo history
@@ -442,8 +452,13 @@ export function registerIpc(): void {
     const job = exportJob
     exportJob = null
     for (const ctrl of preparing) ctrl.abort()
-    // the undo history waiting to be written goes to disk too
-    const cleanup = Promise.allSettled([job ? job.cancel() : cancelActiveExport(), exportQueue.shutdown(), media?.dispose(), endExiftool(), history.flush()])
+    // the undo history waiting to be written goes to disk too, also of saves the windows send while
+    // they close: a project file written without its history would drop that history on the next start
+    const cleanup = (async () => {
+      await Promise.allSettled([job ? job.cancel() : cancelActiveExport(), exportQueue.shutdown(), media?.dispose(), endExiftool(), history.flush()])
+      while (saving.size) await Promise.allSettled([...saving])
+      await history.flush()
+    })()
     // Never let a stuck child process block quitting
     const timeout = new Promise((resolve) => setTimeout(resolve, 4000))
     void Promise.race([cleanup, timeout]).finally(() => app.quit())

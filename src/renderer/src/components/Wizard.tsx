@@ -234,8 +234,9 @@ export function Wizard() {
   }, [])
 
   if (!open || blocked) return null
+  // the one dialog that takes files dropped on the window (keys.ts): they go in as without it
   return (
-    <Modal bare onClose={closeWizard} className="wizard" testId="wizard" data={{ step }}>
+    <Modal bare onClose={closeWizard} className="wizard" testId="wizard" data={{ step, 'takes-files': 'true' }}>
       <WizardContent step={step} busy={busy} hasProject={hasProject} />
     </Modal>
   )

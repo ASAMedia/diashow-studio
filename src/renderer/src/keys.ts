@@ -25,3 +25,11 @@ export function keyForFocus(e: KeyboardEvent): boolean {
 export function modalOpen(): boolean {
   return !!document.querySelector('[role="dialog"][aria-modal="true"]')
 }
+
+/**
+ * A dialog is open that doesn't take files (every dialog goes through Modal.tsx; all but the assistant,
+ * which says so with data-takes-files): files dragged in from Explorer are refused until it closes.
+ */
+export function dialogRefusesFiles(): boolean {
+  return !!document.querySelector('[role="dialog"][aria-modal="true"]:not([data-takes-files])')
+}

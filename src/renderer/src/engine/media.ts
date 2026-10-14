@@ -138,6 +138,12 @@ export class VideoPool {
 
   constructor(private c: Compositor) {}
 
+  /** Every video has its frame (or can't have one): nothing more will arrive without a new seek. */
+  settled(): boolean {
+    for (const { el } of this.els.values()) if (!el.error && (el.seeking || el.readyState < 2)) return false
+    return true
+  }
+
   private get(path: string): { el: HTMLVideoElement; tex?: Tex; touched: boolean; idle: number; seeks: number } {
     let v = this.els.get(path)
     if (!v) {

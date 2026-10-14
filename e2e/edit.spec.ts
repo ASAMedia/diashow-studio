@@ -319,7 +319,7 @@ test('rotate, straighten and crop: edit view, undo, Ctrl+R, pixelation and expor
     await page.waitForFunction(() => {
       const jobs = (window as any).__diashow.store.getState().exportJobs
       return jobs.length > 0 && jobs.every((j: any) => j.state === 'done' || j.state === 'error')
-    }, null, { timeout: 600_000, polling: 1000 })
+    }, null, { timeout: 600_000, polling: 250 })
     expect(await state<string[]>(page, `return s.exportJobs.map((j) => j.state)`)).toEqual(['done'])
     const still = execFileSync(ffmpeg, ['-v', 'error', '-ss', (slide.start + slide.duration / 2).toFixed(3), '-i', out, '-frames:v', '1', '-f', 'image2pipe', '-c:v', 'png', 'pipe:1'])
     keep('export.png', still)
@@ -421,7 +421,7 @@ test('a turned and cropped video: preview and export, pixelation kept', async ()
     await page.waitForFunction(() => {
       const jobs = (window as any).__diashow.store.getState().exportJobs
       return jobs.length > 0 && jobs.every((j: any) => j.state === 'done' || j.state === 'error')
-    }, null, { timeout: 600_000, polling: 1000 })
+    }, null, { timeout: 600_000, polling: 250 })
     expect(await state<string[]>(page, `return s.exportJobs.map((j) => j.state)`)).toEqual(['done'])
     const still = execFileSync(ffmpeg, ['-v', 'error', '-ss', (slide.start + 1.2).toFixed(3), '-i', out, '-frames:v', '1', '-f', 'image2pipe', '-c:v', 'png', 'pipe:1'])
     keep('video-export.png', still)

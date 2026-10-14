@@ -22,6 +22,22 @@ Projekte werden automatisch gespeichert, in `Dokumente\Diashow Studio`. Neue Fot
 
 ![Die Startseite mit deinen Diashows](home.jpg)
 
+### Die Startseite
+
+Jede Diashow hat auf der Startseite eine Karte; ein Klick öffnet sie. Zeigst du auf die Karte, erscheinen ihre Knöpfe: **Duplizieren**, **Als ZIP archivieren…**, **Nach dem Projekt aufräumen…** und **Diashow löschen**.
+
+- **Fotos zu einer Diashow hinzufügen:** Fotos, Videos oder Ordner aus dem Explorer auf ihre Karte ziehen. Die Karte zeigt **Zu dieser Diashow hinzufügen**. Beim Loslassen öffnet sich die Diashow, und die Fotos werden wie mit **Fotos und Videos hinzufügen** eingelesen und nach Aufnahmezeit in ihren Tag einsortiert, mit einem neuen Tagestitel, wenn die Diashow Tagestitel hat. Was schon drin ist, wird übersprungen; [[Strg+Z]] nimmt alles in einem Schritt zurück.
+- Auf das Feld **Fotos, Videos oder Ordner hier ablegen** oder woanders auf der Startseite gezogen, entsteht eine neue Diashow.
+- Solange ein Dialog offen ist (z. B. die Einstellungen oder der Papierkorb), nimmt das Fenster keine Dateien an, und ein Hinweis sagt **Erst den Dialog schließen**. Nur der Assistent nimmt Fotos auch dann.
+
+### Diashows duplizieren
+
+**Duplizieren** (an der Karte oder im Menü **⋯**) legt eine unabhängige Kopie an, z. B. eine Fassung für die Eltern mit mehr verpixelten Gesichtern neben der Fassung für die Klasse. Die Kopie heißt „Klassenfahrt (Kopie)“, „Klassenfahrt (Kopie 2)“ usw. und öffnet sich gleich im Editor; was du dort änderst, ändert das Original nicht.
+
+- Sie enthält alles, was die Diashow hat: Folien, Einstellungen, Musik, Bearbeitungen, Bildtexte, Verpixelungen, die Personenliste mit den Gesichtsdaten und die Löschfrist (es sind ja dieselben Fotos der Klasse). Der Titel im Video bleibt „Klassenfahrt“.
+- Ältere Versionen, Rückgängig-Verlauf und Export-Aufträge gehören zum Original; die Kopie beginnt ohne.
+- Hochgeladene Fotos der Klasse und eingefügte Bilder bleiben, wo sie sind, und gehören beiden Diashows. [Aufräumen](#cleanup) und Löschen lassen sie stehen, solange die andere Diashow sie noch nutzt, auch aus dem Papierkorb heraus; erst mit der letzten der beiden werden sie endgültig gelöscht.
+
 ## Bearbeiten {#edit}
 
 Der Editor hat drei Bereiche: die **Vorschau** in der Mitte, rechts die Reiter **Themen**, **Musik**, **Dauer** und **Folie**, und unten den **Filmstreifen** mit allen Folien.
@@ -57,7 +73,7 @@ Die eingefügten Folien sind danach ausgewählt; [[Strg+Z]] nimmt das ganze Einf
 
 ### Fotos, die schon in der Diashow sind
 
-Was schon in der Diashow ist, kommt nicht noch einmal hinein – beim Hinzufügen von Fotos oder Ordnern, beim Ziehen ins Fenster oder in den Filmstreifen, mit [[Strg+V]], **Einfügen…**, im Assistenten und bei Uploads aus dem WLAN. Als „schon da“ zählt:
+Was schon in der Diashow ist, kommt nicht noch einmal hinein – beim Hinzufügen von Fotos oder Ordnern, beim Ziehen ins Fenster, in den Filmstreifen oder auf ihre Karte auf der Startseite, mit [[Strg+V]], **Einfügen…**, im Assistenten und bei Uploads aus dem WLAN. Als „schon da“ zählt:
 
 - dieselbe Datei, auch wenn ihre Folie herausgenommen ist;
 - eine Kopie unter anderem Namen oder in einem anderen Ordner, die Byte für Byte gleich ist;

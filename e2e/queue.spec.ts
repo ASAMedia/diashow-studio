@@ -87,7 +87,7 @@ test('export queue: background jobs one after another, resume after a worker cra
   await expect(page.locator('.job')).toHaveCount(2)
   await page.keyboard.press('Escape')
 
-  await expect.poll(async () => (await jobs(page)).map((j) => j.state).join(','), { timeout: 600_000, intervals: [1000] }).toBe('done,done')
+  await expect.poll(async () => (await jobs(page)).map((j) => j.state).join(','), { timeout: 600_000, intervals: [250] }).toBe('done,done')
   console.log(`two jobs in ${((Date.now() - t0) / 1000).toFixed(0)} s`)
   for (const f of [a, b]) {
     const p = probe(f)
@@ -106,7 +106,7 @@ test('export queue: background jobs one after another, resume after a worker cra
     return !!worker
   })
   expect(crashed).toBe(true)
-  await expect.poll(async () => (await jobs(page)).find((j) => j.name === 'C')?.state, { timeout: 600_000, intervals: [1000] }).toBe('done')
+  await expect.poll(async () => (await jobs(page)).find((j) => j.name === 'C')?.state, { timeout: 600_000, intervals: [250] }).toBe('done')
   const pc = probe(c)
   console.log(c, JSON.stringify(pc))
   expect(pc.frames).toBe(Math.ceil(show * 30 - 1e-6))

@@ -168,6 +168,17 @@ export class Player {
     }
   }
 
+  private lastChange = 0
+
+  /**
+   * Paused: pictures or video frames are still on their way, or something changed a moment ago (a
+   * decoder or font may still deliver): draw often. Otherwise once a second as a safety net, so a
+   * paused preview doesn't keep the processor busy (on PCs without a graphics card it draws on it).
+   */
+  private settling(now: number): boolean {
+    return now - this.lastChange < 2000 || !this.engine.settled
+  }
+
   /** Frame pacing while playing (for diagnostics and tests): interval, render cost, textures still loading. */
   frameLog: { t: number; dt: number; render: number; missing: number }[] = []
   private lastFrame = 0
@@ -186,7 +197,8 @@ export class Player {
       }
       this.syncAudio(this.t)
       this.onTime?.(this.t)
-    } else if (!this.dirty && now - this.lastPausedRender < 120) return
+    } else if (!this.dirty && now - this.lastPausedRender < (this.settling(now) ? 120 : 1000)) return
+    if (this.dirty) this.lastChange = now
     this.lastPausedRender = now
     this.dirty = false
     this.engine.playing = this.playing

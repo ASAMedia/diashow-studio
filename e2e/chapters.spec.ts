@@ -24,14 +24,17 @@ const expectedList = (page: Page): Promise<{ start: number; title: string }[]> =
     ]
   })
 
-test('chapters: offered in the export dialog, written into the MP4, copied for YouTube', async () => {
+test('chapters: offered in the export dialog, written into the MP4, copied for YouTube', { lock: 'clipboard' }, async () => {
   test.setTimeout((SOFTWARE_GL ? 15 : 5) * 60 * 1000)
   ensureTestMedia()
   const dataDir = mkdtempSync(join(tmpdir(), 'diashow-chapters-'))
   let s: Session | null = null
+  // the user's clipboard text, put back at the end
+  let saved = ''
   try {
     s = await launch(dataDir)
     const { app, page } = s
+    saved = await app.evaluate(({ clipboard }) => clipboard.readText())
     await page.evaluate(async (paths) => {
       const d = (window as any).__diashow
       await d.store.getState().createProject(paths, 'Kapitel')
@@ -71,7 +74,7 @@ test('chapters: offered in the export dialog, written into the MP4, copied for Y
     await dialog.locator('.actions .btn.primary').click()
     await expect.poll(() => page.evaluate(() => (window as any).__diashow.store.getState().exportJobs.map((j: any) => j.state).join()), {
       timeout: (SOFTWARE_GL ? 12 : 4) * 60 * 1000,
-      intervals: [1000]
+      intervals: [250]
     }).toBe('done')
 
     // ---- the MP4 has the chapters, each until the next one
@@ -92,6 +95,7 @@ test('chapters: offered in the export dialog, written into the MP4, copied for Y
     await page.keyboard.press('Escape')
     expect(s.errors).toEqual([])
   } finally {
+    if (saved) await s?.app.evaluate(({ clipboard }, text) => clipboard.writeText(text), saved).catch(() => {})
     await s?.app.close().catch(() => {})
     removeDir(dataDir)
   }

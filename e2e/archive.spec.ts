@@ -41,7 +41,7 @@ async function exportShow(page: Page, file: string, name: string): Promise<strin
     { outPath: file, size: EXPORT_SIZE, name }
   )
   await expect
-    .poll(() => page.evaluate((id) => (window as any).__diashow.store.getState().exportJobs.find((j: any) => j.id === id)?.state, info.id), { timeout: 600_000, intervals: [1000] })
+    .poll(() => page.evaluate((id) => (window as any).__diashow.store.getState().exportJobs.find((j: any) => j.id === id)?.state, info.id), { timeout: 600_000, intervals: [250] })
     .toBe('done')
   return file
 }

@@ -17,6 +17,7 @@ const LOCAL_ONLY: Record<string, string> = {
   'exportspeed.spec.ts': 'measures hardware encoders with the original photos',
   'flicker.spec.ts': 'diagnostics on request',
   'handbook-shots.spec.ts': 'makes the handbook pictures (DIASHOW_HANDBOOK_SHOTS)',
+  'home.spec.ts': 'new, not yet in ci.yml',
   'magazine.spec.ts': 'needs a folder of real photos (DIASHOW_VISUAL_DIR)',
   'originals.spec.ts': 'needs the original photos (DIASHOW_ORIGINALS_DIR)',
   'pacing.spec.ts': 'measures preview timing on a real graphics card',

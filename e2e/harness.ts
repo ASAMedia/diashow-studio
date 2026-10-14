@@ -98,6 +98,9 @@ const hasProjects = (dataDir: string): boolean => {
  */
 export async function dismissFirstRun(page: Page, wait = 5000): Promise<void> {
   const wizard = page.locator('[data-testid="wizard"]')
+  // skipped or finished once (wizard:done in Wizard.tsx), it never opens by itself again: no wait
+  // (a later start whose shows are all in the trash, say)
+  if (await page.evaluate(() => localStorage.getItem('wizard:done') === '1').catch(() => false)) return
   try {
     await wizard.waitFor({ state: 'visible', timeout: wait })
   } catch {
@@ -137,6 +140,41 @@ export async function waitProcessed(page: Page, timeout = 300_000): Promise<void
     null,
     { timeout, polling: 250 }
   )
+}
+
+/**
+ * Seeks the editor's preview to `t` and waits until that frame is drawn complete: every photo in full
+ * size (engine.missing counts those still loading, Live Photo motions too) and every video at its frame
+ * (no <video> of the engine still seeking), drawn once more after that. What a fixed wait after a seek
+ * was for, but only as long as it takes. (Reads the player's and the engine's own fields: dirty, missing,
+ * videos.) `atMost`: give up waiting after that many ms instead of failing, for pictures only looked at;
+ * a video on Vintage's pile, for one, counts as missing for good (the pile shows its still).
+ */
+export async function seekDrawn(page: Page, t: number, opts: { atMost?: number } = {}): Promise<void> {
+  const until = Date.now() + (opts.atMost ?? 60_000)
+  const drawn = async (): Promise<boolean> => {
+    try {
+      await page.waitForFunction(
+        () => {
+          const pl = (window as any).__diashow.player.current
+          const videos = [...(pl.engine.videos?.els?.values() ?? [])] as { el: HTMLVideoElement }[]
+          return !pl.dirty && pl.engine.missing === 0 && videos.every(({ el }) => !!el.error || (!el.seeking && el.readyState >= 2))
+        },
+        null,
+        { timeout: Math.max(1, until - Date.now()), polling: 'raf' }
+      )
+      return true
+    } catch (e) {
+      if (opts.atMost != null && (e as Error).name === 'TimeoutError') return false
+      throw e
+    }
+  }
+  const seek = (): Promise<void> => page.evaluate((tt) => (window as any).__diashow.player.current.seek(tt), t)
+  await seek()
+  if (!(await drawn())) return
+  // once more: a video frame that arrived after the last draw is in this one
+  await seek()
+  await drawn()
 }
 
 /** The open project in the renderer store. */
@@ -209,6 +247,9 @@ async function watchDrags(page: Page): Promise<void> {
     w.__dropOutcome = null
     if (w.__dragLogged) return
     w.__dragLogged = true
+    // a drag of the page's own element: from its dragstart to its dragend
+    window.addEventListener('dragstart', () => (w.__dragging = true), true)
+    window.addEventListener('dragend', () => (w.__dragging = false), true)
     for (const type of ['dragenter', 'dragover', 'dragleave', 'drop']) {
       window.addEventListener(type, (e: Event) => {
         const d = e as DragEvent
@@ -288,6 +329,9 @@ export async function dragFiles(page: Page, files: string[]): Promise<Drag> {
  */
 export async function dragElement(page: Page, x: number, y: number): Promise<Drag> {
   await watchDrags(page)
+  // the drag before may have ended a moment ago without its dragend in the page yet: a press now
+  // would overtake it and start nothing (a busy PC); a user can't start the next one earlier either
+  await page.waitForFunction(() => !(window as any).__dragging, null, { timeout: 10_000, polling: 50 }).catch(() => {})
   const cdp = await page.context().newCDPSession(page)
   const mouse = (type: string, px: number, buttons: number): Promise<unknown> =>
     cdp.send('Input.dispatchMouseEvent', { type, x: px, y, button: buttons ? 'left' : 'none', buttons, clickCount: 1 } as any)
@@ -297,7 +341,14 @@ export async function dragElement(page: Page, x: number, y: number): Promise<Dra
   await mouse('mousePressed', x, 1)
   // the drag starts once the pointer moved a few pixels with the button down
   for (let i = 1; i <= 5; i++) await mouse('mouseMoved', x + i * 2, 1)
-  const data = await Promise.race([caught, new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`no drag started at ${x},${y}`)), 10_000))])
+  const data = await Promise.race([caught, new Promise<null>((resolve) => setTimeout(() => resolve(null), 10_000))])
+  if (!data) {
+    const seen = await page.evaluate(([px, py]) => {
+      const el = document.elementFromPoint(px, py)
+      return `${el?.tagName.toLowerCase()}.${el?.className?.toString().slice(0, 40)} draggable=${!!el?.closest('[draggable="true"]')}, previous drag still on: ${!!(window as any).__dragging}`
+    }, [x, y])
+    throw new Error(`no drag started at ${x},${y} (under the pointer: ${seen}); the last drag events:\n${(await dragLog(page)).join('\n')}`)
+  }
   await cdp.send('Input.setInterceptDrags', { enabled: false })
   return dragSession(page, cdp, data)
 }
