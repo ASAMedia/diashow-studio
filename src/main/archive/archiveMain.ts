@@ -10,6 +10,7 @@ import { VIDEO_EXT } from '@shared/formats'
 import { checkProjectId } from '../projectSchema'
 import { archiveInventory, chosenVideos, fileLimitFor, freeSpaceOf, isVideoFile, writeArchive, type ArchiveDeps } from './archive'
 import { showOpen, showSave } from '../dialogs'
+import { dialogText } from '../dialogText'
 
 /** The renderer's choice, with anything unknown meaning "no". */
 export function checkArchiveChoice(raw: unknown): ArchiveChoice {
@@ -31,7 +32,7 @@ export function registerArchive(d: ArchiveDeps): void {
   // `bytes`: about how large the archive becomes (for the FAT32 check)
   ipcMain.handle('archive:pick-target', async (e, suggested: unknown, bytes: unknown): Promise<ArchiveTarget | null> => {
     const opts: Electron.SaveDialogOptions = {
-      title: 'Diashow als ZIP archivieren',
+      title: dialogText('archiveShow'),
       defaultPath: typeof suggested === 'string' && suggested ? suggested : d.documentsDir,
       filters: [{ name: 'ZIP', extensions: ['zip'] }]
     }
@@ -45,9 +46,9 @@ export function registerArchive(d: ArchiveDeps): void {
 
   ipcMain.handle('archive:pick-videos', async (e): Promise<ArchiveVideo[]> => {
     const opts: Electron.OpenDialogOptions = {
-      title: 'Video hinzufügen',
+      title: dialogText('addVideo'),
       properties: ['openFile', 'multiSelections'],
-      filters: [{ name: 'Video', extensions: VIDEO_EXT }]
+      filters: [{ name: dialogText('video'), extensions: VIDEO_EXT }]
     }
     const r = await showOpen(e, opts)
     if (r.canceled) return []

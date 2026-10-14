@@ -23,6 +23,10 @@ All notable changes to Diashow Studio. Versions follow [Semantic Versioning](htt
 - The undo history is no longer lost when the slideshow is saved just as the app closes.
 - A paused preview no longer redraws ten times a second when nothing changes, which kept the processor busy on PCs without a graphics card.
 - Temporary files of the graphics card check at start-up no longer stay behind in the Windows temp folder when the app is closed during the check.
+- Windows' file dialogs (adding photos and music, opening, exporting, archiving, the diagnostics package, offering a video) and the presentation window are titled in English in the English UI.
+- With several slides selected, "n areas pixelated" also counts the faces followed in videos.
+- Starting an export while another one is being written no longer breaks the running one.
+- Moving through the filmstrip with the arrow keys keeps the focused card fully in view at the left edge.
 
 ## [1.7.0] - 2026-10-13
 

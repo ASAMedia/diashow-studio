@@ -12,6 +12,7 @@ import type { ShareCommand, ShareFilesEvent, ShareStatus } from '@shared/share'
 import { lanAddresses } from './net'
 import { createShareServer, DEFAULT_LIMITS, showFolderName, type ShareServer } from './server'
 import { showOpen } from '../dialogs'
+import { dialogText } from '../dialogText'
 
 export interface ShareMainConfig {
   /** <Documents>/Diashow Studio/Uploads */
@@ -166,11 +167,11 @@ export function registerShare(cfg: ShareMainConfig): { stop(): Promise<void> } {
       case 'pickOffer': {
         if (!session) break
         const opts: Electron.OpenDialogOptions = {
-          title: 'Datei zum Herunterladen anbieten',
+          title: dialogText('offerFile'),
           defaultPath: app.getPath('videos'),
           properties: ['openFile', 'multiSelections'],
           filters: [
-            { name: 'Videos', extensions: VIDEO_EXT },
+            { name: dialogText('videos'), extensions: VIDEO_EXT },
             { name: 'Fotos und Videos', extensions: [...VIDEO_EXT, ...IMAGE_EXT] }
           ]
         }

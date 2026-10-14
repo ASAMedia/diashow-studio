@@ -11,6 +11,7 @@ import { importProjectFile } from './projectFile'
 import { PROJECT_ID, readProjectText } from './projectSchema'
 import { PROJECT_EXT, type ProjectStore } from './projects'
 import { showOpen } from './dialogs'
+import { dialogText } from './dialogText'
 
 export interface ProjectRepairConfig {
   projects: ProjectStore
@@ -58,9 +59,9 @@ export function registerProjectRepair(cfg: ProjectRepairConfig): void {
   // the renderer knows the file before it is read, so a damaged one can be offered for repair
   ipcMain.handle('project:pick-file', async (e) => {
     const opts: Electron.OpenDialogOptions = {
-      title: 'Projekt öffnen',
+      title: dialogText('openProject'),
       properties: ['openFile'],
-      filters: [{ name: 'Diashow-Projekt', extensions: [PROJECT_EXT.slice(1)] }]
+      filters: [{ name: dialogText('project'), extensions: [PROJECT_EXT.slice(1)] }]
     }
     const r = await showOpen(e, opts)
     return r.canceled || !r.filePaths.length ? null : r.filePaths[0]

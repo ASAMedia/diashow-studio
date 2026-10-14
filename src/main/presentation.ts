@@ -3,6 +3,7 @@
 import { BrowserWindow, screen, shell } from 'electron'
 import { join } from 'node:path'
 import { APP_ICON } from './appIcon'
+import { dialogText } from './dialogText'
 
 /**
  * Every app window (editor, presentation, export worker): sandboxed renderer without Node, isolated
@@ -63,7 +64,7 @@ export function startPresentation(owner: BrowserWindow | undefined): void {
       : { width: 1280, height: 720, minWidth: 320, minHeight: 180 }),
     show: false,
     backgroundColor: '#000000',
-    title: 'Diashow Studio – Präsentation',
+    title: dialogText('presentation'),
     icon: APP_ICON,
     autoHideMenuBar: true,
     webPreferences: rendererWebPreferences()

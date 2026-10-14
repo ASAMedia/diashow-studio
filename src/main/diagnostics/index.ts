@@ -15,6 +15,7 @@ import { trustedSender } from '../security'
 import { createLogger, type Logger } from './logger'
 import { packageFileName, packageFiles, previewOf, zipOf, type PackageSources } from './package'
 import { showSave } from '../dialogs'
+import { dialogText } from '../dialogText'
 
 let logger: Logger | null = null
 
@@ -257,7 +258,7 @@ export function registerDiagnostics(cfg: DiagnosticsConfig): void {
   ipcMain.handle('diag:save', async (e, input: DiagnosticsInput): Promise<string | null> => {
     const now = Date.now()
     const opts: Electron.SaveDialogOptions = {
-      title: 'Diagnosepaket speichern',
+      title: dialogText('saveDiagnostics'),
       defaultPath: join(app.getPath('desktop'), packageFileName(now)),
       filters: [{ name: 'ZIP', extensions: ['zip'] }]
     }

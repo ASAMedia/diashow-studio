@@ -175,7 +175,12 @@ export function BatchPanel({ entries, slides }: { entries: Entry[]; slides: Time
               </button>
             )}
           </div>
-          {pixelated > 0 && <p className="hint">{t('privacyCount').replace('{n}', String(visual.reduce((n, x) => n + (x.privacy?.length ?? 0), 0)))}</p>}
+          {pixelated > 0 && (
+            <p className="hint">
+              {/* drawn areas, and in videos the faces followed through the clip */}
+              {t('privacyCount').replace('{n}', String(visual.reduce((n, x) => n + (x.privacy?.length ?? 0) + (x.type === 'video' ? (x.privacyTracks?.length ?? 0) : 0), 0)))}
+            </p>
+          )}
         </Section>
       )}
       <div className="section">

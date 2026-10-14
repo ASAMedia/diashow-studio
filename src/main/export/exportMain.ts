@@ -54,8 +54,8 @@ export function registerExport(d: ExportIpcDeps): { stop: () => Promise<void> } 
 
   ipcMain.handle('export:start', async (e, options: ExportOptions) => {
     if (exportQueue.isWorker(e.sender)) throw new Error('the export worker uses segmentStart')
-    exportJob = null
     const encoders = await service.ffmpeg.encoders()
+    // a second start while one runs is refused by startExport and must not drop the running export
     exportJob = await startExport(checkDirectExport(options), d.ffmpegDir, join(d.cacheDir, 'export'), sendProgress, encoders)
   })
 

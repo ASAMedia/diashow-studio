@@ -1,7 +1,7 @@
 // IPC of the app and its windows: the UI language, fullscreen, showing a file in Explorer, displays and
 // the graphics chip, the app settings, keeping the display awake (keepAwake.ts) and the presentation on
 // a second display (presentation.ts).
-import { app, ipcMain, powerSaveBlocker, shell } from 'electron'
+import { ipcMain, powerSaveBlocker, shell } from 'electron'
 import type { AppSettings, GpuChoiceInfo } from '@shared/types'
 import type { AppSettingsStore } from './appSettings'
 import { windowOf } from './dialogs'
@@ -9,9 +9,9 @@ import { gpuOverride, runningGpuPreference } from './gpuChoice'
 import { createKeepAwake } from './keepAwake'
 import { displayCount, isPresentationWindow, startPresentation, stopPresentation } from './presentation'
 import { gpuDevices } from './systemCheck'
+import { appLocale } from './dialogText'
 
-/** The UI language: Windows', or DIASHOW_LOCALE (e.g. en-US) for tests in either language. */
-export const appLocale = (): string => process.env.DIASHOW_LOCALE || app.getLocale()
+export { appLocale }
 
 export function registerApp(d: { settings: AppSettingsStore }): void {
   const appSettings = d.settings

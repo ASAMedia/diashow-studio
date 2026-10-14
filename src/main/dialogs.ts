@@ -4,6 +4,7 @@
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { join } from 'node:path'
 import { AUDIO_EXT, IMAGE_EXT, VIDEO_EXT } from '@shared/formats'
+import { dialogText } from './dialogText'
 
 /** The window an IPC call came from. */
 export function windowOf(event: IpcMainInvokeEvent): BrowserWindow | undefined {
@@ -28,28 +29,28 @@ function safeFileName(name: string): string {
 export function registerDialogs(): void {
   ipcMain.handle('dialog:media', async (e) => {
     const r = await showOpen(e, {
-      title: 'Fotos und Videos hinzufügen',
+      title: dialogText('addMedia'),
       properties: ['openFile', 'multiSelections'],
       filters: [
-        { name: 'Fotos und Videos', extensions: [...IMAGE_EXT, ...VIDEO_EXT] },
-        { name: 'Alle Dateien', extensions: ['*'] }
+        { name: dialogText('photosAndVideos'), extensions: [...IMAGE_EXT, ...VIDEO_EXT] },
+        { name: dialogText('allFiles'), extensions: ['*'] }
       ]
     })
     return r.canceled ? [] : r.filePaths
   })
 
   ipcMain.handle('dialog:folder', async (e) => {
-    const r = await showOpen(e, { title: 'Ordner hinzufügen', properties: ['openDirectory', 'multiSelections'] })
+    const r = await showOpen(e, { title: dialogText('addFolder'), properties: ['openDirectory', 'multiSelections'] })
     return r.canceled ? [] : r.filePaths
   })
 
   ipcMain.handle('dialog:music', async (e) => {
     const r = await showOpen(e, {
-      title: 'Musik hinzufügen',
+      title: dialogText('addMusic'),
       properties: ['openFile', 'multiSelections'],
       filters: [
-        { name: 'Musik', extensions: AUDIO_EXT },
-        { name: 'Alle Dateien', extensions: ['*'] }
+        { name: dialogText('music'), extensions: AUDIO_EXT },
+        { name: dialogText('allFiles'), extensions: ['*'] }
       ]
     })
     return r.canceled ? [] : r.filePaths
@@ -57,16 +58,16 @@ export function registerDialogs(): void {
 
   ipcMain.handle('dialog:export', async (e, defaultName: string) => {
     const r = await showSave(e, {
-      title: 'Diashow exportieren',
+      title: dialogText('exportShow'),
       defaultPath: join(app.getPath('videos'), `${safeFileName(defaultName)}.mp4`),
-      filters: [{ name: 'MPEG-4-Video', extensions: ['mp4'] }]
+      filters: [{ name: dialogText('mp4'), extensions: ['mp4'] }]
     })
     if (r.canceled || !r.filePath) return null
     return /\.mp4$/i.test(r.filePath) ? r.filePath : `${r.filePath}.mp4`
   })
 
   ipcMain.handle('dialog:pack', async (e) => {
-    const r = await showOpen(e, { title: 'Projekt mit allen Medien packen – Zielordner', properties: ['openDirectory', 'createDirectory'] })
+    const r = await showOpen(e, { title: dialogText('packTarget'), properties: ['openDirectory', 'createDirectory'] })
     return r.canceled || !r.filePaths.length ? null : r.filePaths[0]
   })
 }

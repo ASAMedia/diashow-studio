@@ -11,6 +11,7 @@ import type { HistorySaveStatus, HistoryStore } from './history'
 import type { NetTrust } from './netTrust'
 import { importProjectFile } from './projectFile'
 import { PROJECT_EXT, summarize, type ProjectStore } from './projects'
+import { dialogText } from './dialogText'
 
 export interface ProjectsIpcDeps {
   projects: ProjectStore
@@ -51,9 +52,9 @@ export function registerProjects(d: ProjectsIpcDeps): { settleSaves: () => Promi
 
   ipcMain.handle('project:open-dialog', async (e) => {
     const r = await showOpen(e, {
-      title: 'Projekt öffnen',
+      title: dialogText('openProject'),
       properties: ['openFile'],
-      filters: [{ name: 'Diashow-Projekt', extensions: [PROJECT_EXT.slice(1)] }]
+      filters: [{ name: dialogText('project'), extensions: [PROJECT_EXT.slice(1)] }]
     })
     if (r.canceled || !r.filePaths.length) return null
     // a pack the user opened from a share: its files sit next to it on that share

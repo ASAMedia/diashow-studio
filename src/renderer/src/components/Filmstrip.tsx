@@ -103,7 +103,8 @@ export function Filmstrip() {
   const focusCard = (index: number, tries = 6): void => {
     const el = scrollRef.current
     if (el) {
-      const x = index * step
+      // where the card sits in the scrolled strip, past its left padding (as revealIndex and the playhead)
+      const x = index * step + STRIP_PAD
       if (x < el.scrollLeft || x + scale.card > el.scrollLeft + el.clientWidth - 32) el.scrollLeft = Math.max(0, x - el.clientWidth / 2)
     }
     // right away when the card is rendered (quick key presses go to the new card), else after a frame
