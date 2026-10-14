@@ -10,6 +10,7 @@ import { checkLocalFile, stringList } from './ipcGuards'
 import type { MediaService } from './media/service'
 import type { NetTrust } from './netTrust'
 import type { ProjectStore } from './projects'
+import { inThemeMusicDir } from './protocol'
 
 export function registerMedia(d: { service: MediaService; projects: ProjectStore; themeMusic: Promise<ThemeTrack[]>; net: NetTrust }): void {
   const { service, net } = d
@@ -36,12 +37,14 @@ export function registerMedia(d: { service: MediaService; projects: ProjectStore
   ipcMain.handle('music:theme-songs', () => d.themeMusic)
   // the user agreed to open files on these network hosts (banner in the editor)
   ipcMain.handle('net:trust-hosts', (_e, hosts: unknown) => net.trustHosts(hosts))
-  // paths FFmpeg reads for the renderer: existing files only, never URLs (ipcGuards.ts)
-  ipcMain.handle('audio:waveform', async (_e, path: string, buckets: number) => service.waveform(await checkLocalFile(path), buckets))
+  // paths FFmpeg reads for the renderer: existing files only, never URLs nor untrusted shares (ipcGuards.ts);
+  // the bundled theme songs wherever the app is (as dsmedia:// serves them, protocol.ts)
+  const readable = (p: string): boolean => net.allowPath(p) || inThemeMusicDir(p)
+  ipcMain.handle('audio:waveform', async (_e, path: string, buckets: number) => service.waveform(await checkLocalFile(path, readable), buckets))
   ipcMain.handle('media:faces', (_e, id: string, faces: Rect[], desc?: number[][]) => service.setFaces(id, faces, desc))
   ipcMain.handle('media:video-faces', (_e, id: string, samples: VideoFaces[]) => service.setVideoFaces(id, samples))
-  ipcMain.handle('media:frames', async (_e, path: string, times: number[], maxEdge: number) => service.videoFrames(await checkLocalFile(path), times, maxEdge))
-  ipcMain.handle('media:strip', async (_e, path: string, count: number, height: number) => service.videoStrip(await checkLocalFile(path), count, height))
+  ipcMain.handle('media:frames', async (_e, path: string, times: number[], maxEdge: number) => service.videoFrames(await checkLocalFile(path, readable), times, maxEdge))
+  ipcMain.handle('media:strip', async (_e, path: string, count: number, height: number) => service.videoStrip(await checkLocalFile(path, readable), count, height))
   ipcMain.handle('media:relink', async (_e, missing: MediaItem[], folder: string) => {
     await net.trustPaths([String(folder)])
     return service.relinkMedia(missing, folder)

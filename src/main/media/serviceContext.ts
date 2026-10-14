@@ -1,5 +1,6 @@
 // State shared by the parts of one media service (service.ts): its items and songs, the pools and
 // gates that order their processing, and how changes reach the renderer.
+import { createHash } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import { availableParallelism } from 'node:os'
 import { join } from 'node:path'
@@ -21,6 +22,18 @@ import type { DirectDecode, VideoInfo } from './videoInfo'
 export const PRI_THUMB = 0
 export const PRI_DISPLAY = 1
 export const PRI_ANALYSIS = 2
+
+/** An id that can be a folder name as it is (media ids are 16 hex digits, scan.ts; songs of the library "theme-…"). */
+const PLAIN_ID = /^(?!(?:con|prn|aux|nul|com\d|lpt\d)$)[A-Za-z0-9_-]{1,128}$/i
+
+/**
+ * The cache folder name of a media or music id. Ids come back from project files, and one made
+ * elsewhere can hold any string ("..\..\Startup"): such an id gets a folder named by its hash, inside
+ * the cache like every other, never a path of its own.
+ */
+export function cacheFolderName(id: string): string {
+  return PLAIN_ID.test(id) ? id : createHash('sha1').update(`id:${String(id)}`).digest('hex').slice(0, 16)
+}
 
 /** What the import read about a file, reused by its processing job. */
 export interface ImportContext {
@@ -174,7 +187,7 @@ export function createServiceContext(config: MediaServiceConfig): ServiceContext
     shaderCache: join(config.cacheDir, 'gpu'),
     gpuDetection: null,
 
-    folder: (id) => join(config.cacheDir, id),
+    folder: (id) => join(config.cacheDir, cacheFolderName(id)),
 
     emit(item) {
       if (!ctx.disposed) config.onUpdate?.({ ...item })

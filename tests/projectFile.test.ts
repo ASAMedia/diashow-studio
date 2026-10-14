@@ -156,6 +156,39 @@ describe('pack and open', () => {
     expect(await store.list()).toHaveLength(2)
   })
 
+  it('does not look at files on shares the user has not trusted, not even their size', async () => {
+    // a .dshow from a USB stick naming files on another host: Windows would sign in there at the first stat
+    const dir = join(tmp, 'foreign')
+    const here = file(join(dir, 'media', 'here.jpg'), 'here')
+    const refused = file(join(dir, 'media', 'refused.jpg'), 'refused')
+    const song = file(join(dir, 'music', 'refused.mp3'), 'song')
+    // (on loopback: should the check ever fail, nothing leaves this PC)
+    const unc = '\\\\127.0.0.1\\diashow-untrusted\\a.jpg'
+    const foreign: Project = {
+      ...project,
+      id: 'foreign-show',
+      entries: [
+        { id: 'e1', type: 'photo', mediaId: 'h' },
+        { id: 'e2', type: 'photo', mediaId: 'r' },
+        { id: 'e3', type: 'photo', mediaId: 'u' }
+      ],
+      media: [media('h', 'media/here.jpg'), media('r', 'media/refused.jpg'), media('u', unc)],
+      music: [{ id: 's', path: 'music/refused.mp3', title: 'song', duration: 3, status: 'ready' }]
+    }
+    const dshow = file(join(dir, 'foreign.dshow'), JSON.stringify(foreign))
+    const asked: string[] = []
+    const allowPath = (p: string): boolean => {
+      asked.push(p)
+      return p !== refused && p !== song && !p.startsWith('\\\\')
+    }
+    const p = await importProjectFile(dshow, createProjectStore(join(tmp, 'projects-foreign')), { allowPath })
+    expect(asked).toEqual(expect.arrayContaining([here, refused, unc, song]))
+    // a file that may be looked at gets its id from size and time; the others keep theirs, unopened
+    expect(p.media.map((m) => m.id)).toEqual([idOf(here), 'r', 'u'])
+    expect(p.music[0].id).toBe('s')
+    expect(p.entries.map((e) => (e.type === 'text' ? '' : e.mediaId))).toEqual([idOf(here), 'r', 'u'])
+  })
+
   it('rejects files that are not projects', async () => {
     const bad = file(join(tmp, 'bad.dshow'), '{"hello": 1}')
     const store = createProjectStore(join(tmp, 'projects2'))

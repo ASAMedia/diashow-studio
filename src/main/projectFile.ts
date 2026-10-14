@@ -58,6 +58,8 @@ export interface PackOptions {
   signal?: AbortSignal
   /** Today's folder of the bundled songs: own songs from the music library are copied from there (themeMusic.ts). */
   themeMusicDir?: string
+  /** Originals that may be read (netTrust.ts): one on an untrusted share counts as missing and is not touched. */
+  allowPath?: (path: string) => boolean
 }
 
 /** One original copied into a pack (or an archive, archive/archive.ts). */
@@ -84,6 +86,8 @@ export interface PackPlanOptions {
   themeMusicDir?: string
   /** Whether an original is there to be copied; default: it is an existing file. */
   isFile?: (path: string) => Promise<boolean>
+  /** Paths that may be looked at (netTrust.ts); default: all. */
+  allowPath?: (path: string) => boolean
 }
 
 /**
@@ -137,7 +141,7 @@ export async function planPack(project: Project, opts: PackPlanOptions = {}): Pr
   const music: MusicTrack[] = []
   for (const track of project.music ?? []) {
     // a song from the bundled music library is packed like any other song
-    const [rel] = await plan('music', [rebaseBundledPath(track.path, opts.themeMusicDir ?? '')])
+    const [rel] = await plan('music', [rebaseBundledPath(track.path, opts.themeMusicDir ?? '', opts.allowPath)])
     const { playback: _p, error: _e, ...rest } = track
     music.push({ ...rest, path: rel ?? track.path, status: 'pending' })
   }
@@ -157,7 +161,8 @@ export async function packProject(project: Project, dir: string, opts: PackOptio
   try {
     await mkdir(join(root, 'media'))
     await mkdir(join(root, 'music'))
-    const { media, music, copies } = await planPack(project, { themeMusicDir: opts.themeMusicDir })
+    const allow = opts.allowPath
+    const { media, music, copies } = await planPack(project, { themeMusicDir: opts.themeMusicDir, ...(allow ? { allowPath: allow, isFile: async (p: string) => allow(p) && isFile(p) } : {}) })
 
     const total = copies.length
     const report = (done: number): void => opts.onProgress?.({ phase: 'prepare', frame: done, totalFrames: total, message: `${done}/${total}` })
@@ -198,8 +203,10 @@ async function openedFromZip(p: Project, base: string): Promise<boolean> {
   return rel.length > 0
 }
 
-/** Current id for a file (same scheme as import), or null when it is not there. */
-async function idFor(path: string): Promise<string | null> {
+/** Current id for a file (same scheme as import), or null when it is not there or may not be looked at. */
+async function idFor(path: string, allow: (path: string) => boolean = () => true): Promise<string | null> {
+  // a network share the user has not trusted: even a stat would make Windows sign in there (netTrust.ts)
+  if (!allow(path)) return null
   try {
     const st = await stat(path)
     return st.isFile() ? mediaId(path, st.size, st.mtimeMs) : null
@@ -223,6 +230,11 @@ export interface ImportOptions {
   themeTracks?: readonly ThemeTrack[]
   /** Opens a show's own file in the projects folder (no import); default store.load. */
   loadOwn?: (id: string) => Promise<Project>
+  /**
+   * Which of the file's paths may be looked at (netTrust.ts): a share the user has not trusted is not
+   * touched until the editor's banner allows it; its items keep their ids. Default: all.
+   */
+  allowPath?: (path: string) => boolean
 }
 
 export async function importProjectFile(path: string, store: ProjectStore, opts: ImportOptions = {}): Promise<Project> {
@@ -243,7 +255,7 @@ export async function importProjectFile(path: string, store: ProjectStore, opts:
   for (const item of Array.isArray(p.media) ? p.media : []) {
     const out: MediaItem = { ...item, path: toAbsolute(base, item.path) }
     if (item.live) out.live = { ...item.live, source: toAbsolute(base, item.live.source) }
-    const id = await idFor(out.path)
+    const id = await idFor(out.path, opts.allowPath)
     if (id && id !== item.id) {
       remap.set(item.id, id)
       out.id = id
@@ -254,7 +266,7 @@ export async function importProjectFile(path: string, store: ProjectStore, opts:
   const songs = new Map<string, string>()
   for (const track of Array.isArray(p.music) ? p.music : []) {
     const out: MusicTrack = { ...track, path: toAbsolute(base, track.path) }
-    const id = await idFor(out.path)
+    const id = await idFor(out.path, opts.allowPath)
     if (id && id !== track.id) {
       songs.set(track.id, id)
       out.id = id

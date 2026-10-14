@@ -25,7 +25,7 @@ import { removeInside } from './safeDelete'
 import { serialByKey } from './serial'
 
 const gzip = promisify(zlib.gzip)
-const gunzip = promisify(zlib.gunzip)
+const gunzipRaw = promisify(zlib.gunzip)
 
 export const HISTORY_FORMAT = 'diashow-history'
 export const HISTORY_VERSION = 1
@@ -116,6 +116,9 @@ export function createHistoryStore(opts: HistoryStoreOptions): HistoryStore {
   const delay = opts.delayMs ?? 1000
   const maxSteps = opts.maxSteps ?? HISTORY_STEPS
   const maxBytes = opts.maxBytes ?? HISTORY_BYTES
+  // a stored history holds at most maxBytes of steps: one that unpacks to much more is damaged (or made
+  // to fill the memory) and is not unpacked further
+  const gunzip = (data: Buffer): Promise<Buffer> => gunzipRaw(data, { maxOutputLength: 4 * maxBytes + 65_536 })
   const now = opts.now ?? Date.now
   const log = (m: string): void => opts.log?.(m)
   const fileOf = (id: string): string => join(dir, `${checkProjectId(id)}${EXT}`)

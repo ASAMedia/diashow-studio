@@ -432,6 +432,18 @@ describe('the stored history', () => {
     expect(log.join('\n')).not.toMatch(/Lena|Klassenfahrt|anna|Brandenburger/)
   })
 
+  it('a file that unpacks to far more than a history can hold is not unpacked, and discarded', async () => {
+    const base = asSaved(bigShow(5, 'bomb'))
+    const text = JSON.stringify(base, null, 1)
+    const { store, dir, log } = historyStore('bomb', { maxBytes: 1000 })
+    mkdirSync(dir, { recursive: true })
+    // a megabyte of spaces packs into a few hundred bytes
+    writeFileSync(join(dir, 'bomb.json.gz'), gzipSync(Buffer.alloc(1_000_000, 32)))
+    expect((await reopen(store, 'bomb', text)).restored).toBeNull()
+    expect(existsSync(join(dir, 'bomb.json.gz'))).toBe(false)
+    expect(log.at(-1)).toMatch(/discarded: the file is damaged/)
+  })
+
   it('a broken step ends the chain there; the steps before it stay', async () => {
     const base = asSaved(bigShow(10, 'broken'))
     const text = JSON.stringify(base, null, 1)

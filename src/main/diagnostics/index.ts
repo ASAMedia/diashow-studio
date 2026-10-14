@@ -163,6 +163,26 @@ export interface DiagnosticsConfig {
   settings: () => Promise<unknown>
   systemInfo: () => Promise<SystemInfo>
   ffmpegVersion: () => Promise<string>
+  /** Originals that may be looked at (netTrust.ts); default: all. */
+  allowPath?: (path: string) => boolean
+}
+
+/**
+ * File sizes of a project's originals by media id, a few at a time (no content is read). A file on a
+ * network share the user hasn't trusted is left out unopened: even its size would make Windows sign in there.
+ */
+export async function originalSizes(media: readonly { id: string; path: string }[], allowPath: (path: string) => boolean = () => true): Promise<Map<string, number>> {
+  const sizes = new Map<string, number>()
+  const list = media.filter((m) => typeof m?.path === 'string' && allowPath(m.path))
+  await Promise.all(
+    Array.from({ length: 16 }, async () => {
+      for (let m = list.shift(); m; m = list.shift()) {
+        const size = await stat(m.path).then((st) => st.size, () => undefined)
+        if (size !== undefined) sizes.set(m.id, size)
+      }
+    })
+  )
+  return sizes
 }
 
 /** Registers diag:log (reports from the windows) and the diagnostics package (preview and save). */
@@ -204,19 +224,7 @@ export function registerDiagnostics(cfg: DiagnosticsConfig): void {
       safe(cfg.themeMusic?.() ?? Promise.resolve([]), []),
       safe(cfg.trash?.() ?? Promise.resolve(undefined), undefined)
     ])
-    const sizes = new Map<string, number>()
-    if (project && project.media.length <= 5000) {
-      // file sizes of the originals (no content is read); a few at a time
-      const list = project.media.slice()
-      await Promise.all(
-        Array.from({ length: 16 }, async () => {
-          for (let m = list.shift(); m; m = list.shift()) {
-            const size = await stat(m.path).then((st) => st.size, () => undefined)
-            if (size !== undefined) sizes.set(m.id, size)
-          }
-        })
-      )
-    }
+    const sizes = project && project.media.length <= 5000 ? await originalSizes(project.media, cfg.allowPath) : new Map<string, number>()
     const logs: PackageSources['logs'] = []
     for (const file of logger?.files() ?? []) {
       const text = await readFile(file, 'utf8').catch(() => null)

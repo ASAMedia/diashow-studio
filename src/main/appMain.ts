@@ -2,6 +2,7 @@
 // the graphics chip, the app settings, keeping the display awake (keepAwake.ts) and the presentation on
 // a second display (presentation.ts).
 import { ipcMain, powerSaveBlocker, shell } from 'electron'
+import { isAbsolute } from 'node:path'
 import type { AppSettings, GpuChoiceInfo } from '@shared/types'
 import type { AppSettingsStore } from './appSettings'
 import { windowOf } from './dialogs'
@@ -27,7 +28,11 @@ export function registerApp(d: { settings: AppSettingsStore }): void {
     windowOf(e)?.setFullScreen(!!on)
   })
 
-  ipcMain.handle('shell:reveal', (_e, path: string) => {
+  // a file the app made or shows (an export, the uploads, the cache): an ordinary absolute path, never a
+  // device path (\\?\GLOBALROOT\…, \\.\pipe\…) or a relative one
+  ipcMain.handle('shell:reveal', (_e, path: unknown) => {
+    if (typeof path !== 'string' || !path || path.length > 4000 || path.includes('\0') || !isAbsolute(path)) return
+    if (/^(?:[\\/]{2}[?.]|[\\/]\?\?)[\\/]/.test(path)) return
     shell.showItemInFolder(path)
   })
 

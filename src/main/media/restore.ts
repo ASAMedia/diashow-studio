@@ -67,6 +67,11 @@ export async function restoreMedia(ctx: ServiceContext, items: MediaItem[]): Pro
       const allow = ctx.config.allowPath ?? (() => true)
       if (!allow(it.path)) return clean({ ...it, status: 'error' as const, error: 'network-blocked', progress: undefined })
       it = withoutForeignFiles(it, allow)
+      // a Live Photo whose video lies on such a share (the photo elsewhere): it stays a still, the share untouched
+      if (it.live && !allow(it.live.source)) {
+        const { live: _l, liveVideo: _v, ...still } = it
+        it = still
+      }
       let changed = false
       try {
         const st = await stat(it.path)

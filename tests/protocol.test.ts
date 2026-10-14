@@ -4,7 +4,8 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import { mediaUrl } from '@shared/api'
 
-vi.mock('electron', () => ({ protocol: { handle: vi.fn() } }))
+// app: the protocol's origin check asks security.ts whether the app runs from its sources
+vi.mock('electron', () => ({ protocol: { handle: vi.fn() }, app: { isPackaged: false } }))
 const { contentType, handleMediaRequest, parseRange } = await import('../src/main/protocol')
 
 const dir = mkdtempSync(join(tmpdir(), 'diashow proto '))

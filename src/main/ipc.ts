@@ -96,7 +96,7 @@ export function registerIpc(): void {
   registerApp({ settings: appSettings })
   registerMedia({ service, projects, themeMusic, net })
   // Sharing over the local network: uploads go to <Documents>/Diashow Studio/Uploads/<project>/<name>
-  registerShare({ uploadsRoot: join(projects.dir, 'Uploads'), broadcast })
+  registerShare({ uploadsRoot: join(projects.dir, 'Uploads'), broadcast, allowPath: net.allowPath })
   // Ctrl+V: copied files, or a copied picture saved to <Documents>/Diashow Studio/Eingefügt/<project>
   registerPaste({ projectsDir: projects.dir, locale: appLocale })
   // "Nach dem Projekt aufräumen", deleting a project into the trash and the trash (cleanup.ts, trash.ts, safeDelete.ts)
@@ -126,10 +126,12 @@ export function registerIpc(): void {
     },
     settings: () => appSettings.get(),
     systemInfo: () => collectSystemInfo({ ff: service.ffmpeg, cacheDir }, 15_000),
-    ffmpegVersion: async () => /ffmpeg version (\S+)/.exec((await service.ffmpeg.capture(['-version'])).toString('utf8'))?.[1] ?? 'unknown'
+    ffmpegVersion: async () => /ffmpeg version (\S+)/.exec((await service.ffmpeg.capture(['-version'])).toString('utf8'))?.[1] ?? 'unknown',
+    // the sizes of the originals: never of files on a share the user hasn't trusted
+    allowPath: net.allowPath
   })
   registerDialogs()
-  const exports = registerExport({ service, ffmpegDir, cacheDir, themeMusicDir, queue: exportQueue, broadcast })
+  const exports = registerExport({ service, ffmpegDir, cacheDir, themeMusicDir, queue: exportQueue, broadcast, allowPath: net.allowPath })
   let quitting = false
   const shows = registerProjects({ projects, history, themeMusic, onReport, net, trashReady, quitting: () => quitting })
 

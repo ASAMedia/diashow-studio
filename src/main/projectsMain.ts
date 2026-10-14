@@ -44,8 +44,10 @@ export function registerProjects(d: ProjectsIpcDeps): { settleSaves: () => Promi
       own = true
       return loadForEditor(id)
     }
-    // an archived show brings its theme song; it plays when this app's song is another one
-    const p = await importProjectFile(path, projects, { onReport, themeTracks: await d.themeMusic, loadOwn })
+    // an archived show brings its theme song; it plays when this app's song is another one. Its paths on
+    // shares the user hasn't trusted are not looked at (not even their size): the editor's banner asks first
+    await d.net.loaded
+    const p = await importProjectFile(path, projects, { onReport, themeTracks: await d.themeMusic, loadOwn, allowPath: d.net.allowPath })
     if (!own) await history.clear(p.id)
     return p
   }

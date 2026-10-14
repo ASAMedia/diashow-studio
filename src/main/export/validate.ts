@@ -59,8 +59,10 @@ function validateClip(raw: unknown, i: number): AudioPlanClip {
   const rate = (raw as { rate?: unknown }).rate
   if (typeof id !== 'string' || id.length > 200) throw new Error(`audio clip ${i}: invalid id`)
   if (kind !== 'music' && kind !== 'video') throw new Error(`audio clip ${i}: invalid kind`)
-  // FFmpeg reads it: a local file only, never a URL or protocol
+  // FFmpeg reads it: a local file only, never a URL or protocol, no device path (\\?\…, \\.\…, \??\…)
+  // and no alternate data stream (a colon past the drive letter), as for dsmedia:// (protocol.ts)
   if (typeof src !== 'string' || !src || src.length > 2000 || src.includes('\0') || !isAbsolute(src)) throw new Error(`audio clip ${i}: invalid source`)
+  if (/^[\\/]{2}[?.][\\/]|^[\\/]\?\?[\\/]/.test(src) || src.indexOf(':', /^[A-Za-z]:/.test(src) ? 2 : 0) >= 0) throw new Error(`audio clip ${i}: invalid source`)
   for (const [key, v] of [['start', start], ['offset', offset], ['duration', duration]] as const) {
     if (!(finite(v) && v >= 0)) throw new Error(`audio clip ${i}: invalid ${key}`)
   }

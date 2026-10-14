@@ -15,6 +15,7 @@ import { Readable } from 'node:stream'
 import type { ReadableStream as WebReadableStream } from 'node:stream/web'
 import { MEDIA_SCHEME, pathFromMediaUrl } from '@shared/api'
 import { AUDIO_EXT, extOf, IMAGE_EXT, VIDEO_EXT } from '@shared/formats'
+import { devRendererUrl } from './security'
 
 const SERVED_EXT = new Set([...IMAGE_EXT, ...VIDEO_EXT, ...AUDIO_EXT])
 
@@ -52,7 +53,7 @@ export function mediaPathAllowed(path: string): boolean {
  * Pages that may read media: the app's own (file://, "null" for file pages, the dev server) and
  * dsmedia itself. A request without Origin (a plain <img>/<video>) is fine.
  */
-export function originAllowed(origin: string | null, devUrl = process.env.ELECTRON_RENDERER_URL): boolean {
+export function originAllowed(origin: string | null, devUrl = devRendererUrl()): boolean {
   if (!origin || origin === 'null' || origin.startsWith('file://') || origin.startsWith(`${MEDIA_SCHEME}://`)) return true
   if (!devUrl) return false
   try {

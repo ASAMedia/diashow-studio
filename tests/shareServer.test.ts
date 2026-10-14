@@ -2,14 +2,22 @@
 // limits, range downloads, stopping), safe names, page language and the interface list.
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { request as httpRequest, type IncomingHttpHeaders } from 'node:http'
+import { connect, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
-import type { ShareReceived } from '@shared/share'
+import type { ShareReceived, ShareStatus } from '@shared/share'
 
-vi.mock('electron', () => ({ protocol: { handle: vi.fn() } }))
-const { createShareServer, safeName, uploadFileName, uploaderFolder, contentDisposition } = await import('../src/main/share/server')
-const { pageLang } = await import('../src/main/share/pages')
+const ipcHandlers = vi.hoisted(() => new Map<string, (event: unknown, ...args: unknown[]) => unknown>())
+vi.mock('electron', () => ({
+  protocol: { handle: vi.fn() },
+  app: { on: vi.fn(), getPath: () => '', getLocale: () => 'de-DE' },
+  ipcMain: { handle: (channel: string, listener: (event: unknown, ...args: unknown[]) => unknown) => ipcHandlers.set(channel, listener) },
+  BrowserWindow: { fromWebContents: () => null },
+  dialog: {}
+}))
+const { createShareServer, safeName, showFolderName, uploadFileName, uploaderFolder, contentDisposition } = await import('../src/main/share/server')
+const { downloadPage, pageLang, uploadPage } = await import('../src/main/share/pages')
 const { adapterKind, isPrivateIPv4, lanAddresses } = await import('../src/main/share/net')
 
 const tmp = mkdtempSync(join(tmpdir(), 'diashow-share-'))
@@ -65,6 +73,14 @@ async function startServer(name: string, extra: Partial<Parameters<typeof create
 }
 
 describe('safe names', () => {
+  it('a show’s folder keeps the whole name: a slash is no path', () => {
+    expect(showFolderName('Klassenfahrt 9/10')).toBe('Klassenfahrt 9-10')
+    expect(showFolderName('Wandertag 9 / 10')).toBe('Wandertag 9-10')
+    expect(showFolderName('Klassenfahrt 9/10')).not.toBe(showFolderName('Wandertag 9/10'))
+    // no way out of the uploads folder: no separators, no leading dot
+    expect(showFolderName('..\\..\\Windows')).toBe('-..-Windows')
+    expect(showFolderName('  ')).toBe('Diashow')
+  })
   it('keeps only a harmless last path component', () => {
     expect(safeName('..\\..\\Windows\\win.ini')).toBe('win.ini')
     expect(safeName('../../etc/passwd')).toBe('passwd')
@@ -89,6 +105,9 @@ describe('safe names', () => {
     expect(uploaderFolder('  ../..  ')).toBe('Unbekannt')
     expect(uploaderFolder('Mia/../../x')).toBe('x')
     expect(uploaderFolder('Jonas Müller')).toBe('Jonas Müller')
+    // Windows' short names ("JONASM~1" is "Jonas Müller") would reach another pupil's folder or file
+    expect(uploaderFolder('JONASM~1')).toBe('JONASM_1')
+    expect(uploadFileName('IMG_00~1.JPG')).toEqual({ name: 'IMG_00_1.JPG', kind: 'photo' })
   })
 
   it('writes Content-Disposition with an ASCII fallback and the UTF-8 name', () => {
@@ -102,6 +121,17 @@ describe('safe names', () => {
     expect(pageLang('fr-FR,de;q=0.7,en;q=0.5')).toBe('de')
     expect(pageLang('en;q=0.5,de;q=0.6')).toBe('de')
     expect(pageLang(undefined)).toBe('en')
+  })
+
+  it('shows the show name on the phone pages as it is, escaped', () => {
+    // $' and $& are replacement patterns of String.replace: the name must not pull in the template
+    const name = "Fahrt $' <b>$&</b> 'x'"
+    const html = [
+      uploadPage({ lang: 'de', project: name, uploadPath: '/t/upload', collecting: true, photoExt: [], videoExt: [], mime: {}, limits: { photo: 1, video: 1 }, nonce: 'n' }),
+      downloadPage({ lang: 'en', project: name, offers: [], fileHref: () => '' })
+    ]
+    expect(html[0]).toContain('für „Fahrt $&#39; &lt;b&gt;$&amp;&lt;/b&gt; &#39;x&#39;“')
+    expect(html[1]).toContain('Slideshow “Fahrt $&#39; &lt;b&gt;$&amp;&lt;/b&gt; &#39;x&#39;”')
   })
 
   it('lists private IPv4 interfaces, Wi-Fi first', () => {
@@ -295,6 +325,74 @@ describe('share server', () => {
     }
   })
 
+  it('counts uploads running together against the free space', async () => {
+    // room for one more KB above the reserve: two uploads of 1000 bytes that start together don't both fit
+    const { server, port } = await startServer('disk-together', { freeSpace: async () => 1024 ** 3 + 1500 })
+    try {
+      const tok = server.uploadToken
+      let release = (): void => {}
+      const first = req(port, 'POST', `/${tok}/upload`, {
+        headers: { 'X-File-Name': 'first.jpg', 'Content-Type': 'image/jpeg', 'Content-Length': 1000 },
+        write: (r) => {
+          r.write(bytes(100))
+          release = () => r.end(bytes(900))
+        }
+      })
+      await new Promise((r) => setTimeout(r, 150))
+      expect(server.uploading()).toBe(1)
+      expect((await upload(port, tok, 'second.jpg', bytes(1000))).status).toBe(507)
+      release()
+      expect((await first).status).toBe(201)
+      // once the first is written, the next one fits again
+      expect((await upload(port, tok, 'third.jpg', bytes(1000))).status).toBe(201)
+    } finally {
+      await server.close()
+    }
+  })
+
+  it('keeps one device from taking every upload slot and every connection', async () => {
+    const { server, port } = await startServer('per-client', { maxUploadsPerClient: 2, maxConnectionsPerClient: 4 })
+    try {
+      const tok = server.uploadToken
+      const releases: (() => void)[] = []
+      const slow = (name: string): Promise<Reply> =>
+        req(port, 'POST', `/${tok}/upload`, {
+          headers: { 'X-File-Name': name, 'Content-Type': 'image/jpeg', 'Content-Length': 200 },
+          write: (r) => {
+            r.write(bytes(100))
+            releases.push(() => r.end(bytes(100)))
+          }
+        })
+      const running = [slow('a.jpg'), slow('b.jpg')]
+      await new Promise((r) => setTimeout(r, 150))
+      expect(server.uploading()).toBe(2)
+      // a third upload from the same device waits (the page retries after Retry-After)
+      const third = await upload(port, tok, 'c.jpg', bytes(10))
+      expect([third.status, third.headers['retry-after']]).toEqual([503, '3'])
+      await new Promise((r) => setTimeout(r, 100))
+      // idle connections without any request: the device's fifth is closed at once, no token needed
+      const idle = await Promise.all(
+        [0, 1].map(
+          () =>
+            new Promise<Socket>((resolve, reject) => {
+              const s = connect(port, '127.0.0.1', () => resolve(s))
+              s.on('error', reject)
+            })
+        )
+      )
+      await new Promise((r) => setTimeout(r, 100))
+      await expect(req(port, 'GET', `/${tok}/`)).rejects.toThrow()
+      idle.forEach((s) => s.destroy())
+      releases.forEach((r) => r())
+      expect((await Promise.all(running)).map((r) => r.status)).toEqual([201, 201])
+      await new Promise((r) => setTimeout(r, 100))
+      expect((await req(port, 'GET', `/${tok}/`)).status).toBe(200)
+      expect((await upload(port, tok, 'c.jpg', bytes(10))).status).toBe(201)
+    } finally {
+      await server.close()
+    }
+  })
+
   it('serves offered files with ranges, type and disposition', async () => {
     const { server, port } = await startServer('download')
     try {
@@ -344,6 +442,36 @@ describe('share server', () => {
       expect((await req(port, 'GET', href)).status).toBe(404)
     } finally {
       await server.close()
+    }
+  })
+
+  it('offers only ordinary local photo and video files, never device paths or untrusted shares', async () => {
+    const { registerShare } = await import('../src/main/share/shareMain')
+    const clip = join(tmp, 'offer.mp4')
+    const refused = join(tmp, 'on-a-share.mp4')
+    writeFileSync(clip, 'video')
+    writeFileSync(refused, 'video')
+    // an alternate data stream of the file (NTFS): it would be served under the file's name
+    let stream: string | null = `${clip}:hidden.mp4`
+    try {
+      writeFileSync(stream, 'hidden')
+    } catch {
+      stream = null
+    }
+    process.env.DIASHOW_SHARE_HOST = '127.0.0.1'
+    // the refused file stands for a share the user hasn't trusted
+    const share = registerShare({ uploadsRoot: join(tmp, 'uploads-main'), broadcast: () => {}, allowPath: (p) => p !== refused })
+    const control = ipcHandlers.get('share:control')!
+    const owner = { once: vi.fn(), removeListener: vi.fn(), isDestroyed: () => false }
+    try {
+      await control({ sender: owner }, { type: 'start', projectId: 'p1', projectName: 'Klassenfahrt' })
+      const paths = [refused, ...(stream ? [stream] : []), '\\\\.\\UNC\\127.0.0.1\\x\\a.mp4', `\\\\?\\${clip}`, 'relative.mp4', 42, clip]
+      const status = (await control({ sender: owner }, { type: 'offer', paths })) as ShareStatus
+      expect(status.running).toBe(true)
+      expect(status.offered.map((o) => o.path)).toEqual([clip])
+    } finally {
+      await share.stop()
+      delete process.env.DIASHOW_SHARE_HOST
     }
   })
 

@@ -4,7 +4,8 @@
 // Security model: every session gets two random tokens (upload page, download page); only paths below
 // them are answered, everything else is a bare 404. Nothing maps a URL to the file system: uploads go
 // to names this module makes up, and downloads are looked up by a random id among the files the user
-// offered. No directory listings, no other files.
+// offered. No directory listings, no other files. One device (IP address) can hold only a few
+// connections and upload slots, and uploads running together count against the free disk space.
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { createReadStream, createWriteStream, existsSync } from 'node:fs'
 import { mkdir, rename, rm, stat, statfs } from 'node:fs/promises'
@@ -26,6 +27,10 @@ export const DEFAULT_LIMITS = {
 }
 /** Uploads written at the same time; more get 503 + Retry-After (the page waits and retries). */
 export const MAX_CONCURRENT_UPLOADS = 6
+/** Uploads one device (IP address) may write at once: its page sends one at a time, and no device takes every slot. */
+export const MAX_UPLOADS_PER_CLIENT = 3
+/** Connections one device may hold open (a phone's browser uses a few); more are closed at once. */
+export const MAX_CONNECTIONS_PER_CLIENT = 32
 /** Space left on the disk after an upload (the media cache needs room too). */
 const DISK_RESERVE = 1024 ** 3
 /** Name of the folder for uploads without a name. */
@@ -79,11 +84,20 @@ export function safeName(raw: string, max = 120): string {
  * The folder of a show's received files, in Uploads (the share dialog) and in Eingefügt (Ctrl+V): its
  * safe name. The clean-up and the trash find them by the same name.
  */
-export const showFolderName = (projectName: string): string => safeName(projectName, 60) || 'Diashow'
+export const showFolderName = (projectName: string): string =>
+  // a slash in a show's name is no path: "Klassenfahrt 9/10" and "Wandertag 9/10" must not both become "10"
+  // (older uploads in such a folder are still found through the show's media, cleanup.ts showFolders)
+  safeName(String(projectName ?? '').replace(/\s*[\\/]+\s*/g, '-'), 60) || 'Diashow'
+
+/**
+ * A name a phone sent, safe and without "~": Windows' short 8.3 names ("MIAMUL~1", "IMG_00~1.JPG") would
+ * otherwise reach another pupil's folder or file under its second name (and a rename can replace it).
+ */
+const phoneName = (raw: string, max?: number): string => safeName(String(raw ?? '').replace(/~/g, '_'), max)
 
 /** Safe file name for an upload, or null when it is no photo or video the app imports. */
 export function uploadFileName(raw: string, mime?: string): { name: string; kind: 'photo' | 'video' } | null {
-  let name = safeName(raw)
+  let name = phoneName(raw)
   let kind = classify(name)
   if (kind !== 'photo' && kind !== 'video') {
     const ext = MIME_EXT[(mime ?? '').split(';')[0].trim().toLowerCase()]
@@ -98,7 +112,7 @@ export function uploadFileName(raw: string, mime?: string): { name: string; kind
 
 /** Folder name for an uploader: their (safe) name, or "Unbekannt". */
 export function uploaderFolder(raw: string): string {
-  return safeName(raw, 40) || UNKNOWN_UPLOADER
+  return phoneName(raw, 40) || UNKNOWN_UPLOADER
 }
 
 /** Content-Disposition with an ASCII fallback and the UTF-8 name (RFC 6266 / 5987). */
@@ -159,6 +173,9 @@ export interface ShareServerOptions {
   projectName: string
   limits?: { photo: number; video: number }
   maxConcurrentUploads?: number
+  /** Per device (IP address): uploads at once and open connections. */
+  maxUploadsPerClient?: number
+  maxConnectionsPerClient?: number
   /** Free bytes on the upload disk; injected for tests (default: statfs). */
   freeSpace?: (dir: string) => Promise<number | null>
   /** A file arrived completely (it is in its final place). */
@@ -204,7 +221,20 @@ export function createShareServer(opts: ShareServerOptions): ShareServer {
   const downloadToken = token()
   const limits = opts.limits ?? DEFAULT_LIMITS
   const maxUploads = opts.maxConcurrentUploads ?? MAX_CONCURRENT_UPLOADS
+  const maxUploadsPerClient = opts.maxUploadsPerClient ?? MAX_UPLOADS_PER_CLIENT
+  const maxConnectionsPerClient = opts.maxConnectionsPerClient ?? MAX_CONNECTIONS_PER_CLIENT
   const freeSpace = opts.freeSpace ?? diskFree
+  /** Open connections and running uploads per device (remote address). */
+  const connectionsBy = new Map<string, number>()
+  const uploadsBy = new Map<string, number>()
+  const bump = (map: Map<string, number>, key: string, by: number): void => {
+    const n = (map.get(key) ?? 0) + by
+    if (n > 0) map.set(key, n)
+    else map.delete(key)
+  }
+  /** Uploads being written: what each still needs on the disk (a free-space check counts them all). */
+  const writing = new Set<{ length: number; counter: Limit | null }>()
+  const unwritten = (): number => [...writing].reduce((n, w) => n + Math.max(0, w.length - (w.counter?.bytes ?? 0)), 0)
   const offered = new Map<string, ShareOffer>()
   const received: ShareReceived[] = []
   /** Final paths (lower case) reserved by uploads in progress. */
@@ -259,8 +289,13 @@ export function createShareServer(opts: ShareServerOptions): ShareServer {
     if (length === 0) return reject(req, res, 400)
     const limit = limits[file.kind]
     if (length > limit) return reject(req, res, 413)
-    if (active >= maxUploads) return reject(req, res, 503, { 'Retry-After': '3' })
+    const client = req.socket.remoteAddress ?? ''
+    if (active >= maxUploads || (uploadsBy.get(client) ?? 0) >= maxUploadsPerClient) return reject(req, res, 503, { 'Retry-After': '3' })
     active++
+    bump(uploadsBy, client, 1)
+    // counted before the free space is asked for: uploads that start together see each other
+    const space = { length, counter: null as Limit | null }
+    writing.add(space)
     changed()
     const uploader = uploaderFolder(decodeHeader(req.headers['x-uploader']))
     const dir = join(opts.uploadDir, uploader)
@@ -269,11 +304,14 @@ export function createShareServer(opts: ShareServerOptions): ShareServer {
     try {
       await mkdir(dir, { recursive: true })
       const free = await freeSpace(dir)
-      if (free !== null && free < length + DISK_RESERVE) throw new HttpError(507, 'disk full')
+      // the other uploads still to be written need their room too
+      const others = unwritten() - (length - (space.counter?.bytes ?? 0))
+      if (free !== null && free - others < length + DISK_RESERVE) throw new HttpError(507, 'disk full')
       final = uniquePath(dir, file.name)
       part = `${final}.part`
       partFiles.add(part)
       const counter = new Limit(Math.min(limit, length))
+      space.counter = counter
       await pipeline(req, counter, createWriteStream(part, { flags: 'wx' }))
       if (counter.bytes !== length) throw new HttpError(400, 'incomplete')
       if (closed) throw new HttpError(503, 'stopped')
@@ -294,6 +332,8 @@ export function createShareServer(opts: ShareServerOptions): ShareServer {
         await rm(part, { force: true }).catch(() => {})
       }
       if (final) reserved.delete(final.toLowerCase())
+      writing.delete(space)
+      bump(uploadsBy, client, -1)
       active--
       changed()
     }
@@ -457,8 +497,18 @@ export function createShareServer(opts: ShareServerOptions): ShareServer {
       s.setTimeout(60_000)
       s.maxConnections = 200
       s.on('connection', (sock) => {
+        // one device can't hold all connections (and so lock the phones out); no token is needed for that
+        const client = sock.remoteAddress ?? ''
+        if ((connectionsBy.get(client) ?? 0) >= maxConnectionsPerClient) {
+          sock.destroy()
+          return
+        }
+        bump(connectionsBy, client, 1)
         sockets.add(sock)
-        sock.once('close', () => sockets.delete(sock))
+        sock.once('close', () => {
+          sockets.delete(sock)
+          bump(connectionsBy, client, -1)
+        })
       })
       await new Promise<void>((resolve, reject) => {
         s.once('error', reject)

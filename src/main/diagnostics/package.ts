@@ -196,6 +196,13 @@ contains no photos or videos, no face data and no names or paths of the project'
 logs are shortened (%USERPROFILE%).
 `
 
+/** The app settings as the package shows them: the trusted network hosts (the school's servers) only counted. */
+function settingsOf(settings: unknown): unknown {
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return settings
+  const s = settings as Record<string, unknown>
+  return Array.isArray(s.trustedHosts) ? { ...s, trustedHosts: `${s.trustedHosts.length} hosts` } : s
+}
+
 /** The files of the package, already cleaned. */
 export function packageFiles(src: PackageSources): PackageFile[] {
   const clean = (text: string, max = 4_000_000): string => redact(text, { home: src.home, maxLength: max })
@@ -204,7 +211,7 @@ export function packageFiles(src: PackageSources): PackageFile[] {
     { name: 'README.txt', about: 'readme', text: README },
     { name: 'versions.txt', about: 'versions', text: clean(lines({ ...src.versions, created: new Date(src.now).toISOString() })) },
     { name: 'system-check.txt', about: 'system', text: clean(systemReport(src.system, src.input.renderer)) },
-    { name: 'settings.json', about: 'settings', text: json({ app: src.settings, renderer: src.input.renderer ?? {} }) },
+    { name: 'settings.json', about: 'settings', text: json({ app: settingsOf(src.settings), renderer: src.input.renderer ?? {} }) },
     {
       name: 'project-summary.json',
       about: 'project',

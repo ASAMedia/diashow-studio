@@ -12,7 +12,7 @@ vi.mock('electron', () => ({
   protocol: { handle: vi.fn() },
   app: { on: vi.fn(), whenReady: () => new Promise(() => {}) },
   session: {},
-  shell: { openExternal: vi.fn() },
+  shell: { openExternal: vi.fn(), showItemInFolder: vi.fn() },
   ipcMain: {
     handle(channel: string, listener: (event: unknown, ...args: unknown[]) => unknown) {
       handlers.set(channel, listener)
@@ -20,8 +20,8 @@ vi.mock('electron', () => ({
   }
 }))
 const { handleMediaRequest, inThemeMusicDir, mediaPathAllowed, originAllowed, setMediaPathPolicy, setThemeMusicDir } = await import('../src/main/protocol')
-const { guardIpc, isAppUrlFor, navigationAllowed } = await import('../src/main/security')
-const { ipcMain } = await import('electron')
+const { guardIpc, isAppUrlFor, linkAllowed, navigationAllowed, openLinks } = await import('../src/main/security')
+const { ipcMain, shell } = await import('electron')
 
 const dir = mkdtempSync(join(tmpdir(), 'diashow sec '))
 afterAll(() => rmSync(dir, { recursive: true, force: true }))
@@ -57,6 +57,43 @@ describe('the app page', () => {
     expect(navigationAllowed('about:blank', 'file:///C:/Windows/', app)).toBe(false)
     // a window the main process pointed at a web page itself (tests: the phone page) is not the app
     expect(navigationAllowed('http://127.0.0.1:5000/tok/', 'http://127.0.0.1:5000/tok/f/1', app)).toBe(true)
+  })
+
+  it('opens only links to the app own sites in the browser, never a window', () => {
+    for (const url of [
+      'https://github.com/ASAMedia/diashow-studio/releases/tag/v1.8.1',
+      'https://github.com/BtbN/FFmpeg-Builds/releases',
+      'https://www.gnu.org/licenses/gpl-3.0.html',
+      'https://asamedia.github.io/diashow-studio/'
+    ]) {
+      expect([url, linkAllowed(url)]).toEqual([url, true])
+    }
+    // anything else could carry what the page knows (names of pupils, files) past the network block
+    for (const url of [
+      'https://evil.example/?names=Mia,Ben',
+      'http://github.com/x',
+      'https://github.com.evil.example/',
+      'https://user:pw@github.com/',
+      'https://github.com:8443/',
+      'https://evil.github.io/',
+      'file:///C:/Windows/System32/calc.exe',
+      'ms-settings:privacy',
+      'mailto:a@b.c',
+      'https://github.com/a b',
+      'not a url'
+    ]) {
+      expect([url, linkAllowed(url)]).toEqual([url, false])
+    }
+    let handler: ((d: { url: string }) => { action: string }) | null = null
+    const contents = { setWindowOpenHandler: (h: typeof handler) => (handler = h) }
+    const warnings: string[] = []
+    openLinks(contents as never, (m) => warnings.push(m))
+    const open = vi.mocked(shell.openExternal)
+    open.mockClear()
+    expect(handler!({ url: 'https://evil.example/?d=1' })).toEqual({ action: 'deny' })
+    expect(handler!({ url: 'https://github.com/ASAMedia/diashow-studio' })).toEqual({ action: 'deny' })
+    expect(open.mock.calls).toEqual([['https://github.com/ASAMedia/diashow-studio']])
+    expect(warnings).toEqual(['blocked opening https://evil.example/?d=1'])
   })
 })
 
@@ -147,9 +184,12 @@ describe('renderer paths that reach FFmpeg or the disk', async () => {
     const clip = join(dir, 'clip.mp4')
     writeFileSync(clip, 'x')
     expect(await checkLocalFile(clip)).toBe(clip)
-    for (const p of ['http://evil.example/x.mp4', 'concat:C:\\a.mp4|C:\\b.mp4', 'tcp://1.2.3.4:5', 'file:C:\\x.mp4', '\\\\?\\C:\\x.mp4', 'relative.mp4', join(dir, 'gone.mp4'), dir, 42]) {
+    for (const p of ['http://evil.example/x.mp4', 'concat:C:\\a.mp4|C:\\b.mp4', 'tcp://1.2.3.4:5', 'file:C:\\x.mp4', '\\\\?\\C:\\x.mp4', '\\??\\C:\\x.mp4', '\\\\.\\UNC\\evil-host\\s\\x.mp4', 'relative.mp4', join(dir, 'gone.mp4'), dir, 42]) {
       await expect(checkLocalFile(p)).rejects.toThrow()
     }
+    // a share the user hasn't trusted is refused before anything looks at it (a local stand-in here)
+    await expect(checkLocalFile(clip, (p) => p !== clip)).rejects.toThrow(/network-blocked/)
+    expect(await checkLocalFile(clip, () => true)).toBe(clip)
   })
 
   it('writes (and deletes on cancel) only video files in existing folders', () => {
@@ -159,6 +199,22 @@ describe('renderer paths that reach FFmpeg or the disk', async () => {
     expect(checkDirectExport(ok)).toMatchObject({ outPath: join(dir, 'out.mp4'), width: 1280 })
     expect(() => checkDirectExport({ ...ok, width: 1e6 })).toThrow(/width/)
     expect(() => checkDirectExport({ ...ok, audio: { duration: 5, clips: [{ id: 'a', kind: 'music', src: 'http://x/a.mp3', start: 0, offset: 0, duration: 1, gain: [] }] } })).toThrow(/source/)
+  })
+})
+
+describe('showing a file in Explorer', () => {
+  it('shows ordinary absolute paths only, never device paths', async () => {
+    const { registerApp } = await import('../src/main/appMain')
+    const settings = { get: async () => ({}), set: async () => {}, update: async () => {} }
+    registerApp({ settings })
+    const reveal = handlers.get('shell:reveal')!
+    const shown = vi.mocked(shell.showItemInFolder)
+    shown.mockClear()
+    const ok = join(dir, 'export.mp4')
+    for (const p of ['\\\\.\\UNC\\some-host\\s\\a.mp4', '\\\\?\\GLOBALROOT\\Device\\Mup\\h\\s\\a.mp4', '\\\\.\\pipe\\x', '\\??\\C:\\x', 'relative\\a.mp4', 'C:\\x\0.mp4', 42, null, ok]) {
+      await reveal({}, p)
+    }
+    expect(shown.mock.calls).toEqual([[ok]])
   })
 })
 

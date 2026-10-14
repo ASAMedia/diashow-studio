@@ -1,7 +1,7 @@
 // Diagnostics: friendly error kinds, cleaning of log text (profile paths, media content, tokens), the
 // rotating log file, the zip writer, the diagnostics package (counts only, no names or paths) and the
 // rate limits for reports from the windows.
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
@@ -15,7 +15,7 @@ import { buildZip, crc32, readZip } from '../src/main/diagnostics/zip'
 import { createReporter, describeValue } from '@shared/logReport'
 
 vi.mock('electron', () => ({ app: { on: vi.fn(), whenReady: () => new Promise(() => {}) }, ipcMain: { on: vi.fn(), handle: vi.fn() }, session: {}, shell: {}, BrowserWindow: {}, dialog: {} }))
-const { cleanEntry, rateLimiter } = await import('../src/main/diagnostics/index')
+const { cleanEntry, originalSizes, rateLimiter } = await import('../src/main/diagnostics/index')
 const { requestAllowed } = await import('../src/main/security')
 
 const tmp = mkdtempSync(join(tmpdir(), 'diashow-diag-'))
@@ -195,7 +195,7 @@ describe('diagnostics package', () => {
     home: 'C:\\Users\\anna',
     versions: { app: '1.0.0' },
     system,
-    settings: { kioskProjectId: null },
+    settings: { kioskProjectId: null, trustedHosts: ['nas-gymnasium-musterstadt', '10.1.2.3'] },
     input: { projectId: 'p1', renderer: { previewQuality: 'high' }, exportJobs: [{ state: 'error', width: 1920, height: 1080, codec: 'h264', error: 'nvenc failed' }] },
     project: project(),
     sizes: new Map([['m1', 3_000_000]]),
@@ -218,12 +218,29 @@ describe('diagnostics package', () => {
     const files = packageFiles(src())
     expect(files.map((f) => f.name)).toEqual(['README.txt', 'versions.txt', 'system-check.txt', 'settings.json', 'project-summary.json', 'export-queue.json', 'logs/diashow.log'])
     const all = files.map((f) => f.text).join('\n')
-    for (const secret of ['Müller', 'Lisa', 'Tom', 'Strand', 'Klasse 7b', 'Lieblingslied', 'anna', '0.11', 'Abschied']) expect([secret, all.includes(secret)]).toEqual([secret, false])
+    for (const secret of ['Müller', 'Lisa', 'Tom', 'Strand', 'Klasse 7b', 'Lieblingslied', 'anna', '0.11', 'Abschied', 'musterstadt', '10.1.2.3']) expect([secret, all.includes(secret)]).toEqual([secret, false])
+    // the trusted network hosts are only counted
+    expect(JSON.parse(files.find((f) => f.name === 'settings.json')!.text).app.trustedHosts).toBe('2 hosts')
     expect(all).toContain('%USERPROFILE%')
     // the zip holds exactly what the preview shows
     const zipped = readZip(zipOf(files, Date.UTC(2026, 9, 10)))
     expect(zipped.map((e) => e.data.toString('utf8'))).toEqual(files.map((f) => f.text))
     expect(previewOf(files).every((f) => f.bytes > 0)).toBe(true)
+  })
+})
+
+describe('sizes of the originals', () => {
+  it('never looks at a file on a share the user has not trusted', async () => {
+    const here = join(tmp, 'here.jpg')
+    const share = join(tmp, 'share.jpg')
+    writeFileSync(here, 'x'.repeat(10))
+    writeFileSync(share, 'x'.repeat(20))
+    // the share is a local stand-in the policy refuses: were it looked at, its size would be there
+    const asked: string[] = []
+    const sizes = await originalSizes([{ id: 'a', path: here }, { id: 'b', path: share }, { id: 'c', path: join(tmp, 'gone.jpg') }], (p) => (asked.push(p), p !== share))
+    expect([...sizes]).toEqual([['a', 10]])
+    expect(asked).toContain(share)
+    expect([...(await originalSizes([{ id: 'b', path: share }]))]).toEqual([['b', 20]])
   })
 })
 

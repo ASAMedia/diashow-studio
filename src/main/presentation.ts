@@ -1,9 +1,10 @@
 // Renderer windows: shared setup for the editor window and the presentation window, which plays the
 // show fullscreen on another display (or in a plain window when there is only one screen).
-import { BrowserWindow, screen, shell } from 'electron'
+import { BrowserWindow, screen } from 'electron'
 import { join } from 'node:path'
 import { APP_ICON } from './appIcon'
 import { dialogText } from './dialogText'
+import { devRendererUrl, openLinks } from './security'
 
 /**
  * Every app window (editor, presentation, export worker): sandboxed renderer without Node, isolated
@@ -24,15 +25,14 @@ export function rendererWebPreferences(): Electron.WebPreferences {
 
 /** Loads the renderer page; `hash` selects a mode (e.g. 'present'). */
 export function loadRenderer(win: BrowserWindow, hash?: string): Promise<void> {
-  if (process.env.ELECTRON_RENDERER_URL) return win.loadURL(process.env.ELECTRON_RENDERER_URL + (hash ? `#${hash}` : ''))
+  const dev = devRendererUrl()
+  if (dev) return win.loadURL(dev + (hash ? `#${hash}` : ''))
   return win.loadFile(join(__dirname, '../renderer/index.html'), hash ? { hash } : undefined)
 }
 
+/** No new windows; links to the app's own sites (GitHub, the licence) open in the browser (security.ts). */
 export function denyPopups(win: BrowserWindow): void {
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:/i.test(url)) void shell.openExternal(url)
-    return { action: 'deny' }
-  })
+  openLinks(win.webContents)
 }
 
 let presentation: BrowserWindow | null = null

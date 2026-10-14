@@ -182,6 +182,7 @@ export async function planArchive(project: Project, choice: Pick<ArchiveChoice, 
   ;(await statAll(known)).forEach((s, i) => stats.set(known[i], s))
   const plan = await planPack(src, {
     themeMusicDir: o.themeMusicDir,
+    allowPath: allow,
     isFile: async (p) => {
       // a song of the bundled library is looked for in today's folder (planPack)
       if (!stats.has(p)) stats.set(p, allow(p) ? await fileStat(p) : null)

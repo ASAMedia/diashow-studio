@@ -45,7 +45,8 @@ describe('Ctrl+V: what the clipboard holds', () => {
     expect(two).toBe(join(root, 'Klassenfahrt_ Athen', '2026-10-13 09-05-03 (2).png'))
     expect(readFileSync(one)).toEqual(PNG)
     // a name can't lead out of the folder
-    expect(await savePastedPng(root, '..\\..\\evil', PNG, at)).toBe(join(root, 'evil', '2026-10-13 09-05-03.png'))
+    // a show's name is no path: its slashes become dashes, inside the root (share/server.ts showFolderName)
+    expect(await savePastedPng(root, '..\\..\\evil', PNG, at)).toBe(join(root, '-..-evil', '2026-10-13 09-05-03.png'))
     expect(await savePastedPng(root, '', PNG, at)).toBe(join(root, 'Diashow', '2026-10-13 09-05-03.png'))
     await expect(savePastedPng(root, 'x', Buffer.from('not a picture'), at)).rejects.toThrow()
   })

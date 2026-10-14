@@ -20,11 +20,13 @@ export function stringList(value: unknown): string[] {
  * A path FFmpeg may read for the renderer (frames, filmstrip, waveform): an existing local or network
  * file, never a URL or protocol FFmpeg would follow (http:, tcp:, concat:, …) nor a device path. A
  * project file from elsewhere can hold any string as a path; this keeps it from reaching the network.
+ * `allow` (netTrust.ts allowPath): a share the user hasn't trusted is refused before it is looked at.
  */
-export async function checkLocalFile(raw: unknown): Promise<string> {
+export async function checkLocalFile(raw: unknown, allow?: (path: string) => boolean): Promise<string> {
   if (typeof raw !== 'string' || !raw || raw.length > 4000 || raw.includes('\0') || !isAbsolute(raw)) throw new Error('not a local file')
-  // "C:\…" and "\\server\share\…" only: no "scheme:" (a drive letter is one character), no \\?\ or \\.\
-  if (/^[a-z][a-z0-9+.-]+:/i.test(raw) || /^[\\/]{2}[?.][\\/]/.test(raw)) throw new Error('not a local file')
+  // "C:\…" and "\\server\share\…" only: no "scheme:" (a drive letter is one character), no \\?\, \\.\ or \??\
+  if (/^[a-z][a-z0-9+.-]+:/i.test(raw) || /^(?:[\\/]{2}[?.]|[\\/]\?\?)[\\/]/.test(raw)) throw new Error('not a local file')
+  if (allow && !allow(raw)) throw new Error('network-blocked: the share is not trusted')
   const st = await stat(raw).catch(() => null)
   if (!st?.isFile()) throw new Error(`ENOENT: no such file '${raw}'`)
   return raw

@@ -291,7 +291,7 @@ export function uploadPage(o: UploadPageOptions): string {
 <meta name="referrer" content="no-referrer"><title>${escapeHtml(t.title)}</title>${ICON_LINKS}<style>${STYLE}</style></head>
 <body><main>
 <h1>${escapeHtml(t.title)}</h1>
-<p class="sub">${escapeHtml(t.forProject.replace('{p}', o.project))}</p>
+<p class="sub">${escapeHtml(t.forProject.replace('{p}', () => o.project))}</p>
 ${o.collecting ? '' : `<p class="closed">${escapeHtml(t.closed)}</p>`}
 <label for="name">${escapeHtml(t.name)}</label>
 <input id="name" type="text" maxlength="40" autocomplete="given-name" placeholder="${escapeHtml(t.namePlaceholder)}">
@@ -353,7 +353,7 @@ export function downloadPage(o: DownloadPageOptions): string {
 <meta name="referrer" content="no-referrer"><title>${escapeHtml(t.title)}</title>${ICON_LINKS}<style>${STYLE}</style></head>
 <body><main>
 <h1>${escapeHtml(t.title)}</h1>
-<p class="sub">${escapeHtml(t.forProject.replace('{p}', o.project))}</p>
+<p class="sub">${escapeHtml(t.forProject.replace('{p}', () => o.project))}</p>
 ${o.offers.length ? `<ul>${rows}</ul>` : `<p class="hint">${escapeHtml(t.none)}</p>`}
 <p class="hint">${escapeHtml(t.iphone)}<br>${escapeHtml(t.android)}</p>
 <a class="btn" href="">${escapeHtml(t.reload)}</a>

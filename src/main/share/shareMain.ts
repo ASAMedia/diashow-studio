@@ -12,12 +12,15 @@ import type { ShareCommand, ShareFilesEvent, ShareStatus } from '@shared/share'
 import { lanAddresses } from './net'
 import { createShareServer, DEFAULT_LIMITS, showFolderName, type ShareServer } from './server'
 import { showOpen } from '../dialogs'
+import { checkLocalFile } from '../ipcGuards'
 import { dialogText } from '../dialogText'
 
 export interface ShareMainConfig {
   /** <Documents>/Diashow Studio/Uploads */
   uploadsRoot: string
   broadcast: (channel: string, payload: unknown) => void
+  /** Files that may be offered (netTrust.ts allowPath): never one on a share the user hasn't trusted. */
+  allowPath?: (path: string) => boolean
 }
 
 interface Session {
@@ -130,6 +133,18 @@ export function registerShare(cfg: ShareMainConfig): { stop(): Promise<void> } {
     await listen(s, pick)
   }
 
+  /**
+   * Offers a file for download: an existing photo or video at an ordinary local path (or on a trusted
+   * share, or one the user picked in the dialog), never a device path or an alternate data stream; the
+   * server checks its type (server.ts).
+   */
+  async function offer(raw: unknown, picked = false): Promise<void> {
+    if (!session) return
+    const path = await checkLocalFile(raw, picked ? undefined : cfg.allowPath).catch(() => null)
+    if (!path || path.indexOf(':', /^[A-Za-z]:/.test(path) ? 2 : 0) >= 0) return
+    await session?.server.offer(path)
+  }
+
   async function listen(s: Session, address: string): Promise<void> {
     // Only the machine's own private addresses (or the test override)
     if (!addresses().some((a) => a.address === address)) throw new Error('unknown address')
@@ -159,7 +174,7 @@ export function registerShare(cfg: ShareMainConfig): { stop(): Promise<void> } {
         if (session) session.server.collecting = !!cmd.on
         break
       case 'offer':
-        if (session && Array.isArray(cmd.paths)) for (const p of cmd.paths.slice(0, 50)) await session.server.offer(p)
+        if (session && Array.isArray(cmd.paths)) for (const p of cmd.paths.slice(0, 50)) await offer(p)
         break
       case 'unoffer':
         if (session && typeof cmd.id === 'string') session.server.unoffer(cmd.id)
@@ -176,7 +191,7 @@ export function registerShare(cfg: ShareMainConfig): { stop(): Promise<void> } {
           ]
         }
         const r = await showOpen(e, opts)
-        if (!r.canceled) for (const p of r.filePaths) await session?.server.offer(p)
+        if (!r.canceled) for (const p of r.filePaths) await offer(p, true)
         break
       }
       default:

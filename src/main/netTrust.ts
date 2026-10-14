@@ -1,7 +1,8 @@
 // Network shares (\\host\share): a project made elsewhere may point at any host, and Windows would sign
 // in there with the user's account. Files on a share are only opened when its host is trusted: hosts
 // of files and folders the user picked or dropped in this app, and hosts allowed in the editor's banner.
-// They are kept in the app settings. Electron-free.
+// They are kept in the app settings. The device-namespace spellings of a share (\\.\UNC\host\…,
+// \??\UNC\host\…) count as that host; other device paths (\\?\GLOBALROOT\…) are refused. Electron-free.
 import { uncHost, validHost } from '@shared/netPaths'
 import type { AppSettingsStore } from './appSettings'
 
@@ -16,11 +17,29 @@ export interface NetTrust {
   trustHosts(hosts: unknown): Promise<void>
 }
 
+/** Win32 device namespaces: \\?\…, \\.\… and the NT prefix \??\… (also with forward slashes). */
+const DEVICE = /^(?:[\\/]{2}[?.]|[\\/]\?\?)[\\/]/
+/** A drive in the device namespace (\\?\C:\…): a long local path. */
+const DEVICE_DRIVE = /^(?:[\\/]{2}[?.]|[\\/]\?\?)[\\/][a-z]:[\\/]/i
+/** A share in the device namespace (\\.\UNC\host\…, \??\UNC\host\…): Windows signs in there like at \\host. */
+const DEVICE_UNC = /^(?:[\\/]{2}[?.]|[\\/]\?\?)[\\/]UNC[\\/]([^\\/]+)[\\/]/i
+
+/**
+ * The network host a path leads to, '' for a local path, or null when it can't be told: a device path
+ * other than a drive or a share (\\?\GLOBALROOT\Device\Mup\host\…, pipes, volumes) may reach any host.
+ */
+export function pathHost(p: unknown): string | null {
+  if (typeof p !== 'string') return null
+  const host = uncHost(p) ?? DEVICE_UNC.exec(p)?.[1]?.toLowerCase()
+  if (host) return host
+  return DEVICE.test(p) && !DEVICE_DRIVE.test(p) ? null : ''
+}
+
 export function createNetTrust(settings: AppSettingsStore): NetTrust {
   const trustedHosts = new Set<string>()
   const allowPath = (p: string): boolean => {
-    const host = uncHost(p)
-    return !host || trustedHosts.has(host)
+    const host = pathHost(p)
+    return host === '' || (host !== null && trustedHosts.has(host))
   }
   const loaded = settings
     .get()

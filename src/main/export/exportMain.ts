@@ -18,6 +18,8 @@ export interface ExportIpcDeps {
   themeMusicDir: string
   queue: ExportQueueMain
   broadcast: (channel: string, payload: unknown) => void
+  /** Originals that may be read (netTrust.ts): packing leaves files on untrusted shares alone. */
+  allowPath: (path: string) => boolean
 }
 
 /** Registers the channels; `stop` (the app quits) stops the preparations and cancels the direct export. */
@@ -39,7 +41,7 @@ export function registerExport(d: ExportIpcDeps): { stop: () => Promise<void> } 
 
   ipcMain.handle('project:pack', (_e, project: Project, dir: string) => {
     if (typeof dir !== 'string' || !dir) throw new Error('no target folder')
-    return prepareRun((signal) => packProject(project, dir, { signal, onProgress: sendProgress, themeMusicDir: d.themeMusicDir }))
+    return prepareRun((signal) => packProject(project, dir, { signal, onProgress: sendProgress, themeMusicDir: d.themeMusicDir, allowPath: d.allowPath }))
   })
 
   ipcMain.handle('export:encoders', () => service.ffmpeg.encoders())
