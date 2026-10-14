@@ -2,6 +2,41 @@
 
 All notable changes to Diashow Studio. Versions follow [Semantic Versioning](https://semver.org). The release workflow publishes the section of a version as its release notes.
 
+## [1.9.0] - 2026-10-14
+
+**Downloads**
+
+- `Diashow.Studio-Setup-1.9.0.exe`: installer (no admin rights needed); it updates an installed version and keeps your slideshows and settings.
+- `Diashow.Studio-1.9.0-portable.exe`: runs without installing, e.g. from a USB stick.
+- The installer is not code-signed. If Windows SmartScreen says "Windows protected your PC", choose "More info" and then "Run anyway".
+- `THIRD_PARTY_NOTICES.txt` lists the licences of everything bundled, including all songs. The `ffmpeg-*` archives contain the source code of the bundled FFmpeg build and of every library compiled into it (GPL), listed in `ffmpeg-deps-sources-*.txt`.
+
+**New**
+
+- The app's taskbar button shows the progress of an export (yellow when paused, red for a moment when one fails), and Windows tells you when an export is finished or failed while you work in another program; a click shows the video in its folder. No notification appears while a slideshow plays fullscreen.
+
+**Security**
+
+- Network shares you haven't trusted stay untouched in more places: opening a slideshow file from elsewhere no longer looks at its files' sizes, and a Live Photo's video, the diagnostics package, packing, frames, waveforms and files offered on the phones' page wait for your OK too. `\\.\UNC\…` spellings of a share count as that share; other device paths are refused.
+- A slideshow file from elsewhere can no longer make the app create folders or files outside its media cache.
+- Share over Wi-Fi: one phone or laptop can hold at most 32 connections and 3 uploads at once, so nobody can lock the class out; uploads that run together count against the free disk space; "~" in pupils' names and file names becomes "_". Slideshows with a slash in their name ("Klassenfahrt 9/10") get their own upload folder.
+- Links open in the browser only to GitHub, the website and the GPL text. An installed app ignores the developer setting that would load another page.
+- The diagnostics package counts trusted network hosts instead of naming them.
+
+**Fixes**
+
+- Photos and videos still being read for one slideshow no longer land in another one opened meanwhile (Add photos, drop, Ctrl+V, Insert…, pupils' uploads).
+- An edit made right before the window is closed is saved, with its undo step; opening a slideshow right after closing it waits for its last save.
+- Undo and redo also take back a song's trim.
+- The clean-up: a background update during it no longer writes the slideshow back as it was.
+- Trash: a slideshow restored with an upload under another name is no longer processed again every time it opens (its face data was dropped); a slideshow whose move into the trash was taken back while a file stayed busy can be saved again; finished exports come back into the queue after an interrupted restore; the home screen no longer waits for the trash's expiry at start-up.
+- Snapshots: Loop and Bounce prints on the pile no longer decode their motion again for every exported frame. Magazine preview: a Loop or Bounce no longer shows its still at the start of its slide.
+- Beat sync no longer cuts a Loop or Bounce shorter than one cycle, or a grid slide shorter than its longest clip.
+- Panoramas in HEIF, HIF and JPEG XL keep their full display size and get sharper 4K versions.
+- "Split into single slides" also separates the slide's last photo; moving a slide in grid themes no longer lands inside the next slide or between a caption text and its slide; a panorama dropped onto a card gets a slide of its own; combining is no longer offered for a Live Photo that plays; a text slide is no longer counted among the fixed slides.
+- Search finds a person where the people list sees them; "n of m" and F3 follow the match shown when the slideshow changes; the zoom slider's arrow keys work at small sizes; the filmstrip stays a Tab stop when the selected slide is scrolled away.
+- The repeat notice counts how many skipped files repeat a left-out photo.
+
 ## [1.8.1] - 2026-10-14
 
 **Downloads**
