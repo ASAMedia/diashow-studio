@@ -73,7 +73,7 @@ export function useStripDrop(o: {
     const canMerge = files
       ? filesFit(target, e.dataTransfer.items)
       : maxPer > 1 && !!target && !!source && i !== dragRef.current && target.kind !== 'title' && target.kind !== 'text' && source.kind !== 'text' &&
-        target.entries.length + source.entries.length <= maxPer && !target.pano && !source.pano
+        target.entries.length + source.entries.length <= maxPer && !target.pano && !source.pano && !target.live && !source.live
     if (canMerge && scale.card >= MIN_MERGE_CARD && within > 0.25 && within < 0.75) return { merge: i }
     return { insert: Math.max(0, Math.min(n, Math.round(x / step))) }
   }

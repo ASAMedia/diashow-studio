@@ -32,8 +32,8 @@ export function BatchPanel({ entries, slides }: { entries: Entry[]; slides: Time
   const withFaces = visual.filter((e) => media.get(e.mediaId)?.faces?.length || media.get(e.mediaId)?.videoFaces?.some((s) => s.faces.length))
   const pixelated = visual.filter((e) => e.privacy?.length || (e.type === 'video' && e.privacyTracks?.length)).length
   const panos = panoramaEntries(visual, (id) => media.get(id), project.settings.aspect)
-  // a panorama always keeps a slide of its own
-  const mergeable = meta.maxPerSlide > 1 && slides.length > 1 && slides.every((s) => (s.kind === 'photos' && !s.pano) || s.kind === 'video') && visual.length <= meta.maxPerSlide
+  // a panorama, and a Live Photo that plays, always keep a slide of their own
+  const mergeable = meta.maxPerSlide > 1 && slides.length > 1 && slides.every((s) => (s.kind === 'photos' && !s.pano && !s.live) || s.kind === 'video') && visual.length <= meta.maxPerSlide
 
   const mixed = <option value="mixed">{t('unchanged')}</option>
   return (

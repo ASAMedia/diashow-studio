@@ -44,7 +44,7 @@ export interface RepeatNotice {
   videos: number
   /** Nothing of the import was new. */
   all: boolean
-  /** Media ids the skipped ones repeat: in the show, or added by the same import. */
+  /** For each skipped one, the media id it repeats: in the show, or added by the same import. */
   targets: string[]
   /** Adds the skipped ones where they would have gone, in one undo step; resolves with the new entry ids. */
   addAnyway: () => Promise<string[]>
@@ -72,7 +72,10 @@ function repeatText(n: Pick<RepeatNotice, 'photos' | 'videos' | 'all'>): string 
   return t(n.all ? 'repeatAllMany' : total === 1 ? 'repeatSkippedOne' : 'repeatSkippedMany').replace('{what}', what)
 }
 
-/** Of the media `targets`, those whose slides are all left out (they show up in the review grid only). */
+/**
+ * How many of the skipped ones (`targets`: what each repeats) repeat a photo or video whose slides are
+ * all left out (it shows up in the review grid only).
+ */
 export function leftOutTargets(p: Project, targets: string[]): number {
   const want = new Set(targets)
   const shown = new Set<string>()
@@ -82,7 +85,7 @@ export function leftOutTargets(p: Project, targets: string[]): number {
     if (e.excluded) left.add(e.mediaId)
     else shown.add(e.mediaId)
   }
-  return [...left].filter((id) => !shown.has(id)).length
+  return targets.filter((id) => left.has(id) && !shown.has(id)).length
 }
 
 /** "1 davon ist herausgenommen …", or '' when every target has a slide in the show. */
@@ -105,7 +108,7 @@ export function noticeRepeats(project: Project, checked: CheckedImport, addAnywa
     photos,
     videos: checked.skipped.length - photos,
     all: checked.fresh.length === 0,
-    targets: [...new Set(Object.values(checked.repeatOf))],
+    targets: checked.skipped.map((m) => checked.repeatOf[m.id]).filter((id): id is string => !!id),
     addAnyway
   }
   const text = noticeText(project, notice)

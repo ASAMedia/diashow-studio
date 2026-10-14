@@ -35,35 +35,41 @@ export interface StripSearch {
 export function useStripSearch(tl: Timeline, project: Project, onJump: (index: number) => void): StripSearch {
   const [open, setOpenRaw] = useState(false)
   const [query, setQueryRaw] = useState('')
-  const [current, setCurrent] = useState(-1)
+  // the match shown last, by its slide: the matches are found again whenever the show changes, and one
+  // may be gone (its caption edited, say) or new ones may come before it
+  const [shown, setShown] = useState<{ id: string; index: number } | null>(null)
   const people = project.people
   const hits = useMemo(() => (open && query.trim() ? searchSlides(tl, { people }, query, localeTag()) : []), [open, query, tl, people])
   const matched = useMemo(() => new Set(hits.map((h) => h.index)), [hits])
+  const current = shown ? hits.findIndex((h) => tl.slides[h.index]?.id === shown.id) : -1
   const jump = useRef(onJump)
   jump.current = onJump
   const go = (k: number): void => {
     if (!hits.length) return
     const i = ((k % hits.length) + hits.length) % hits.length
-    setCurrent(i)
+    setShown({ id: tl.slides[hits[i].index].id, index: hits[i].index })
     jump.current(hits[i].index)
   }
+  // without the match shown last among them: the first one behind (in front of) where it was
+  const after = (): number => (shown ? hits.findIndex((h) => h.index > shown.index) : 0)
+  const before = (): number => (shown ? hits.findLastIndex((h) => h.index < shown.index) : -1)
   return {
     open,
     query,
     hits,
-    current: current < hits.length ? current : -1,
+    current,
     matched,
     setOpen: (v) => {
       setOpenRaw(v)
-      if (!v) setCurrent(-1)
+      if (!v) setShown(null)
     },
     setQuery: (q) => {
       setQueryRaw(q)
-      setCurrent(-1)
+      setShown(null)
     },
     go,
-    next: () => go(current < 0 || current >= hits.length ? 0 : current + 1),
-    prev: () => go(current < 0 || current >= hits.length ? hits.length - 1 : current - 1)
+    next: () => go(current >= 0 ? current + 1 : Math.max(0, after())),
+    prev: () => go(current >= 0 ? current - 1 : before())
   }
 }
 
@@ -331,7 +337,12 @@ export function ZoomControls({ card, onZoom, onFit }: { card: number; onZoom: (c
         value={cardToSlider(card)}
         aria-label={t('stripZoom')}
         aria-valuetext={`${card} px`}
-        onChange={(e) => onZoom(sliderToCard(Number(e.target.value)))}
+        onChange={(e) => {
+          // a step of the slider is less than a pixel on small cards: then one pixel its way
+          const v = Number(e.target.value)
+          const next = sliderToCard(v)
+          onZoom(next !== card || v === cardToSlider(card) ? next : zoomStep(card, v > cardToSlider(card) ? 1.001 : 1 / 1.001))
+        }}
       />
       <button className="btn small icon ghost" title={`${t('stripZoomIn')} (${t('kbdCtrlWheel')})`} aria-label={t('stripZoomIn')} disabled={card >= MAX_CARD} onClick={() => onZoom(zoomStep(card, 1.25))}>
         <ZoomIn size={14} />

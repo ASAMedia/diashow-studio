@@ -26,6 +26,10 @@ export interface CleanupIpcOptions {
   log?: (message: string) => void
 }
 
+/**
+ * `ready` settles once a show half moved into the trash (a crash) is back: the list of shows waits for
+ * that, not for the expiry after it (deleting a big show for good may take a while).
+ */
 export function registerCleanup(d: CleanupDeps & { trash: Trash }, opts: CleanupIpcOptions = {}): { ready: Promise<void> } {
   const trash = d.trash
   const serial = serialByKey()
@@ -67,7 +71,14 @@ export function registerCleanup(d: CleanupDeps & { trash: Trash }, opts: Cleanup
       },
       (err: Error) => opts.log?.(`trash expiry failed: ${err.message}`)
     )
-  const ready = trash.recover().catch((err: Error) => opts.log?.(`trash recovery failed: ${err.message}`)).then(expire)
+  // export jobs that came back with a show go into the queue again
+  const recovered = trash
+    .recover()
+    .then(async (jobs) => {
+      for (const job of jobs) await d.exports.adopt?.(job).catch(() => {})
+    })
+    .catch((err: Error) => opts.log?.(`trash recovery failed: ${err.message}`))
+  const ready = recovered.then(expire)
   setInterval(() => void expire(), EXPIRE_EVERY_MS).unref()
 
   ipcMain.handle('project:delete', async (_e, id: unknown) => {
@@ -103,5 +114,5 @@ export function registerCleanup(d: CleanupDeps & { trash: Trash }, opts: Cleanup
     await ready
     return forGood(() => trash.empty())
   })
-  return { ready }
+  return { ready: recovered }
 }

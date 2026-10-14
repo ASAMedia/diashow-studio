@@ -241,12 +241,14 @@ function dateLabel(time: number): string {
 
 /**
  * An instant photo: square picture, thick bottom border with a handwritten line. A panorama gets a
- * wide (tall) one, like a wide-format instant film, and pans in it after landing.
+ * wide (tall) one, like a wide-format instant film, and pans in it after landing. `still`: a print on
+ * the pile shows the photo, never its motion (like Vintage's pile): a Loop or Bounce there would keep
+ * its decoded motion part in memory, and in an export start decoding it again for every frame.
  */
-function polaroid(ctx: Ctx, s: SlideState, pose: Pose, opacity: number, text: string, o: { shade?: number; textOpacity?: number } = {}): void {
+function polaroid(ctx: Ctx, s: SlideState, pose: Pose, opacity: number, text: string, o: { shade?: number; textOpacity?: number; still?: boolean } = {}): void {
   const { W, H } = ctx
   const sl = s.slide
-  const tex = slideTexture(ctx, s, 0)
+  const tex = o.still ? ctx.image(sl.media[0]) : slideTexture(ctx, s, 0)
   const m = sl.media[0]
   const a = aspectOf(m, tex)
   const area = !sl.pano ? { w: H * 0.56, h: H * 0.56 } : sl.pano.axis === 'x' ? { w: W * 0.78, h: H * 0.5 } : { w: W * 0.5, h: H * 0.6 }
@@ -292,7 +294,7 @@ export const snapshots: Theme = {
       const opacity = clamp01(5 - depth)
       if (opacity <= 0.001) continue
       const st: SlideState = { slide: sl, local: sl.duration, p: 1, inP: 1, outP: 1 }
-      polaroid(ctx, st, snapPoses(ctx, sl).pile, opacity, '', { shade: Math.min(0.45, 0.11 * Math.max(0, depth - 1)) })
+      polaroid(ctx, st, snapPoses(ctx, sl).pile, opacity, '', { shade: Math.min(0.45, 0.11 * Math.max(0, depth - 1)), still: true })
     }
   },
   drawSlide(ctx, s) {

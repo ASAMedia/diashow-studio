@@ -233,7 +233,8 @@ export function createProjectStore(dir: string, opts: ProjectStoreOptions = {}):
     },
 
     async load(id, onRead) {
-      const { project: p, report, text } = await readChecked(file(id), { fallbackId: id })
+      // in the show's queue: a save still on its way (the editor was just closed) is read, not the file before it
+      const { project: p, report, text } = await serial(id, () => readChecked(file(id), { fallbackId: id }))
       const renamed = p.id !== id
       if (renamed) p.id = id
       onRead?.(text, renamed || lostData(report))

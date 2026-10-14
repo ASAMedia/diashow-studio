@@ -4,7 +4,7 @@
 // good; emptying; never restoring over another show or file; busy files (Windows keeps a file open:
 // the move waits, or is taken back); damaged entries (reported, never in the way); deleting only
 // inside the trash folders; finishing what a crash interrupted.
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
@@ -31,6 +31,7 @@ vi.mock('node:fs/promises', async (original) => {
 const { createTrash, TrashRefusedError } = await import('../src/main/trash')
 const { createProjectStore } = await import('../src/main/projects')
 const { importProjectFile } = await import('../src/main/projectFile')
+const { mediaId } = await import('../src/main/media/scan')
 
 const tmp = mkdtempSync(join(tmpdir(), 'diashow-trash-'))
 afterAll(() => rmSync(tmp, { recursive: true, force: true, maxRetries: 3 }))
@@ -198,9 +199,16 @@ describe('restoring', () => {
     const moved = join(dirname(s.upload), 'IMG_1 (2).jpg')
     expect(readFileSync(s.upload, 'utf8')).toBe('someone else')
     expect(readFileSync(moved, 'utf8')).toBe('upload of trip')
+    // under another name it is another file to the media ids (path, size, time): it gets the id an import
+    // would give it, and its slide follows; else opening the show takes it for an edited original every
+    // time (processed again, its face data dropped: media/restore.ts)
+    const st = statSync(moved)
+    const id = mediaId(moved, st.size, st.mtimeMs)
     for (const f of [s.file, ...s.backups]) {
       const p = JSON.parse(readFileSync(f, 'utf8')) as Project
       expect(p.media.map((m) => m.path)).toEqual([moved, s.pasted, s.photo])
+      expect(p.media.map((m) => m.id)).toEqual([id, 'a000000000000002', 'a000000000000003'])
+      expect(p.entries.map((e) => (e.type === 'text' ? '' : e.mediaId))).toEqual([id, 'a000000000000002', 'a000000000000003'])
     }
     expect(existsSync(s.history)).toBe(false)
     expect(readdirSync(a.trash.dataDir)).toEqual([])
@@ -276,6 +284,28 @@ describe('busy files', () => {
     expect(readFileSync(s.file, 'utf8')).toBe(s.text)
   })
 
+  it('a move whose take-back meets a busy file too: the show works on, the rest comes back at the next start', async () => {
+    const a = app('busy-back')
+    const s = show(a, 'trip')
+    const projects = createProjectStore(a.docs, { inTrash: (id) => a.trash.has(id) })
+    setBusy(s.pasted, 99)
+    setBusy(join(a.trash.dir, 'trip', 'backups'), 99)
+    await expect(a.trash.moveIn(s.move)).rejects.toMatchObject({ code: 'EBUSY' })
+    busy.clear()
+    // the show is back, its older versions are still in the trash
+    expect(readFileSync(s.file, 'utf8')).toBe(s.text)
+    for (const f of s.backups) expect(existsSync(f), f).toBe(false)
+    // so it is no show in the trash: its saves go through
+    expect(await a.trash.has('trip')).toBe(false)
+    await projects.save({ ...s.project, name: 'Klassenfahrt 2' })
+    // the next start brings the rest back
+    const again = a.open()
+    await again.recover()
+    for (const f of s.backups) expect(existsSync(f), f).toBe(true)
+    expect(await again.list()).toEqual({ entries: [], problems: [], bytes: 0 })
+    expect(await again.has('trip')).toBe(false)
+  })
+
   it('a file that stays busy: the move is taken back, the show stays as it was', async () => {
     const a = app('busy-long')
     const s = show(a, 'trip')
@@ -343,7 +373,8 @@ describe('damaged entries and crashes', () => {
     // under way: not listed as shows
     expect((await a.trash.list()).entries).toEqual([])
     const trash = a.open()
-    await trash.recover()
+    // the export jobs that came back are named, so the queue takes them in again (cleanupMain.ts)
+    expect((await trash.recover()).sort()).toEqual(['job-moving', 'job-restoring'])
     for (const f of [...moving.all, ...restoring.all]) expect(existsSync(f), f).toBe(true)
     expect(readFileSync(moving.file, 'utf8')).toBe(moving.text)
     for (const f of purging.all) expect(existsSync(f), f).toBe(false)

@@ -140,8 +140,9 @@ export function mergeEntries(p: Project, ids: string[]): void {
   const at = p.entries.slice(0, firstIdx).filter((e) => !moving.has(e)).length
   rest.splice(at, 0, ...block)
   block.forEach((e, i) => (e.groupBreak = i === 0 ? 'force' : 'join'))
+  // the slide behind starts afresh (a text slide is one of its own anyway, and no slide fixed by hand)
   const after = rest[at + block.length]
-  if (after) after.groupBreak = 'force'
+  if (after && after.type !== 'text') after.groupBreak = 'force'
   p.entries = rest
 }
 
@@ -149,6 +150,11 @@ export function mergeEntries(p: Project, ids: string[]): void {
 export function splitSlide(p: Project, ids: string[]): void {
   const want = new Set(ids)
   p.entries.forEach((e) => want.has(e.id) && (e.groupBreak = 'force'))
+  // the photo behind the slide starts a slide too: else the last of these would take it in (and more,
+  // up to the size the theme's pattern has for that slide)
+  const last = p.entries.findLastIndex((e) => want.has(e.id))
+  const next = last < 0 ? undefined : p.entries.slice(last + 1).find((e) => !e.excluded)
+  if (next && next.type !== 'text' && next.groupBreak !== 'join') next.groupBreak = 'force'
 }
 
 /** Takes one entry out of a slide; it follows the slide as a slide of its own. */
@@ -164,7 +170,7 @@ export function releaseEntry(p: Project, slideIds: string[], id: string): void {
   e.groupBreak = 'force'
   if (keep[0].groupBreak === 'join') keep[0].groupBreak = 'force'
   const next = p.entries[at + 1]
-  if (next) next.groupBreak = 'force'
+  if (next && next.type !== 'text') next.groupBreak = 'force'
 }
 
 /** Pulls the next entry of the show into the slide, or hands the last one on. */
@@ -181,7 +187,7 @@ export function resizeSlide(p: Project, slideIds: string[], delta: 1 | -1): void
   if (!next || next.type === 'text') return
   next.groupBreak = 'join'
   const after = p.entries[p.entries.indexOf(next) + 1]
-  if (after && after.groupBreak !== 'join') after.groupBreak = 'force'
+  if (after && after.type !== 'text' && after.groupBreak !== 'join') after.groupBreak = 'force'
 }
 
 /**

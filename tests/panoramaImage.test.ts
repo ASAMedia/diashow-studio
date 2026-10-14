@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { ExportProgress, MediaItem } from '@shared/types'
 import { createMediaService, type MediaService } from '../src/main/media/service'
 import { classifyCacheFile } from '../src/main/cache'
-import { FFMPEG_DIR } from './helpers/media'
+import { ff, FFMPEG_DIR } from './helpers/media'
 
 const tmp = mkdtempSync(join(tmpdir(), 'diashow-pano-'))
 const src = join(tmp, 'src')
@@ -31,6 +31,8 @@ beforeAll(async () => {
   await plain(2000, 8000).withMetadata({ orientation: 6 }).jpeg({ quality: 70 }).toFile(join(src, 'turned.jpg'))
   // an ordinary photo keeps the 3840 px long side
   await plain(6000, 4000).jpeg({ quality: 70 }).toFile(join(src, 'normal.jpg'))
+  // a format FFmpeg decodes (HEIF, HIF, JPEG XL): its first pass must not shrink a panorama already
+  await ff.run(['-f', 'lavfi', '-i', 'color=c=0x2878c8:s=8000x2000', '-frames:v', '1', '-c:v', 'libjxl', '-distance', '3', join(src, 'wide.jxl')])
   svc = createMediaService({ ffmpegDir: FFMPEG_DIR, cacheDir: join(tmp, 'cache') })
   items = await svc.importPaths([src])
   await svc.idle()
@@ -53,6 +55,9 @@ describe('panorama display images', () => {
     expect(await size(turned.display!)).toEqual([7680, 1920])
     const normal = byName('normal.jpg')
     expect([normal.width, normal.height]).toEqual([3840, 2560])
+    const jxl = byName('wide.jxl')
+    expect([jxl.width, jxl.height]).toEqual([7680, 1920])
+    expect(await size(jxl.display!)).toEqual([7680, 1920])
   })
 
   it('get a sharper version for big exports, once, counted with the 4K versions', async () => {

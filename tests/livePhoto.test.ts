@@ -168,6 +168,12 @@ describe('Loop and Bounce slides', () => {
         const off = Math.abs(((s.start + s.transIn / 2 - 0.25) / 0.5) % 1)
         expect(Math.min(off, 1 - off)).toBeLessThan(1e-6)
       }
+      // a short song: the slides are near their shortest, and the beats never cut a cycle short
+      for (let shift = 0; shift < 0.5; shift += 0.05) {
+        const song = { ...track('b', 16), beats: Array.from({ length: 32 }, (_, i) => shift + i * 0.5), bpm: 120 }
+        const tight = buildTimeline(show({ playLive: true, liveEffect }, { timing: { mode: 'fitToMusic', customTotal: 60, beatSync: true } }, [song]))
+        expect(tight.slides.find((s) => s.live)!.duration, `beats from ${shift.toFixed(2)} s`).toBeGreaterThanOrEqual(liveMinSeconds(3, liveEffect) - 1e-9)
+      }
     }
   })
 })

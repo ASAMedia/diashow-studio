@@ -15,7 +15,8 @@
 //
 // Restoring puts everything back where it was, never over anything that is there now: a show whose id
 // is taken is refused; an upload whose place is taken comes back under a free name, the show and its
-// older versions follow it, and its undo history (which no longer fits) goes.
+// older versions follow it (with the media id of the file there), and its undo history (which no longer
+// fits) goes.
 //
 // Uploads a show shares with another one (a duplicate) are not moved in (cleanup.ts decides what goes
 // along): media() tells the clean-up what the shows in the trash still use, so nothing deletes them
@@ -25,6 +26,7 @@ import { basename, dirname, extname, join, relative, resolve } from 'node:path'
 import { validDeleteAt } from '@shared/cleanup'
 import { TRASH_DAYS, type TrashContents, type TrashEntry, type TrashProblem, type TrashRefusal, type TrashRemoveResult } from '@shared/trash'
 import { listDir, present } from './files'
+import { mediaId } from './media/scan'
 import { checkProjectId, cleanProjectText } from './projectSchema'
 import { BACKUPS, PROJECT_EXT } from './projects'
 import { replaceFile } from './replaceFile'
@@ -95,7 +97,10 @@ export interface Trash {
   /** <projects>/.trash and <userData>/trash. */
   readonly dir: string
   readonly dataDir: string
-  /** A show of this id is in the trash (its saves are refused, an imported file gets another id). */
+  /**
+   * A show of this id is in the trash: its file lies there (its saves are refused, an imported file gets
+   * another id). Not what is left of a move taken back while a file stayed busy: that show is in use.
+   */
   has(id: string): Promise<boolean>
   moveIn(move: TrashMove): Promise<TrashEntry>
   /** The shows in the trash, newest first, and what can't be read there. */
@@ -107,8 +112,8 @@ export interface Trash {
   empty(): Promise<TrashRemoveResult>
   /** Deletes what has been in the trash for its days; returns the keys. */
   expire(): Promise<string[]>
-  /** After a crash: takes back a half-done move, finishes a restore or a purge. */
-  recover(): Promise<void>
+  /** After a crash: takes back a half-done move, finishes a restore or a purge. Returns the export jobs whose folders came back (the queue takes them in again). */
+  recover(): Promise<string[]>
   /**
    * The photos and videos of each show in the trash (by id). Uploads and pasted pictures it shared with
    * another show (a duplicate) stayed in place when it moved in: it still uses them (cleanup.ts).
@@ -338,6 +343,12 @@ export function createTrash(opts: TrashOptions): Trash {
 
   /** The show and its older versions point at uploads that came back under another name. */
   async function followRenamed(id: string, renamed: ReadonlyMap<string, string>): Promise<void> {
+    // the media ids of the files at their new places (a rename keeps size and time)
+    const ids = new Map<string, string>()
+    for (const [old, dest] of renamed) {
+      const st = await stat(dest).catch(() => null)
+      if (st?.isFile()) ids.set(old, mediaId(dest, st.size, st.mtimeMs))
+    }
     const files = [place(id, { kind: 'show' })]
     const folder = place(id, { kind: 'backups' })
     for (const n of await readdir(folder).catch(() => [] as string[])) if (n.toLowerCase().endsWith(PROJECT_EXT)) files.push(join(folder, n))
@@ -345,7 +356,7 @@ export function createTrash(opts: TrashOptions): Trash {
       try {
         const st = await stat(file)
         const p = JSON.parse(cleanProjectText(await readFile(file, 'utf8'))) as unknown
-        if (!followFiles(p, renamed)) continue
+        if (!followFiles(p, renamed, ids)) continue
         const tmp = `${file}.${process.pid}.${now()}.tmp`
         await writeFile(tmp, JSON.stringify(p, null, 1), 'utf8')
         await replaceFile(tmp, file, opts.retry)
@@ -363,7 +374,7 @@ export function createTrash(opts: TrashOptions): Trash {
 
     async has(id) {
       await load()
-      return ids.has(id)
+      return ids.has(id) && present(inTrash(id, { kind: 'show' }))
     },
 
     moveIn(mv) {
@@ -508,6 +519,10 @@ export function createTrash(opts: TrashOptions): Trash {
 
     recover() {
       return serial(async () => {
+        const jobs: string[] = []
+        /** The jobs among `items` that are no longer `left` in the trash. */
+        const back = (items: Item[], left: Item[]): string[] =>
+          items.flatMap((i) => (i.kind === 'job' && !left.some((l) => l.kind === 'job' && l.job === i.job) ? [i.job] : []))
         for (const e of await listDir(dir)) {
           if (!e.isDirectory() || !ID.test(e.name)) continue
           const m = await readManifest(e.name)
@@ -515,11 +530,19 @@ export function createTrash(opts: TrashOptions): Trash {
             if (m?.state === 'moving') {
               // the app stopped while a show was being moved: it goes back
               const left = await takeBack(m.id, m.items)
-              if (left.length) await writeManifest({ ...m, state: 'trashed' })
+              jobs.push(...back(m.items, left))
+              if (left.length) await writeManifest({ ...m, state: 'trashed', items: left })
               else await removeEntry(m.id)
               log(`trash: an interrupted move of ${m.id} was taken back`)
+            } else if (m?.state === 'trashed' && !(await present(inTrash(m.id, { kind: 'show' }))) && (await present(place(m.id, { kind: 'show' })))) {
+              // a move taken back while a file stayed busy: the show is in use again, the rest follows it now
+              const left = await takeBack(m.id, m.items)
+              jobs.push(...back(m.items, left))
+              if (left.length) await writeManifest({ ...m, items: left })
+              else await removeEntry(m.id)
+              log(`trash: what was left of a move of ${m.id} that was taken back ${left.length ? 'stays in the trash (in use)' : 'came back'}`)
             } else if (m?.state === 'restoring') {
-              await putBack(m)
+              jobs.push(...(await putBack(m)).jobs)
             } else if (m?.state === 'purging') {
               await purgeOne(m.id)
             }
@@ -527,6 +550,7 @@ export function createTrash(opts: TrashOptions): Trash {
             log(`trash: ${m?.state} of ${e.name} not finished (${(err as NodeJS.ErrnoException).code ?? (err as Error).message})`)
           }
         }
+        return jobs
       })
     },
 

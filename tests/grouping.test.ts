@@ -3,7 +3,7 @@ import { buildTimeline } from '@shared/timeline'
 import { buildAudioPlan, audibleClips } from '@shared/audioPlan'
 import { DEFAULT_SETTINGS, type Entry, type MediaItem, type Project } from '@shared/types'
 import { showsWhole } from '../src/renderer/src/engine/draw'
-import { addMissingDayTitles, autoGroup, hasDateTitles, insertByTime, isFixed, sortByDate, splitSlide } from '../src/renderer/src/entryEdits'
+import { addMissingDayTitles, autoGroup, hasDateTitles, insertByTime, isFixed, mergeEntries, releaseEntry, resizeSlide, sortByDate, splitSlide } from '../src/renderer/src/entryEdits'
 import { insertEntries } from '../src/renderer/src/insertAt'
 import { localeTag } from '../src/renderer/src/i18n'
 
@@ -98,6 +98,30 @@ describe('slide grouping actions', () => {
   })
 })
 
+describe('saves held while the clean-up rewrites the open show', () => {
+  it('an edit while the last save before the hold is on its way is not written over the clean-up', async () => {
+    const api = (globalThis as unknown as { window: { api: Record<string, unknown> } }).window
+    const saved: string[] = []
+    let release!: () => void
+    const first = new Promise<void>((r) => (release = r))
+    api.api.saveProject = async (p: Project) => {
+      saved.push(p.name)
+      if (saved.length === 1) await first
+    }
+    const { holdSaves } = await import('../src/renderer/src/store')
+    useStore.setState({ project: { ...project([], []), name: 'before' } })
+    const holding = holdSaves()
+    // a background update of a photo comes in meanwhile (it schedules a save as any change does)
+    useStore.getState().update((q) => void (q.name = 'during'))
+    release()
+    const resume = await holding
+    await new Promise((r) => setTimeout(r, 800))
+    resume()
+    expect(saved).toEqual(['before'])
+    api.api.saveProject = async () => {}
+  })
+})
+
 describe('crop or whole picture', () => {
   const st = DEFAULT_SETTINGS
   it('follows the entry, then the show setting; videos decide by shape', () => {
@@ -139,6 +163,20 @@ describe('undo, durations and day titles', () => {
     expect(p().settings.look).toBe('warm')
     useStore.getState().redo()
     expect(p().settings.timing.customTotal).toBe(32)
+  })
+
+  it("undoes a song's trim, keeping the song's processing as it is now", () => {
+    const song = { id: 's1', path: 'C:\m\s1.mp3', title: 's1', duration: 120, status: 'pending' as const }
+    useStore.setState({ project: { ...project(entries(), media), music: [song] } })
+    const trim = (patch: object): void => useStore.getState().update((q) => void Object.assign(q.music[0], patch), 'music:s1:trim')
+    trim({ trimIn: 10 })
+    // the song is processed meanwhile (an update from the main process)
+    useStore.setState({ project: { ...p(), music: [{ ...p().music[0], status: 'ready', playback: 'C:\c\s1.m4a' }] } })
+    useStore.getState().undo()
+    expect(p().music[0]).toMatchObject({ status: 'ready', playback: 'C:\c\s1.m4a' })
+    expect(p().music[0].trimIn).toBeUndefined()
+    useStore.getState().redo()
+    expect(p().music[0]).toMatchObject({ status: 'ready', trimIn: 10 })
   })
 
   it('sets a slide time and inserts day titles from dates or folders', () => {
@@ -239,6 +277,35 @@ describe('grouping automatically again', () => {
     expect(runs.find((s) => s.includes('e0'))).toEqual(['e0'])
     for (const k of ['e3', 'e4', 'e5', 'e9', 'e10', 'e11']) expect(runs.find((s) => s.includes(k))).toEqual([k])
     expect(runs.find((s) => s.includes('e1'))).toEqual(['e1', 'e2'])
+  })
+
+  it('splitting a slide of the automatic grouping gives each of its photos a slide', () => {
+    const p = project(fresh(), media, { theme: 'magazine' })
+    const before = ids(p)
+    expect(before[1]).toEqual(['e2', 'e3', 'e4'])
+    splitSlide(p, before[1])
+    const after = ids(p)
+    for (const id of before[1]) expect(after.find((s) => s.includes(id))).toEqual([id])
+    expect(after[0]).toEqual(before[0])
+  })
+
+  it('a text slide behind an edit is never counted as a slide fixed by hand', () => {
+    // as the filmstrip's chip counts them
+    const fixedSlides = (p: Project): number => buildTimeline(p).slides.filter((x) => x.entries.some(isFixed)).length
+    const withDay = (): Project =>
+      project([...fresh().slice(0, 4), { id: 'day', type: 'text', title: 'Dienstag' }, ...fresh().slice(4, 6)], media.slice(0, 6), { theme: 'origami' })
+    const merged = withDay()
+    mergeEntries(merged, ['e2', 'e3'])
+    expect(fixedSlides(merged)).toBe(1)
+    const released = withDay()
+    mergeEntries(released, ['e1', 'e2', 'e3'])
+    releaseEntry(released, ['e1', 'e2', 'e3'], 'e3')
+    expect(fixedSlides(released)).toBe(2)
+    const grown = withDay()
+    mergeEntries(grown, ['e1', 'e2'])
+    resizeSlide(grown, ['e1', 'e2'], 1)
+    expect(fixedSlides(grown)).toBe(1)
+    for (const p of [merged, released, grown]) expect(p.entries.find((e) => e.id === 'day')!.groupBreak).toBeUndefined()
   })
 
   it('photos inserted between slides keep the others fixed, until the show is grouped again', () => {

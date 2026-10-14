@@ -56,6 +56,14 @@ describe('project store', () => {
     expect((await store.list()).map((s) => s.id)).toEqual(['beta-2'])
   })
 
+  it('opening a show waits for a save of it still on its way (the editor was just closed)', async () => {
+    const a = project('gamma', 'Herbst', 100)
+    await store.save(a)
+    const saving = store.save({ ...a, name: 'Herbst, zuletzt geändert', updatedAt: 200 })
+    expect((await store.load('gamma')).name).toBe('Herbst, zuletzt geändert')
+    await saving
+  })
+
   it('rejects ids that could escape the folder', async () => {
     await expect(store.load('..\\evil')).rejects.toThrow(/invalid project id/)
     await expect(store.save(project('../x', 'x', 1))).rejects.toThrow(/invalid project id/)

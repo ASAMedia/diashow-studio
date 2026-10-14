@@ -6,7 +6,9 @@
 // frame of an export, is matched against the clip's frames as FFmpeg decodes them. That gives the frame
 // shown (or, at a Loop's seam, how well the blend of the two frames explains it), so a Loop must repeat
 // and a Bounce reverse all the slide long, one frame per frame time, with no hard jump at a seam. A
-// pixelated area stays pixelated while the motion loops, and every theme draws the motion.
+// pixelated area stays pixelated while the motion loops, and every theme draws the motion; the prints
+// on Snapshots' pile show the photo (an export decodes each motion part once), and Magazine's preview
+// keeps the motion part of a Loop on screen.
 import { expect, test, type Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync } from 'node:fs'
@@ -386,6 +388,14 @@ test('Live Photos loop and bounce: Slide tab, preview, export, pixelation and th
       // a Loop and a Bounce take a slide of their own, also in a theme of several photos per slide
       await state(page, `s.setTheme('magazine')`)
       for (const l of lives) expect((await slides(page)).find((x) => x.media.includes(l.name))!.n).toBe(1)
+      // and the slide menu doesn't offer to combine one with another slide (it would stay alone anyway)
+      const k = (await slides(page)).findIndex((x) => x.media.includes(lives[0].name))
+      const other = k > 0 ? k - 1 : k + 1
+      await state(page, `const tl = d.player.current.tl; s.select([...tl.slides[${k}].entries, ...tl.slides[${other}].entries].map((e) => e.id))`)
+      await page.locator(`.cards .card[data-index="${Math.max(k, other)}"]`).click({ button: 'right' })
+      await expect(page.getByRole('menuitem', { name: /^(Textfolie hinzufügen|Add text slide)$/ })).toBeVisible()
+      await expect(page.getByRole('menuitem', { name: /^(Zu einer Folie zusammenfassen|Combine into one slide|Mit vorheriger Folie verbinden|Join with previous slide)$/ })).toHaveCount(0)
+      await page.keyboard.press('Escape')
       await state(page, `s.setTheme('classic')`)
     }
     await state(page, `s.select([])`)
@@ -477,6 +487,41 @@ test('Live Photos loop and bounce: Slide tab, preview, export, pixelation and th
       expect(d, theme).toBeGreaterThan(3)
     }
     console.log('loop against still, per theme:', diffs.join(' | '))
+
+    // ---- Snapshots: a print on the pile shows the photo, so an export decodes each motion part once
+    // (the pile asked for the motion on every frame, and the export started decoding it anew each time)
+    await state(page, `s.setTheme('snapshots'); s.update((p) => p.entries.forEach((e) => { e.duration = 2 }))`)
+    const parts = lives.map((x) => x.liveVideo.split(/[\\/]/).pop()!)
+    let reads = 0
+    const count = (r: { url(): string }): void => {
+      if (parts.some((n) => decodeURIComponent(r.url()).includes(n))) reads++
+    }
+    page.on('request', count)
+    await exportShow(page, join(dataDir, 'snapshots.mp4'))
+    page.off('request', count)
+    console.log(`Snapshots export: ${reads} reads of ${parts.length} motion parts`)
+    expect(reads).toBeLessThanOrEqual(4 * parts.length)
+
+    // ---- Magazine preview: a Loop on screen keeps its decoded motion part. Its cells fade in one after
+    // another, so for a few frames nothing draws it; with three motion parts around, the sweep dropped it
+    // then and decoded it again (the still showed meanwhile)
+    if (iphone) {
+      const third = copyMedia(['iphone/IMG_0001.HEIC', 'iphone/IMG_0001.MOV'], join(dataDir, 'third'), true)
+      await page.evaluate(async (paths) => (window as any).__diashow.store.getState().importMedia(paths), third)
+      await page.waitForFunction(() => {
+        const p = (window as any).__diashow.store.getState().project
+        return p.media.filter((m: any) => m.live && m.liveVideo && m.status === 'ready').length === 3
+      }, null, { timeout: 300_000, polling: 250 })
+      await state(page, `s.update((p) => { const live = p.entries.filter((e) => p.media.find((m) => m.id === e.mediaId).live); p.entries = [...live, ...p.entries.filter((e) => !live.includes(e))]; p.entries.forEach((e) => { e.duration = 3 }); live.forEach((e) => { e.playLive = true; e.liveEffect = 'loop' }) }); s.setTheme('magazine')`)
+      const kept = await state<{ loops: number; released: boolean }>(
+        page,
+        `const e = d.player.current.engine; const loops = d.player.current.tl.slides.filter((x) => x.live && x.live.effect); const second = loops[1];
+        const released = []; const release = e.motions.release.bind(e.motions); e.motions.release = (p) => { released.push(p); release(p) };
+        try { for (let t = second.start - 1.5; t < second.start + 1; t += 1 / 60) e.render(t) } finally { e.motions.release = release }
+        return { loops: loops.length, released: released.includes(second.media[0].liveVideo) }`
+      )
+      expect(kept).toEqual({ loops: 3, released: false })
+    }
 
     expect(s.errors).toEqual([])
   } finally {

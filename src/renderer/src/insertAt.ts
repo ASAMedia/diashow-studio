@@ -7,7 +7,8 @@
 // slide behind it keeps exactly its photos and videos. Without that, the theme's automatic grouping,
 // which counts its pattern (2, 3, 6, 4, …) from the start of the show, would regroup every slide after
 // the insertion point, and their layouts, crops and captions would move to other slides.
-import type { Timeline, TimelineSlide } from '@shared/timeline'
+import { aspectValue, type Timeline, type TimelineSlide } from '@shared/timeline'
+import { panoramaOf } from '@shared/panorama'
 import type { Entry, MediaItem, Project, ProjectSettings } from '@shared/types'
 import { themeMeta } from '@shared/themes'
 import { mergeEntries } from './entryEdits'
@@ -68,15 +69,22 @@ export function insertEntries(p: Project, fresh: Entry[], before: string | null,
 /**
  * Whether new items can join a slide (dropped onto its card), like dragging one slide onto another:
  * a theme with several photos per slide, a photo or grid slide, room for all of them, and only items
- * the theme puts into a grid (no Live Photo that plays its motion, videos only in Magazine).
+ * the theme puts into a grid (no Live Photo that plays its motion, no panorama, videos only in Magazine).
  */
-export function canJoin(slide: TimelineSlide, items: readonly Pick<MediaItem, 'kind' | 'live'>[], settings: ProjectSettings): boolean {
+export function canJoin(
+  slide: TimelineSlide,
+  items: readonly (Pick<MediaItem, 'kind' | 'live'> & Partial<Pick<MediaItem, 'width' | 'height' | 'edit'>>)[],
+  settings: ProjectSettings
+): boolean {
   const meta = themeMeta(settings.theme)
   // a panorama is always alone on its slide (shared/panorama.ts)
   if (meta.maxPerSlide < 2 || !items.length || slide.live || slide.pano) return false
   if (slide.kind !== 'photos' && !(slide.kind === 'video' && meta.videoInGrid)) return false
   if (slide.entries.length + items.length > meta.maxPerSlide) return false
-  return items.every((m) => (m.kind === 'video' ? !!meta.videoInGrid : !(m.live && settings.playLivePhotos)))
+  const frame = aspectValue(settings.aspect)
+  return items.every((m) =>
+    m.kind === 'video' ? !!meta.videoInGrid : !(m.live && settings.playLivePhotos) && !(m.width && m.height && panoramaOf(m as MediaItem, frame))
+  )
 }
 
 /** Adds `fresh` to the slide made of `slideIds` (behind its last entry) as one slide, like "Combine into one slide". */
@@ -88,4 +96,22 @@ export function insertInto(p: Project, fresh: Entry[], slideIds: string[]): void
   })
   p.entries.splice(last + 1, 0, ...fresh)
   mergeEntries(p, [...slideIds, ...fresh.map((e) => e.id)])
+}
+
+/**
+ * Moves the slide at index `from` to slide boundary `to` (in front of slide `to`; at the end for
+ * `tl.slides.length`), as dragging its card or Alt+←/→ does. Its entries go in front of the first entry
+ * of the slide behind the boundary in show order, its caption text included (anchorAt): a slide lists
+ * its entries in the order of its layout's cells, so its first one may sit in the middle of the slide.
+ */
+export function moveSlide(p: Project, tl: Timeline, from: number, to: number): void {
+  const src = tl.slides[from]
+  if (!src || src.kind === 'title') return
+  const ids = new Set(src.entries.map((e) => e.id))
+  const target = tl.slides.slice(to).find((s) => s.kind !== 'title' && !s.entries.some((e) => ids.has(e.id)))
+  const before = target ? anchorAt(tl, p.entries, target.index) : null
+  const moving = p.entries.filter((e) => ids.has(e.id))
+  p.entries = p.entries.filter((e) => !ids.has(e.id))
+  const idx = before == null ? -1 : p.entries.findIndex((e) => e.id === before)
+  p.entries.splice(idx < 0 ? p.entries.length : idx, 0, ...moving)
 }

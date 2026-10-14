@@ -57,7 +57,8 @@ export function StripMenu({ menu, tl, project, selectedSlides, onClose }: { menu
           <MenuItem icon={<Type size={15} />} onSelect={() => useStore.getState().addText()}>
             {t('addText')}
           </MenuItem>
-          {selectedSlides.length > 1 && maxPer > 1 && !selectedSlides.some((x) => x.pano) && selectedSlides.reduce((k, x) => k + x.entries.length, 0) <= maxPer && (
+          {/* a panorama and a Live Photo that plays keep their slide to themselves */}
+          {selectedSlides.length > 1 && maxPer > 1 && !selectedSlides.some((x) => x.pano || x.live) && selectedSlides.reduce((k, x) => k + x.entries.length, 0) <= maxPer && (
             <MenuItem icon={<Merge size={15} />} onSelect={() => useStore.getState().mergeEntries(selectedSlides.flatMap((x) => x.entries.map((e) => e.id)))}>
               {t('merge')}
             </MenuItem>
@@ -67,7 +68,7 @@ export function StripMenu({ menu, tl, project, selectedSlides, onClose }: { menu
               {t('split')}
             </MenuItem>
           )}
-          {menu.slide.kind !== 'text' && !menu.slide.pano && maxPer > 1 && menu.slide.index > 0 && ['photos', 'video'].includes(tl.slides[menu.slide.index - 1]?.kind) && !tl.slides[menu.slide.index - 1]?.pano && (
+          {menu.slide.kind !== 'text' && !menu.slide.pano && !menu.slide.live && maxPer > 1 && menu.slide.index > 0 && ['photos', 'video'].includes(tl.slides[menu.slide.index - 1]?.kind) && !tl.slides[menu.slide.index - 1]?.pano && !tl.slides[menu.slide.index - 1]?.live && (
             <MenuItem
               icon={<Merge size={15} />}
               onSelect={() => {

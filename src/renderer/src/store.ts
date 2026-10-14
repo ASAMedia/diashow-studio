@@ -117,6 +117,8 @@ function scheduleSave(p: Project): void {
   pendingSave = p
   saveTimer = setTimeout(() => {
     pendingSave = null
+    // held meanwhile (the clean-up rewrites the file): this save would write the show as it was
+    if (savesHeld) return
     // a failed save (disk full, locked folder) must not go unnoticed
     void saveNow(p).catch((e) => notifyError(e, 'save'))
   }, 600)
@@ -167,9 +169,22 @@ export async function holdSaves(): Promise<() => void> {
   const p = useStore.getState().project
   if (p) await saveNow(p, true)
   savesHeld = true
+  // one scheduled while that save was on its way (a background update) is dropped as well: the show
+  // the clean-up leaves replaces the open one afterwards (Cleanup.tsx runCleanup)
+  takePendingSave()
   return () => {
     savesHeld = false
   }
+}
+
+/**
+ * The window closes (also when the app quits): a save still waiting goes out now, with the undo history
+ * written at once. The main process takes it before it quits (projectsMain.ts settleSaves); without
+ * this, an edit made less than a moment before closing was lost.
+ */
+export function saveBeforeClose(): void {
+  const p = takePendingSave()
+  if (p) void saveNow(p, true).catch(() => {})
 }
 
 /** Saves the open project now, with its undo history, when it is `projectId` (before the clean-up or an archive lists it). */
@@ -258,8 +273,16 @@ function withCurrentMedia(snapshot: Project, current: Project): Project {
     ...snapshot,
     // the photo edit (rotate, straighten, crop) is the user's: it goes back with the snapshot
     media: snapshot.media.map((m) => (media.has(m.id) ? keepEdit(media.get(m.id)!, m) : m)),
-    music: snapshot.music.map((m) => music.get(m.id) ?? m)
+    // and so does the part of a song that plays (its trim)
+    music: snapshot.music.map((m) => (music.has(m.id) ? withTrimOf(music.get(m.id)!, m) : m))
   }
+}
+
+/** A song as it is now (processing), with the trim of `snapshot` (an undo step); no trim when it has none. */
+function withTrimOf(cur: MusicTrack, snapshot: MusicTrack): MusicTrack {
+  if (cur.trimIn === snapshot.trimIn && cur.trimOut === snapshot.trimOut) return cur
+  const { trimIn: _i, trimOut: _o, ...rest } = cur
+  return { ...rest, ...(snapshot.trimIn != null ? { trimIn: snapshot.trimIn } : {}), ...(snapshot.trimOut != null ? { trimOut: snapshot.trimOut } : {}) }
 }
 
 /** Fields of a song the user sets in the editor; processing updates from the main process keep them. */
@@ -440,7 +463,12 @@ export const useStore = create<State>((set, get) => ({
   },
 
   importMedia(paths, placement = 'selection', opts = {}) {
+    // the show the files are for: once another one is open (the queue waited, or the files took a
+    // while to read) they go into none
+    const owner = get().project?.id
+    const gone = (): boolean => get().project?.id !== owner
     return serially(async () => {
+      if (gone()) return { added: [], skipped: [] }
       let checked: CheckedImport
       try {
         checked = await importChecked(paths, get().project)
@@ -448,6 +476,7 @@ export const useStore = create<State>((set, get) => ({
         notifyError(e, 'import')
         return { added: [], skipped: [] }
       }
+      if (gone()) return { added: [], skipped: [] }
       const { selection } = get()
       // behind entry `behind` (else at the end), or by capture time; returns the new entry ids
       const put = (items: MediaItem[], behind = selection[selection.length - 1]): string[] => {

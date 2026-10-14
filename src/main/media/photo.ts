@@ -160,7 +160,9 @@ async function decodeWithFfmpeg(ff: Ffmpeg, path: string, orientation: number, t
   } catch {
     // probe failures surface again in the decode below
   }
-  const scale = `scale=w='min(${DISPLAY_MAX},iw)':h='min(${DISPLAY_MAX},ih)':force_original_aspect_ratio=decrease:flags=lanczos`
+  // at most the display size; a panorama (2:1 and more) keeps up to PANO_MAX_LONG on its long side, so
+  // writeOutputs can keep its short side (with 3840 here an 8000×2000 one came out 3840×960)
+  const scale = `scale=w='if(gte(iw,2*ih),min(${PANO_MAX_LONG},iw),min(${DISPLAY_MAX},iw))':h='if(gte(ih,2*iw),min(${PANO_MAX_LONG},ih),min(${DISPLAY_MAX},ih))':force_original_aspect_ratio=decrease:flags=lanczos`
   const pngOut = ['-flags2', '+icc_profiles', '-c:v', 'png', '-compression_level', '1', '-f', 'image2pipe', '-']
   let png: Buffer
   if (!grid) {

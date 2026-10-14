@@ -18,7 +18,7 @@ import './styles.css'
 import { setLocale } from './i18n'
 import { App } from './App'
 import { PresentView } from './components/Presentation'
-import { playerRef, useStore } from './store'
+import { playerRef, saveBeforeClose, useStore } from './store'
 import { exportShow, queueExport, runExportWorker } from './engine/exporter'
 import { detectFaces, faceTestApi } from './faces'
 import { installErrorReporting } from './diagnostics'
@@ -44,6 +44,8 @@ if (route === '#export-worker') {
 } else if (route !== '#present') {
   // a damaged or too new file shows a friendly notice (with "Repair…") instead of failing silently
   window.api.onOpenFile((path) => void importProjectSafely(path))
+  // closing the window: the last edit is saved even when it came a moment before
+  window.addEventListener('beforeunload', saveBeforeClose)
 }
 
 if (route !== '#export-worker') {

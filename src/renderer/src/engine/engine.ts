@@ -230,7 +230,7 @@ export class Engine {
     return axis ? (axis === 'x' ? this.c.H : this.c.W) : 0
   }
 
-  /** Media needed around time t: visible slides plus the Vintage pile and the Magazine cover. */
+  /** Media needed around time t: visible slides plus the piles of Vintage and Snapshots and the Magazine cover. */
   private neededMedia(t: number, ahead: number): MediaItem[] {
     const tl = this.tl!
     const out = new Set<MediaItem>()
@@ -243,6 +243,8 @@ export class Engine {
     const cur = slidesAt(tl, t)
     const idx = cur.length ? cur[cur.length - 1].index : 0
     if (theme === 'vintage') for (let i = Math.max(0, idx - 6); i < idx; i++) tl.slides[i].media.slice(0, 1).forEach((m) => out.add(m))
+    // Snapshots' pile too (its prints show the photo, also of a Loop or Bounce)
+    if (theme === 'snapshots') for (let i = Math.max(0, idx - 5); i < idx; i++) tl.slides[i].media.slice(0, 1).forEach((m) => out.add(m))
     if (theme === 'magazine') {
       const cover = tl.slides.find((s) => s.kind === 'photos')
       if (cover) out.add(cover.media[0])
@@ -283,11 +285,13 @@ export class Engine {
     if (this.mode === 'preview') {
       for (const m of this.neededMedia(t, 6)) if (m.kind === 'photo') ctx.image(m)
       // open the videos of the next seconds early, so a cell doesn't start with a blank frame; a Loop's or
-      // Bounce's motion part is decoded a little earlier, it takes longer
+      // Bounce's motion part is decoded a little earlier, it takes longer. It is kept while its slide is on
+      // screen, also on frames a theme doesn't draw it (Magazine's cells fade in one after another): the
+      // sweep would drop it there and decode it again
       for (const s of this.tl.slides) {
         if (s.start > t + 4) break
+        if (s.start + s.duration >= t && s.live?.effect && s.media[0]?.liveVideo) this.motions.get(s.media[0].liveVideo)
         if (s.start <= t) continue
-        if (s.live?.effect && s.media[0]?.liveVideo) this.motions.get(s.media[0].liveVideo)
         if (s.start > t + 2.5) continue
         s.entries.forEach((_, i) => {
           const src = this.videoSource(s, 0, i)

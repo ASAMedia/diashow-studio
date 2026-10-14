@@ -98,6 +98,11 @@ test('filmstrip: zoom, search, chapters, insert by drop and Ctrl+V, undo', { loc
     await slider.focus()
     await page.keyboard.press('Home')
     await expect.poll(() => cardWidth(page)).toBe(6)
+    // the arrow keys move it by a pixel at least, also where a step of the slider is less
+    await page.keyboard.press('ArrowRight')
+    await expect.poll(() => cardWidth(page)).toBe(7)
+    await page.keyboard.press('ArrowLeft')
+    await expect.poll(() => cardWidth(page)).toBe(6)
     await expect(page.locator('section.strip')).toHaveClass(/zoom-tiny/)
     // small cards: no badges, a mark at each chapter, numbers only every few slides
     expect(await page.locator('.cards .badges').count()).toBe(0)
@@ -157,6 +162,17 @@ test('filmstrip: zoom, search, chapters, insert by drop and Ctrl+V, undo', { loc
     expect(perf.max).toBeLessThan(perf.visible / 7 + 2 * Math.ceil(200 / 7) + 20)
     expect(perf.ms).toBeLessThan(250)
     await page.screenshot({ path: join(shots, 'big-tiny.png') })
+    // the selected card scrolled out of the page: a card in view stays the filmstrip's one Tab stop
+    await page.evaluate(() => {
+      const st = (window as any).__diashow.store.getState()
+      st.select([st.project.entries[0].id])
+    })
+    await page.locator('.strip-scroll').evaluate((el) => {
+      el.scrollLeft = el.scrollWidth
+    })
+    await expect(page.locator('.cards .card[data-index="0"]')).toHaveCount(0)
+    await expect.poll(() => page.locator('.cards .card[tabindex="0"]').count()).toBe(1)
+    await page.evaluate(() => (window as any).__diashow.store.getState().select([]))
 
     // Ctrl+wheel zooms around the mouse: the slide under it stays under it; the page itself doesn't zoom
     const sc = await page.locator('.strip-scroll').evaluate((el) => {
@@ -257,6 +273,17 @@ test('filmstrip: zoom, search, chapters, insert by drop and Ctrl+V, undo', { loc
     await page.getByRole('button', { name: /Nächster Treffer|Next match/ }).click()
     await expect(status).toHaveText(/^(2 von 2|2 of 2)$/)
     await page.screenshot({ path: join(shots, 'search.png') })
+    // the show changes while searching: a new match in front, then that one gone again; the count stays
+    // with the match shown, and the next one is the one behind it
+    await page.evaluate(() => (window as any).__diashow.store.getState().update((p: any) => p.entries.unshift({ id: 'search-new', type: 'text', title: 'Bilder.jp' })))
+    await expect(status).toHaveText(/^(3 von 3|3 of 3)$/)
+    await page.keyboard.press('F3')
+    await expect(status).toHaveText(/^(1 von 3|1 of 3)$/)
+    await page.evaluate(() => (window as any).__diashow.store.getState().update((p: any) => (p.entries = p.entries.filter((e: any) => e.id !== 'search-new'))))
+    await expect(listbox.getByRole('option')).toHaveCount(2)
+    await page.keyboard.press('F3')
+    await expect(status).toHaveText(/^(1 von 2|1 of 2)$/)
+    await expect.poll(() => selection(page)).toEqual(order[0].ids)
     // Esc closes the search and its marks
     await field.focus()
     await page.keyboard.press('Escape')

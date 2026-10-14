@@ -203,15 +203,16 @@ function hasKind(s: TimelineSlide, kind: MatchKind): boolean {
 }
 
 // Whether a person is in a photo or video: face matching is costly for videos, so it is kept per
-// media item (items are replaced, never changed, when their data changes) and person.
+// media item (items are replaced, never changed, when their data changes) and person. Each face goes
+// to the closest of all the marked people, as in the people list and the pixelation.
 const personCache = new WeakMap<MediaItem, Map<string, boolean>>()
-function shows(m: MediaItem, person: Person): boolean {
+function shows(m: MediaItem, person: Person, all: readonly Person[]): boolean {
   let byPerson = personCache.get(m)
   if (!byPerson) personCache.set(m, (byPerson = new Map()))
-  const key = peopleKey([person])
+  const key = `${person.id}/${peopleKey(all)}`
   let hit = byPerson.get(key)
   if (hit === undefined) {
-    hit = m.kind === 'video' ? videoPersonTracks(m, [person]).length > 0 : photoPersonFaces(m, [person]).length > 0
+    hit = m.kind === 'video' ? videoPersonTracks(m, all).some((x) => x.person.id === person.id) : photoPersonFaces(m, all).some((x) => x.person.id === person.id)
     byPerson.set(key, hit)
   }
   return hit
@@ -264,13 +265,13 @@ function timesOf(tl: Timeline, s: TimelineSlide): number[] {
 
 const ORDER: readonly MatchField[] = ['file', 'title', 'chapter', 'caption', 'text', 'freeText', 'person', 'kind', 'date']
 
-function matchTerm(term: SearchTerm, s: TimelineSlide, texts: TextField[], times: () => number[], people: readonly Person[]): Omit<SearchHit, 'index'> | null {
+function matchTerm(term: SearchTerm, s: TimelineSlide, texts: TextField[], times: () => number[], people: readonly Person[], all: readonly Person[]): Omit<SearchHit, 'index'> | null {
   if (term.word) {
     const found = texts.find((f) => fold(f.text).includes(term.word!))
     if (found) return { field: found.field, text: found.text }
     if (term.word.length >= 2) {
       for (const p of people) {
-        if (fold(p.name ?? '').includes(term.word) && s.media.some((m) => shows(m, p))) return { field: 'person', text: p.name! }
+        if (fold(p.name ?? '').includes(term.word) && s.media.some((m) => shows(m, p, all))) return { field: 'person', text: p.name! }
       }
     }
     const kind = kindOf(term.word)
@@ -290,7 +291,8 @@ function matchTerm(term: SearchTerm, s: TimelineSlide, texts: TextField[], times
 export function searchSlides(tl: Timeline, project: Pick<Project, 'people'>, query: string, locale = 'de-DE'): SearchHit[] {
   const terms = parseQuery(query, locale)
   if (!terms.length) return []
-  const people = (project.people ?? []).filter((p) => !!p.name?.trim())
+  const all = project.people ?? []
+  const people = all.filter((p) => !!p.name?.trim())
   const out: SearchHit[] = []
   for (const s of tl.slides) {
     const texts = textsOf(s)
@@ -298,7 +300,7 @@ export function searchSlides(tl: Timeline, project: Pick<Project, 'people'>, que
     const times = (): number[] => (cached ??= timesOf(tl, s))
     let best: Omit<SearchHit, 'index'> | null = null
     for (const term of terms) {
-      const hit = matchTerm(term, s, texts, times, people)
+      const hit = matchTerm(term, s, texts, times, people, all)
       if (!hit) {
         best = null
         break

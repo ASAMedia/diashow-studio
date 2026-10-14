@@ -411,7 +411,7 @@ export function buildTimeline(project: Project, locale = 'de-DE', themeTracks: r
       const seg = at.get(k)
       return seg ? placedBeats(seg.tracks.map((id) => songs.get(id)).filter(playableTrack), audio, k === 0 ? 0 : start, t + 30) : null
     }
-    snapToBeats(slides, beatsFrom, drafts.map((d) => d.fixed != null), minAuto * 0.8)
+    snapToBeats(slides, beatsFrom, drafts.map((d) => d.fixed != null), minAuto * 0.8, drafts.map((d) => d.min))
   }
   const duration = slides.length ? slides[slides.length - 1].start + slides[slides.length - 1].duration : 0
   const musicSegments = segStarts.map((seg, k) => ({
@@ -435,11 +435,12 @@ export function musicBeatTimes(project: Project, until: number, tl?: Timeline): 
 
 /**
  * Moves every slide change (the middle of its transition) onto the nearest beat. Slides with a
- * fixed length (videos, custom times) keep it; automatic slides never get shorter than minDur.
+ * fixed length (videos, custom times) keep it; automatic slides never get shorter than minDur, nor
+ * than their own shortest time (`mins`: a Loop's or Bounce's cycle, the longest clip of a grid).
  * `beats` can also be asked per slide: at a slide where other songs start it returns their
  * beats (given that slide's start after the earlier snapping), else null.
  */
-export function snapToBeats(slides: TimelineSlide[], beats: number[] | ((k: number, start: number) => number[] | null), fixed: boolean[], minDur: number): void {
+export function snapToBeats(slides: TimelineSlide[], beats: number[] | ((k: number, start: number) => number[] | null), fixed: boolean[], minDur: number, mins: readonly number[] = []): void {
   if (slides.length < 2) return
   const fresh = typeof beats === 'function' ? beats : (k: number): number[] | null => (k === 0 ? beats : null)
   let cur: number[] = []
@@ -453,7 +454,7 @@ export function snapToBeats(slides: TimelineSlide[], beats: number[] | ((k: numb
       continue
     }
     const nominal = slides[k + 1].start + slides[k + 1].transIn / 2
-    const earliest = cuts[k] + Math.max(0.3, minDur - s.transIn / 2 - s.transOut / 2)
+    const earliest = cuts[k] + Math.max(0.3, Math.max(minDur, mins[k] ?? 0) - s.transIn / 2 - s.transOut / 2)
     let best = Math.max(nominal, earliest)
     let bestDist = Infinity
     for (const b of cur) {

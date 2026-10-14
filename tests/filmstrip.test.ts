@@ -1,13 +1,14 @@
 // The filmstrip's zoom (time ↔ x, shared with the audio lane), its search (date words and matching)
-// and where inserted photos go (insertion index and grouping in multi-photo themes).
-import { describe, expect, it } from 'vitest'
+// where inserted photos go (insertion index and grouping in multi-photo themes, and only into the show
+// they were meant for) and where a moved slide goes.
+import { beforeAll, describe, expect, it } from 'vitest'
 import { buildTimeline, type Timeline } from '@shared/timeline'
 import { DEFAULT_SETTINGS, type Entry, type MediaItem, type Project, type Rect } from '@shared/types'
 import {
   anchoredScroll, CARD, cardToSlider, fitCard, MAX_CARD, MIN_CARD, numberEvery, sliderToCard, STEP, stripScale, stripWidth, timeToX, xToTime, zoomStep
 } from '../src/renderer/src/components/stripScale'
 import { dateMatches, fold, kindOf, monthOf, parseQuery, searchSlides, weekdayOf } from '../src/renderer/src/search'
-import { anchorAt, canJoin, insertEntries, insertInto } from '../src/renderer/src/insertAt'
+import { anchorAt, canJoin, insertEntries, insertInto, moveSlide } from '../src/renderer/src/insertAt'
 
 const photo = (id: string, extra: Partial<MediaItem> = {}): MediaItem => ({
   id, path: `C:\\p\\${id}.jpg`, name: `${id}.jpg`, kind: 'photo', format: 'JPEG', width: 4000, height: 3000, captureTime: 0, status: 'ready', ...extra
@@ -207,6 +208,21 @@ describe('filmstrip search: what matches', () => {
     expect(find('Strand August')).toEqual([])
     expect(find('   ')).toEqual([])
   })
+
+  it('finds a person where the people list and the pixelation see them: each face goes to the closest person', () => {
+    const mix = (a: number, b: number): number[] => axis(3).map((x, i) => x * a + (i === 5 ? b : 0))
+    // Mia looks like Lena; the face in "mia.jpg" is within reach of both, but closer to Mia
+    const people = [
+      { id: 'lena', name: 'Lena', desc: [axis(3)] },
+      { id: 'mia', name: 'Mia', desc: [mix(0.9, 0.436)] }
+    ]
+    const faces = [photo('lena', { faces: [FACE], faceDesc: [axis(3)] }), photo('mia', { faces: [FACE], faceDesc: [mix(0.97, 0.243)] })]
+    const q = project(faces.map((m) => entryOf(m)), faces, { theme: 'kenburns' }, { people })
+    const qtl = buildTimeline(q)
+    const who = (word: string): string[] => searchSlides(qtl, q, word).map((h) => qtl.slides[h.index].entries[0].id)
+    expect(who('Lena')).toEqual(['e-lena'])
+    expect(who('Mia')).toEqual(['e-mia'])
+  })
 })
 
 describe('inserting at a place in the filmstrip', () => {
@@ -299,8 +315,12 @@ describe('inserting at a place in the filmstrip', () => {
     expect(canJoin(first, [{ kind: 'photo', live: { source: 'x.mov', duration: 2 } }], { ...p.settings, playLivePhotos: true })).toBe(false)
     expect(canJoin(first, [{ kind: 'video' }], { ...p.settings, theme: 'origami' })).toBe(false)
     expect(canJoin(first, [{ kind: 'photo' }], { ...p.settings, theme: 'kenburns' })).toBe(false)
-    // a panorama stays alone on its slide
+    // a panorama stays alone on its slide: none joins it, and a dropped one doesn't join another (it would
+    // get a slide of its own behind it all the same, and the slides behind would be grouped anew)
     expect(canJoin({ ...first, pano: { axis: 'x', mode: 'pan', reverse: false } }, [{ kind: 'photo' }], p.settings)).toBe(false)
+    expect(canJoin(first, [{ kind: 'photo', width: 8000, height: 2000 }], p.settings)).toBe(false)
+    expect(canJoin(first, [{ kind: 'photo', width: 2000, height: 8000, edit: { rotate: 90, straighten: 0 } }], p.settings)).toBe(false)
+    expect(canJoin(first, [{ kind: 'photo', width: 8000, height: 2000, edit: { rotate: 0, straighten: 0, crop: { x: 0, y: 0, w: 0.25, h: 1 } } }], p.settings)).toBe(true)
     const before = slidesOf(p)
     const next = structuredClone(p)
     const n = fresh('n1', 'n2')
@@ -310,5 +330,94 @@ describe('inserting at a place in the filmstrip', () => {
     expect(after[0]).toEqual([...before[0], 'n1', 'n2'].sort())
     // the number of slides stays, so the theme's pattern doesn't shift for the slides behind
     expect(after.slice(1)).toEqual(before.slice(1))
+  })
+})
+
+describe('moving a slide in the filmstrip', () => {
+  it('goes in front of the whole slide behind the place, though a slide lists its photos in the order of its cells', () => {
+    // a portrait among landscapes: Magazine's layout puts it into the first cell
+    const media = [4000, 4000, 4000, 4000, 3000, 4000].map((w, i) => photo(`m${i}`, { width: w, height: 7000 - w }))
+    const p = project(media.map((m) => entryOf(m)), media, { theme: 'magazine' })
+    const tl = buildTimeline(p)
+    expect(tl.slides.map((s) => s.entries.map((e) => e.id))).toEqual([['e-m0', 'e-m1'], ['e-m4', 'e-m3', 'e-m2'], ['e-m5']])
+    // the last slide in front of the middle one (Alt+←, or its card dragged there)
+    const moved = structuredClone(p)
+    moveSlide(moved, tl, 2, 1)
+    expect(moved.entries.map((e) => e.id)).toEqual(['e-m0', 'e-m1', 'e-m5', 'e-m2', 'e-m3', 'e-m4'])
+    // to the end
+    const last = structuredClone(p)
+    moveSlide(last, tl, 0, tl.slides.length)
+    expect(last.entries.map((e) => e.id)).toEqual(['e-m2', 'e-m3', 'e-m4', 'e-m5', 'e-m0', 'e-m1'])
+    // a text slide shown as the caption of the slide behind the place stays with it
+    const withText = project([...media.slice(0, 2).map((m) => entryOf(m)), { id: 'day', type: 'text', title: 'Dienstag' }, ...media.slice(2).map((m) => entryOf(m))], media, { theme: 'magazine' })
+    const wtTl = buildTimeline(withText)
+    const captioned = wtTl.slides.findIndex((s) => s.captionEntryId === 'day')
+    expect(captioned).toBe(1)
+    moveSlide(withText, wtTl, wtTl.slides.length - 1, captioned)
+    expect(withText.entries.map((e) => e.id)).toEqual(['e-m0', 'e-m1', 'e-m5', 'day', 'e-m2', 'e-m3', 'e-m4'])
+  })
+})
+
+describe('inserting: the import queue', () => {
+  // the renderer's store and insert.ts with a stub of the main process: each import waits until released
+  const imports: { paths: string[]; done: (r: { items: MediaItem[]; repeats: Record<string, string> }) => void }[] = []
+  const api = {
+    saveProject: async () => undefined,
+    importNew: (paths: string[]) => new Promise((done) => imports.push({ paths, done })),
+    importPaths: async () => []
+  }
+  let store: typeof import('../src/renderer/src/store')
+  let insert: typeof import('../src/renderer/src/insert')
+  beforeAll(async () => {
+    ;(globalThis as unknown as { window: unknown }).window = { api }
+    store = await import('../src/renderer/src/store')
+    insert = await import('../src/renderer/src/insert')
+  })
+
+  const item = (id: string): MediaItem => ({ id, path: `C:\\Fotos\\${id}.jpg`, name: `${id}.jpg`, kind: 'photo', format: 'JPEG', width: 4000, height: 3000, captureTime: 0, status: 'pending' })
+  const showOf = (id: string): Project => ({ version: 1, id, name: id, createdAt: 0, updatedAt: 0, entries: [{ id: `${id}-e`, type: 'photo', mediaId: `${id}-m` }], media: [item(`${id}-m`)], music: [], settings: structuredClone(DEFAULT_SETTINGS) })
+  const next = async (): Promise<(typeof imports)[number]> => {
+    await expect.poll(() => imports.length).toBeGreaterThan(0)
+    return imports.shift()!
+  }
+
+  it('files imported for one show never land in another one opened meanwhile', async () => {
+    const { useStore } = store
+    // "Add photos" in show A; A is closed and B opened while the files are read
+    useStore.setState({ project: showOf('A'), selection: [] })
+    const added = useStore.getState().importMedia(['C:\\Fotos\\neu.jpg'])
+    const first = await next()
+    useStore.setState({ project: showOf('B'), selection: [] })
+    first.done({ items: [item('neu')], repeats: {} })
+    expect(await added).toEqual({ added: [], skipped: [] })
+    expect(useStore.getState().project!.media.map((m) => m.id)).toEqual(['B-m'])
+
+    // a drop on A's filmstrip waiting behind another import: by its turn B is open, nothing is read for A
+    useStore.setState({ project: showOf('A'), selection: [] })
+    const before = useStore.getState().importMedia(['C:\\Fotos\\x.jpg'])
+    const inserted = insert.insertFiles(['C:\\Fotos\\y.jpg'], { before: null })
+    const running = await next()
+    useStore.setState({ project: showOf('B'), selection: [] })
+    running.done({ items: [item('x')], repeats: {} })
+    await before
+    expect(await inserted).toEqual([])
+    expect(imports).toHaveLength(0)
+    expect(useStore.getState().project!.entries.map((e) => e.id)).toEqual(['B-e'])
+
+    // the show still open gets its files
+    const own = useStore.getState().importMedia(['C:\\Fotos\\z.jpg'])
+    ;(await next()).done({ items: [item('z')], repeats: {} })
+    expect((await own).added.map((m) => m.id)).toEqual(['z'])
+    expect(useStore.getState().project!.media.map((m) => m.id)).toEqual(['B-m', 'z'])
+  })
+
+  it('the notice counts the skipped files that repeat a left-out photo', async () => {
+    const { leftOutTargets, noticeRepeats, noticeText, useRepeatNotice } = await import('../src/renderer/src/repeats')
+    // a photo and a byte-identical copy of it come in; the show has it, left out
+    const p: Project = { ...showOf('A'), entries: [{ id: 'A-e', type: 'photo', mediaId: 'A-m', excluded: true }] }
+    noticeRepeats(p, { fresh: [], skipped: [item('x1'), item('x2')], repeatOf: { x1: 'A-m', x2: 'A-m' } }, async () => [])
+    const notice = useRepeatNotice.getState().notice!
+    expect(leftOutTargets(p, notice.targets)).toBe(2)
+    expect(noticeText(p, notice)).toMatch(/^Alle 2 Fotos .* 2 davon sind herausgenommen/)
   })
 })

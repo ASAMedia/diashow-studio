@@ -3,7 +3,8 @@
 //   again on the same data folder, the show opens with its history: the undo button works right away,
 //   step by step back to the original, and redo forward again; redo steps survive a restart too;
 // - the .dshow changed on disk while the app was closed: the history is discarded (and logged);
-// - the clean-up removes the history when chosen.
+// - the clean-up removes the history when chosen;
+// - an edit right before the window is closed is saved with its undo step.
 // Runs in German and with DIASHOW_LOCALE=en-US DIASHOW_SOFTWARE_GL=1.
 import { expect, test, type Page } from '@playwright/test'
 import { createHash } from 'node:crypto'
@@ -11,7 +12,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { gunzipSync } from 'node:zlib'
-import { ensureTestMedia, launch, mediaDir, menu, project, projectFile, removeDir, sampleFiles, waitProcessed, waitSaved, type Session } from './harness'
+import { ensureTestMedia, launch, mediaDir, menu, project, projectFile, readProject, removeDir, sampleFiles, waitProcessed, waitSaved, type Session } from './harness'
 import { SOFTWARE_GL } from './launch'
 
 const NAME = 'Verlauf'
@@ -196,6 +197,17 @@ test('undo and redo survive closing the app; a changed file discards the history
     await state(page, `s.setTheme('origami')`)
     await waitStored(dataDir, id, { undo: 1, redo: 0 })
     expect(s.errors).toEqual([])
+
+    // ---------------------------------------------------------------- an edit right before ✕
+    // the window closes at once after an edit: the edit and its undo step are saved all the same
+    await state(page, `s.setTheme('vintage')`)
+    const app = s.app
+    const exited = new Promise<void>((r) => app.process().once('exit', () => r()))
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((w) => w.isVisible())?.close())
+    await exited
+    s = null
+    expect(readProject(dataDir, id).settings.theme).toBe('vintage')
+    expect(storedSteps(dataDir, id)).toEqual({ undo: 2, redo: 0 })
   } finally {
     await s?.app.close().catch(() => {})
     removeDir(dataDir)

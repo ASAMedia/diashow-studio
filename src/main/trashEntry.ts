@@ -102,8 +102,13 @@ export function parseManifest(text: string, key: string): Manifest | null {
   }
 }
 
-/** Points the media of a project (parsed JSON) at the files' new places; true when something changed. */
-export function followFiles(p: unknown, renamed: ReadonlyMap<string, string>): boolean {
+/**
+ * Points the media of a project (parsed JSON) at the files' new places; true when something changed.
+ * `ids` (by the old path, lower case): the media id of a file at its new place (path, size and time,
+ * media/scan.ts). A photo or video whose file moved takes it, and its slides follow: with its old id
+ * opening the show would take it for an edited original each time (media/restore.ts).
+ */
+export function followFiles(p: unknown, renamed: ReadonlyMap<string, string>, ids: ReadonlyMap<string, string> = new Map()): boolean {
   let changed = false
   const to = (v: unknown): unknown => {
     if (typeof v !== 'string') return v
@@ -112,10 +117,19 @@ export function followFiles(p: unknown, renamed: ReadonlyMap<string, string>): b
     changed = true
     return next
   }
+  const remap = new Map<string, string>()
   for (const m of isObj(p) && Array.isArray(p.media) ? p.media : []) {
     if (!isObj(m)) continue
+    const id = typeof m.path === 'string' ? ids.get(resolve(m.path).toLowerCase()) : undefined
+    if (id && typeof m.id === 'string' && m.id !== id) {
+      remap.set(m.id, id)
+      m.id = id
+    }
     m.path = to(m.path)
     if (isObj(m.live)) m.live.source = to(m.live.source)
+  }
+  for (const e of remap.size && isObj(p) && Array.isArray(p.entries) ? p.entries : []) {
+    if (isObj(e) && typeof e.mediaId === 'string' && remap.has(e.mediaId)) e.mediaId = remap.get(e.mediaId)
   }
   return changed
 }

@@ -10,6 +10,7 @@ import { playerRef, useStore } from '../store'
 import { useTimeline } from '../timeline'
 import { t } from '../i18n'
 import { isFixed } from '../entryEdits'
+import { moveSlide as moveSlideTo } from '../insertAt'
 import { AudioLane } from './AudioLane'
 import { addWidth, numberEvery, STRIP_PAD, stripWidth, timeToX } from './stripScale'
 import { ChaptersMenu, SearchBox, useSearchKeys, useStripSearch, ZoomControls } from './StripTools'
@@ -39,14 +40,7 @@ export function Filmstrip() {
   const moveSlide = (from: number, to: number): void => {
     const src = tl.slides[from]
     if (!src || src.kind === 'title') return
-    const ids = new Set(src.entries.map((e) => e.id))
-    const target = tl.slides.slice(to).find((s) => s.kind !== 'title' && !s.entries.some((e) => ids.has(e.id)))
-    update((p) => {
-      const moving = p.entries.filter((e) => ids.has(e.id))
-      p.entries = p.entries.filter((e) => !ids.has(e.id))
-      const idx = target ? p.entries.findIndex((e) => e.id === target.entries[0].id) : p.entries.length
-      p.entries.splice(idx < 0 ? p.entries.length : idx, 0, ...moving)
-    })
+    update((p) => moveSlideTo(p, tl, from, to))
   }
 
   // Shift+click selects the range from the last clicked slide, Ctrl+click adds or removes one
@@ -97,9 +91,10 @@ export function Filmstrip() {
   const search = useStripSearch(tl, project, jumpTo)
   useSearchKeys(search, searchInput)
 
-  // The filmstrip is one stop in the tab order: the selected card (or the first). Focus a card by index,
-  // scrolling it into the rendered part first.
-  const tabIndexAt = Math.max(0, tl.slides.findIndex((sl) => sl.entries.some((e) => sel.has(e.id))))
+  // The filmstrip is one stop in the tab order: the selected card (or the first), or the nearest card
+  // rendered while that one is scrolled out of the page (else Tab would skip the filmstrip). Focus a card
+  // by index, scrolling it into the rendered part first.
+  const tabIndexAt = Math.min(Math.max(Math.max(0, tl.slides.findIndex((sl) => sl.entries.some((e) => sel.has(e.id)))), first), last)
   const focusCard = (index: number, tries = 6): void => {
     const el = scrollRef.current
     if (el) {

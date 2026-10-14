@@ -38,7 +38,11 @@ export async function insertFiles(paths: string[], place: InsertPlace): Promise<
   const { audio, media } = splitAudio(paths)
   if (audio.length) void useStore.getState().addMusic(audio).catch((e) => notifyError(e, 'import'))
   if (!media.length) return []
+  // the show the files are for: once another one is open they go into none (store.ts importMedia)
+  const owner = useStore.getState().project?.id
+  const gone = (): boolean => useStore.getState().project?.id !== owner
   return serially(async () => {
+    if (gone()) return []
     let checked: CheckedImport
     try {
       checked = await importChecked(media, useStore.getState().project)
@@ -46,6 +50,7 @@ export async function insertFiles(paths: string[], place: InsertPlace): Promise<
       notifyError(e, 'import')
       return []
     }
+    if (gone()) return []
     const ids = putAt(checked.fresh, place)
     const cur = useStore.getState().project
     if (checked.skipped.length && cur) {
