@@ -65,7 +65,9 @@ describe('public addresses', () => {
       // same number of characters, more bytes: must not reach timingSafeEqual with unequal lengths
       const umlauts = encodeURIComponent('ä'.repeat(token.length))
       expect(await get(`/${umlauts}/`)).toBe(404)
-      expect(await get(`/${token.slice(0, -1)}x/`)).toBe(404)
+      // one character off (a random token may already end in "x")
+      const other = token.endsWith('x') ? 'y' : 'x'
+      expect(await get(`/${token.slice(0, -1)}${other}/`)).toBe(404)
       expect(await get(`/${token}/`)).toBe(200)
     } finally {
       await server.close()

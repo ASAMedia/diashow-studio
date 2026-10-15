@@ -15,6 +15,7 @@ All notable changes to Diashow Studio. Versions follow [Semantic Versioning](htt
 
 - After playing and pausing, a click in the preview selects the slide on screen, and the filmstrip follows. Before, the preview still worked on the slide selected earlier: a click picked its photos, and dragging a picture could move the framing of a photo on that other slide.
 - Selecting a slide that is already fully on screen no longer jumps the preview back to the slide's start.
+- On a busy PC, the filmstrip's marks for files dragged over it no longer flicker.
 
 ## [1.10.0] - 2026-10-15
 

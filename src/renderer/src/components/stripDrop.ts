@@ -95,8 +95,10 @@ export function useStripDrop(o: {
     if (files) {
       setFilesOver(true)
       clearTimeout(filesTimer.current)
-      // dragover repeats while the files hover; when it stops, they left (or were dropped)
-      filesTimer.current = setTimeout(clearMarks, 250)
+      // dragover repeats while the files hover; when it stops, they left (or were dropped). Only a fallback:
+      // leaving, Esc and the drop clear the marks themselves. A busy PC delivers dragover late, so the
+      // mark would go off and on again under the pointer with a shorter wait.
+      filesTimer.current = setTimeout(clearMarks, 1000)
     }
     const target = dropTarget(e, files)
     setMergeAt(target.merge ?? null)
