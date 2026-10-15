@@ -19,6 +19,7 @@ import { FreeTextLayer, PrivacyEditor } from './Overlays'
 import { CollageEditor } from './CollageEditor'
 import { prioritize } from '../priority'
 import { followPointer } from '../pointerDrag'
+import { stripReveal } from '../insert'
 import { Seg } from './ui'
 
 function useBox(ref: React.RefObject<HTMLElement | null>): { w: number; h: number } {
@@ -99,12 +100,15 @@ export function Viewer() {
     p.resize(c.width, c.height)
   }, [fw, fh, quality])
 
-  // Selecting a slide shows it (fully visible, after its incoming transition).
+  // Selecting a slide shows it (fully visible, after its incoming transition); one fully on screen
+  // already (selected by a click on it in the preview) stays where it is.
   useEffect(() => {
     const p = playerRef.current
     if (!p || p.playing || !selection.length) return
     const slide = timelineOf(project).slides.find((s) => s.entries.some((e) => e.id === selection[0]))
-    if (slide) p.seek(slide.start + Math.min(slide.transIn + 0.05, slide.duration / 2))
+    if (!slide) return
+    if (p.t >= slide.start + slide.transIn && p.t < slide.start + slide.duration - slide.transOut) return
+    p.seek(slide.start + Math.min(slide.transIn + 0.05, slide.duration / 2))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selection])
 
@@ -112,13 +116,23 @@ export function Viewer() {
   const duration = tl?.duration ?? 0
   const empty = project.entries.length === 0
 
-  const editSlide: TimelineSlide | undefined =
-    themeMeta(project.settings.theme).cropEdit && selection.length
-      ? timelineOf(project).slides.find((s) => s.kind === 'photos' && s.entries.some((e) => e.id === selection[0]))
-      : undefined
-
   // the slide at the playhead (the later one during a transition) carries the free texts shown
   const atPlayhead = tl ? tl.slides.filter((s) => s.start <= playhead + 1e-3 && playhead < s.start + s.duration).pop() : undefined
+
+  // the crop cells lie over the slide on screen: after playing and pausing the selection may still be
+  // on another slide, whose cells would otherwise catch the clicks (and drags) meant for this one
+  const editSlide: TimelineSlide | undefined = themeMeta(project.settings.theme).cropEdit && atPlayhead?.kind === 'photos' ? atPlayhead : undefined
+
+  // A click on the slide on screen selects it, as a click on its card does (the filmstrip follows);
+  // in the capture phase, so the crop cells, the collage and the text boxes still get the same click.
+  const selectOnScreen = (e: React.PointerEvent): void => {
+    if (e.button !== 0 || playing || kbEdit || privacyEdit || photoEdit || !atPlayhead) return
+    const ids = atPlayhead.entries.map((x) => x.id)
+    if (atPlayhead.kind === 'title' || !ids.length || ids.some((id) => selection.includes(id))) return
+    useStore.getState().select(ids)
+    useStore.getState().set({ tab: 'slide' })
+    stripReveal.current?.(ids[0])
+  }
   // the slide on screen and the next one are processed first during an import
   const nextSlide = atPlayhead && tl ? tl.slides[atPlayhead.index + 1] : undefined
   const viewIds = [...(atPlayhead?.media ?? []), ...(nextSlide?.media ?? [])].map((m) => m.id).join(',')
@@ -135,7 +149,7 @@ export function Viewer() {
   return (
     <section className="viewer" aria-label={t('preview')}>
       <div className="stage" ref={stageRef} data-theme="dark">
-        <div className="frame" style={{ width: fw, height: fh, visibility: empty ? 'hidden' : 'visible' }}>
+        <div className="frame" style={{ width: fw, height: fh, visibility: empty ? 'hidden' : 'visible' }} onPointerDownCapture={selectOnScreen}>
           <canvas ref={canvasRef} />
           {!playing && !kbEdit && !privacyEdit && !photoEdit && editSlide && <CropEditor slide={editSlide} scale={fw / (canvasRef.current?.width || fw)} />}
           {!playing && !kbEdit && !privacyEdit && !photoEdit && atPlayhead?.template?.id === 'free' && <CollageEditor slide={atPlayhead} w={fw} h={fh} />}

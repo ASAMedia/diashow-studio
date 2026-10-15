@@ -50,6 +50,7 @@ Der Editor hat drei Bereiche: die **Vorschau** in der Mitte, rechts die Reiter *
 - **Reihenfolge:** Folien im Filmstreifen ziehen. Eine Folie auf die Mitte einer anderen ziehen fasst beide zu einer Folie zusammen.
 - **Mehrere Folien:** [[Strg]]+Klick, [[Umschalt]]+Klick oder [[Strg+A]]. Der Reiter **Folie** ändert dann alle zusammen: Dauer, Bildausschnitt, Tempo, Videoton, Bewegung von Live Photos, Verpixeln oder **Aus der Diashow nehmen**.
 - **Anzeigedauer:** am rechten Rand einer Karte ziehen; ein Doppelklick dort stellt wieder „automatisch“ ein. Für die ausgewählte Folie geht es auch mit **Eigene Anzeigedauer** im Reiter **Folie**.
+- **Folie in der Vorschau wählen:** Ein Klick in die Vorschau wählt die Folie aus, die gerade zu sehen ist, auch nachdem du abgespielt und angehalten hast; der Filmstreifen springt mit.
 - **Bildausschnitt:** in der Vorschau ziehen verschiebt das Foto, das Mausrad zoomt, ein Doppelklick setzt zurück.
 - **Fotos auf einer Folie:** In Themen mit mehreren Fotos pro Folie nimmt die Folie mit + und − im Reiter **Folie** Fotos auf oder gibt sie ab. **In einzelne Folien teilen** und **Zu einer Folie zusammenfassen** (im Menü der Folie, Rechtsklick) ändern die Gruppen.
 - **Texte:** **Textfolie hinzufügen** (Knopf **+** am Ende des Filmstreifens oder Menü einer Folie) erzeugt eine Textfolie. **Textfeld hinzufügen** im Reiter **Folie** setzt Text auf ein Foto; in der Vorschau verschiebst du ihn, ein Doppelklick öffnet ihn zum Schreiben.

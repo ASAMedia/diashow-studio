@@ -94,3 +94,79 @@ test('group automatically: per slide from its menu, all from the filmstrip bar, 
     removeDir(dataDir)
   }
 })
+
+type Shown = { index: number; ids: string[]; start: number; duration: number; transIn: number }
+const shownSlides = (page: Page): Promise<Shown[]> =>
+  page.evaluate(() =>
+    (window as any).__diashow.player.current.tl.slides
+      .filter((s: any) => s.kind !== 'title')
+      .map((s: any) => ({ index: s.index, ids: s.entries.map((e: any) => e.id), start: s.start, duration: s.duration, transIn: s.transIn }))
+  )
+const selection = (page: Page): Promise<string[]> => page.evaluate(() => (window as any).__diashow.store.getState().selection)
+const playhead = (page: Page): Promise<number> => page.evaluate(() => (window as any).__diashow.player.current.t)
+/** The slide on screen: the last one whose time has begun (the later one during a transition). */
+const onScreen = (slides: Shown[], t: number): Shown => slides.filter((s) => s.start <= t + 1e-3 && t < s.start + s.duration).pop()!
+
+test('a click on the slide in the preview selects that slide, also after playing and pausing elsewhere', async () => {
+  test.setTimeout(4 * 60 * 1000)
+  const dataDir = mkdtempSync(join(tmpdir(), 'diashow-preview-click-'))
+  let s: Session | null = null
+  try {
+    s = await launch(dataDir, { DIASHOW_LOCALE: process.env.DIASHOW_LOCALE ?? 'de-DE' })
+    const { page } = s
+    const files = await photos(join(dataDir, 'media'))
+    await page.evaluate(async (paths) => {
+      await (window as any).__diashow.store.getState().createProject(paths, 'Vorschau')
+    }, files)
+    await waitProcessed(page)
+    await store(page, 'setTheme', 'magazine')
+    await expect.poll(async () => (await shownSlides(page)).length).toBeGreaterThan(3)
+    const slides = await shownSlides(page)
+    const first = slides[0]
+    const later = slides[3]
+
+    // the first slide is selected; the show plays and stops on a later one
+    await store(page, 'select', first.ids)
+    await page.evaluate(() => (window as any).__diashow.player.current.play())
+    await expect.poll(() => playhead(page), { timeout: 60_000 }).toBeGreaterThan(later.start + later.transIn + 0.3)
+    await page.evaluate(() => (window as any).__diashow.player.current.pause())
+    const t0 = await playhead(page)
+    const shown = onScreen(slides, t0)
+    expect(shown.index).not.toBe(first.index)
+    expect(await selection(page)).toEqual(first.ids)
+
+    // the crop cells belong to the slide on screen, not to the selected one
+    const cells = page.locator('.frame .crop-cell')
+    await expect(cells).toHaveCount(shown.ids.length)
+    const box = (await cells.first().boundingBox())!
+    // a click on a picture of it selects that slide (as a click on its card does), where it is
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+    await expect.poll(() => selection(page)).toEqual(shown.ids)
+    expect(await page.evaluate(() => (window as any).__diashow.store.getState().tab)).toBe('slide')
+    await expect(page.locator(`.cards .card[data-index="${shown.index}"]`)).toHaveClass(/selected/)
+    expect(Math.abs((await playhead(page)) - t0)).toBeLessThan(0.05)
+
+    // dragging a picture moves the framing of a photo on the slide on screen, never one of the first slide
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width / 2 + 40, box.y + box.height / 2 + 10, { steps: 5 })
+    await page.mouse.up()
+    const crops = (): Promise<Record<string, unknown>> =>
+      page.evaluate(() => Object.fromEntries((window as any).__diashow.store.getState().project.entries.filter((e: any) => e.crop).map((e: any) => [e.id, e.crop])))
+    await expect.poll(async () => Object.keys(await crops()).length).toBeGreaterThan(0)
+    for (const id of Object.keys(await crops())) expect(shown.ids, `cropped ${id}`).toContain(id)
+
+    // a theme without crop cells (Ken Burns): a click on the picture selects the slide on screen too
+    await store(page, 'setTheme', 'kenburns')
+    const kb = await shownSlides(page)
+    await store(page, 'select', kb[1].ids)
+    const target = kb[6]
+    await page.evaluate((t) => (window as any).__diashow.player.current.seek(t), target.start + target.duration / 2)
+    const frame = (await page.locator('.frame canvas').boundingBox())!
+    await page.mouse.click(frame.x + frame.width / 2, frame.y + frame.height / 2)
+    await expect.poll(() => selection(page)).toEqual(target.ids)
+  } finally {
+    await s?.app.close().catch(() => {})
+    removeDir(dataDir)
+  }
+})

@@ -50,6 +50,7 @@ The editor has three areas: the **preview** in the middle, the tabs **Themes**, 
 - **Order:** drag slides in the filmstrip. Dropping a slide on the middle of another combines both into one slide.
 - **Several slides:** [[Ctrl]]+click, [[Shift]]+click or [[Ctrl+A]]. The **Slide** tab then changes them all together: duration, framing, speed, video sound, Live Photo motion, pixelation, or **Leave out of the slideshow**.
 - **Time on screen:** drag the right edge of a card; a double-click there sets it back to automatic. For the selected slide, **Play selected for** in the **Slide** tab does the same.
+- **Selecting in the preview:** a click in the preview selects the slide on screen, also after you played and paused; the filmstrip follows.
 - **Framing:** drag in the preview to move the photo, scroll to zoom, double-click to reset.
 - **Photos on a slide:** in themes with several photos per slide, + and − in the **Slide** tab make the slide take in or give up photos. **Split into single slides** and **Combine into one slide** (in the slide's menu, right-click) change the groups.
 - **Text:** **Add text slide** (the **+** button at the end of the filmstrip or a slide's menu) creates a text slide. **Add text box** in the **Slide** tab puts text on a photo; drag it in the preview, double-click to type.

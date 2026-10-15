@@ -2,6 +2,20 @@
 
 All notable changes to Diashow Studio. Versions follow [Semantic Versioning](https://semver.org). The release workflow publishes the section of a version as its release notes.
 
+## [1.10.1] - 2026-10-15
+
+**Downloads**
+
+- `Diashow.Studio-Setup-1.10.1.exe`: installer (no admin rights needed); it updates an installed version and keeps your slideshows and settings.
+- `Diashow.Studio-1.10.1-portable.exe`: runs without installing, e.g. from a USB stick.
+- The installer is not code-signed. If Windows SmartScreen says "Windows protected your PC", choose "More info" and then "Run anyway".
+- `THIRD_PARTY_NOTICES.txt` lists the licences of everything bundled, including all songs. The `ffmpeg-*` archives contain the source code of the bundled FFmpeg build and of every library compiled into it (GPL), listed in `ffmpeg-deps-sources-*.txt`.
+
+**Fixes**
+
+- After playing and pausing, a click in the preview selects the slide on screen, and the filmstrip follows. Before, the preview still worked on the slide selected earlier: a click picked its photos, and dragging a picture could move the framing of a photo on that other slide.
+- Selecting a slide that is already fully on screen no longer jumps the preview back to the slide's start.
+
 ## [1.10.0] - 2026-10-15
 
 **Downloads**
